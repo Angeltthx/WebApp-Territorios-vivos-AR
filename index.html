@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1"
+    />
+    <meta name="theme-color" content="#000000" />
+    <title>WebAR · Demo hexagonal</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --surface: rgba(18, 18, 20, 0.72);
+        --border: rgba(255, 255, 255, 0.14);
+        --accent: #e8442f;
+      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+      body {
+        font: 500 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+        color: #fff;
+        overscroll-behavior: none;
+      }
+
+      /* ------------------------------------------------------------------
+         AJUSTE DE PANTALLA COMPLETA
+
+         MindAR calcula por su cuenta el tamaño del contenedor y del video
+         para respetar la relación de aspecto de la cámara, y lo escribe
+         como estilos en línea. En pantallas cuya proporción no coincide
+         con la del sensor, eso deja una franja negra al costado.
+
+         Estas reglas fuerzan a que el contenedor y TODOS sus hijos (el
+         video, el canvas y cualquier div intermedio que MindAR cree)
+         ocupen la pantalla entera. `object-fit: cover` recorta el
+         sobrante en vez de encajarlo con bandas.
+
+         Video y canvas reciben exactamente el mismo tratamiento, así que
+         siguen alineados entre sí: el objeto 3D no se desplaza respecto
+         a la imagen real.
+         ------------------------------------------------------------------ */
+      #ar-container {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        overflow: hidden !important;
+      }
+      #ar-container > *,
+      #ar-container video,
+      #ar-container canvas {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: auto !important;
+        bottom: auto !important;
+        width: 100% !important;
+        height: 100% !important;
+        margin: 0 !important;
+        transform: none !important;
+      }
+      #ar-container video,
+      #ar-container canvas {
+        object-fit: cover !important;
+      }
+
+      #ui {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 12px;
+        padding: calc(20px + env(safe-area-inset-top)) 16px
+                 calc(24px + env(safe-area-inset-bottom));
+        pointer-events: none;
+      }
+      #ui > * { pointer-events: auto; }
+
+      #hint {
+        margin: 0;
+        max-width: 34ch;
+        text-align: center;
+        font-size: 14px;
+        line-height: 1.35;
+        padding: 10px 18px;
+        border-radius: 999px;
+        background: var(--surface);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+      }
+      #hint[data-tone="error"] {
+        background: rgba(150, 24, 24, 0.88);
+        border-color: rgba(255, 120, 120, 0.4);
+      }
+
+      #marker-link {
+        font-size: 13px;
+        color: #fff;
+        text-decoration: none;
+        padding: 9px 16px;
+        border-radius: 999px;
+        background: var(--surface);
+        backdrop-filter: blur(12px);
+        border: 1px dashed var(--border);
+      }
+
+      #picker { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+      #controls { display: flex; gap: 8px; align-items: center; }
+
+      button {
+        font: inherit;
+        color: #fff;
+        background: var(--surface);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 13px 18px;
+        min-width: 52px;
+        min-height: 48px;
+        line-height: 1;
+        transition: transform 0.12s ease, background 0.15s ease;
+      }
+      button:active { transform: scale(0.94); }
+
+      .chip { padding: 10px 16px; min-height: 42px; font-size: 14px; border-radius: 999px; }
+      .chip[data-active="true"] {
+        background: var(--accent);
+        border-color: transparent;
+        font-weight: 600;
+      }
+
+      #stabilization { font-size: 13px; padding: 13px 14px; min-width: 92px; }
+
+      #start {
+        font-size: 17px;
+        font-weight: 600;
+        padding: 17px 44px;
+        background: var(--accent);
+        border-color: transparent;
+      }
+
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <div id="ar-container"></div>
+
+    <div id="app">
+      <div id="ui">
+        <p id="hint"></p>
+
+        <!-- Sin esta imagen delante de la cámara no aparece ningún objeto:
+             la app rastrea un marcador, no el entorno. -->
+        <a
+          id="marker-link"
+          href="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png"
+          target="_blank"
+          rel="noopener"
+          >¿No ves nada? Abre el marcador aquí</a
+        >
+
+        <div id="picker" hidden></div>
+
+        <div id="controls" hidden>
+          <button type="button" id="rot-left" aria-label="Girar a la izquierda">&#8634;</button>
+          <button type="button" id="scale-down" aria-label="Reducir">&minus;</button>
+          <button type="button" id="scale-up" aria-label="Ampliar">+</button>
+          <button type="button" id="rot-right" aria-label="Girar a la derecha">&#8635;</button>
+          <button type="button" id="stabilization" aria-label="Cambiar estabilización"></button>
+        </div>
+
+        <button type="button" id="start">Iniciar AR</button>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
