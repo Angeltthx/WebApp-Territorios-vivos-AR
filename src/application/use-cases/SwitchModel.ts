@@ -8,8 +8,8 @@ import type { ScenePort } from '../ports/ScenePort';
 import type { SessionListener } from './StartArExperience';
 
 /**
- * Cambia el objeto visible. Como el catálogo completo se precargó en
- * scene.preload(), el cambio es instantáneo: no hay descarga en caliente.
+ * Cambia el icono seleccionado. Los cuatro siguen visibles sobre el mapa:
+ * seleccionar solo lo destaca, lo hace sonar y sincroniza la barra inferior.
  */
 export class SwitchModel {
   constructor(
@@ -30,9 +30,10 @@ export class SwitchModel {
     const model = await this.models.findById(targetId);
     if (model === null) return;
 
-    this.scene.setActiveModel(model.id);
+    this.scene.setHighlightedModel(model.id);
+    this.scene.pulse(model.id);
 
-    // Conserva rotación y escala actuales: cambiar de objeto no debería
+    // Conserva rotación y escala actuales: cambiar de selección no debería
     // deshacer lo que el usuario ya ajustó a mano.
     const previous = session.placement;
     const placement =

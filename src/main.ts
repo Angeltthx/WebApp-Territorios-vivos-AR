@@ -2,15 +2,17 @@ import { buildContainer } from '@infrastructure/di/container';
 import { ArView } from '@ui/ArView';
 
 /**
- * Marcador por defecto: el archivo de ejemplo de la documentación de MindAR,
- * servido desde jsDelivr. Permite que la app funcione desde el primer
- * despliegue sin compilar tu propio target.
+ * Marcador: el mapa ilustrado de Nuquí (Chocó).
  *
- * Para producción: compila tu imagen en el compilador oficial de MindAR,
- * guarda el .mind en public/targets/ y usa '/targets/target.mind'.
+ * El `.mind` se genera desde la imagen con:
+ *     npm run compile-target
+ *
+ * TARGET_ASPECT tiene que coincidir con la imagen que se compiló — es lo
+ * que convierte los MarkerSpot del catálogo en coordenadas del anchor. Si
+ * cambias el mapa, cambia también este número (y vuelve a medir los spots).
  */
-const TARGET_SRC =
-  'https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind';
+const TARGET_SRC = '/targets/map.mind';
+const TARGET_ASPECT = 1280 / 880;
 
 const ROTATION_STEP = Math.PI / 12; // 15 grados
 const SCALE_STEP = 1.15;
@@ -35,12 +37,13 @@ const {
 } = buildContainer({
   container: arContainer,
   imageTargetSrc: TARGET_SRC,
+  targetAspect: TARGET_ASPECT,
   onSessionChange: (session) => view?.render(session),
 });
 
 view = new ArView(root, catalog, {
   onStart: async () => {
-    const session = await startArExperience.execute('headphones');
+    const session = await startArExperience.execute('whale');
 
     // Si el arranque falló, MindAR nunca creó el canvas y enganchar los
     // gestos lanzaría una excepción. Solo se conectan si hay sesión viva.
@@ -48,7 +51,7 @@ view = new ArView(root, catalog, {
     gesturesAttached = true;
 
     interaction.attach({
-      onTapModel: () => void playModelSound.execute(),
+      onTapModel: (modelId) => void playModelSound.execute(modelId),
       onRotate: (delta) => transformPlacement.rotateBy(delta),
       onScale: (factor) => transformPlacement.scaleBy(factor),
     });

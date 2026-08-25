@@ -8,7 +8,8 @@ const TAP_MAX_DURATION_MS = 350;
 const ROTATION_PER_PIXEL = 0.008;
 
 export interface InteractiveSource {
-  readonly interactiveObject: Object3D | null;
+  /** Objetos tocables indexados por id, o null si no hay nada a la vista. */
+  readonly pickables: ReadonlyMap<string, Object3D> | null;
 }
 
 /**
@@ -108,23 +109,40 @@ export class PointerInteractionAdapter implements InteractionPort {
 
     const elapsed = performance.now() - this.startedAt;
     if (elapsed > TAP_MAX_DURATION_MS) return;
-    if (!this.hitsModel(event.clientX, event.clientY)) return;
 
-    this.handlers.onTapModel();
+    const modelId = this.modelAt(event.clientX, event.clientY);
+    if (modelId === null) return;
+
+    this.handlers.onTapModel(modelId);
   }
 
-  private hitsModel(clientX: number, clientY: number): boolean {
-    const target = this.source.interactiveObject;
-    if (target === null || !target.visible) return false;
+  /**
+   * Qué icono hay bajo el dedo, o null si se tocó el fondo.
+   *
+   * Se lanza el rayo contra los cuatro a la vez y gana el más cercano a la
+   * cámara: con iconos que pueden solaparse en pantalla según el ángulo,
+   * comprobarlos por separado daría el equivocado.
+   */
+  private modelAt(clientX: number, clientY: number): string | null {
+    const targets = this.source.pickables;
+    if (targets === null || targets.size === 0) return null;
 
     const rect = this.canvas.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return false;
+    if (rect.width === 0 || rect.height === 0) return null;
 
     this.pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     this.pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
     this.raycaster.setFromCamera(this.pointer, this.runtime.mindar.camera);
-    return this.raycaster.intersectObject(target, true).length > 0;
+    const hits = this.raycaster.intersectObjects([...targets.values()], true);
+
+    // intersectObjects devuelve ordenado por distancia, así que el primero
+    // que tenga un id asociado es el icono de delante.
+    for (const hit of hits) {
+      const id = findModelId(hit.object);
+      if (id !== null) return id;
+    }
+    return null;
   }
 
   private currentPinchDistance(): number {
@@ -138,4 +156,18 @@ export class PointerInteractionAdapter implements InteractionPort {
   private get canvas(): HTMLCanvasElement {
     return this.runtime.mindar.renderer.domElement;
   }
+}
+
+/**
+ * El rayo acierta a una malla suelta (una aleta, el halo…), no al grupo del
+ * icono. Subimos por el árbol hasta encontrar quién lleva el id.
+ */
+function findModelId(object: Object3D): string | null {
+  let current: Object3D | null = object;
+  while (current !== null) {
+    const id: unknown = current.userData['modelId'];
+    if (typeof id === 'string') return id;
+    current = current.parent;
+  }
+  return null;
 }

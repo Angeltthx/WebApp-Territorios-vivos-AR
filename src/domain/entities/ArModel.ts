@@ -1,3 +1,4 @@
+import { MarkerSpot } from '../value-objects/MarkerSpot';
 import { ModelId } from '../value-objects/ModelId';
 import { ModelSource } from '../value-objects/ModelSource';
 import { Scale } from '../value-objects/Scale';
@@ -8,6 +9,8 @@ export interface ArModelSnapshot {
   readonly name: string;
   readonly source: ModelSource;
   readonly sound: SoundSnapshot;
+  /** Dónde vive este modelo sobre la imagen del marcador (u, v en 0–1). */
+  readonly spot: { readonly u: number; readonly v: number };
   readonly defaultScale?: number;
 }
 
@@ -17,6 +20,7 @@ export class ArModel {
     readonly name: string,
     readonly source: ModelSource,
     readonly sound: SoundProfile,
+    readonly spot: MarkerSpot,
     readonly defaultScale: Scale,
   ) {
     Object.freeze(this);
@@ -32,6 +36,7 @@ export class ArModel {
       name,
       snapshot.source,
       SoundProfile.of(snapshot.sound),
+      MarkerSpot.of(snapshot.spot.u, snapshot.spot.v),
       Scale.of(snapshot.defaultScale ?? 1),
     );
   }

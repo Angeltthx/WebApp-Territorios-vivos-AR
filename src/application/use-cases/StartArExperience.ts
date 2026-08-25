@@ -59,7 +59,7 @@ export class StartArExperience {
       const initial = catalog.find((model) => model.id.equals(requested)) ?? catalog[0]!;
 
       await this.scene.preload(catalog);
-      this.scene.setActiveModel(initial.id);
+      this.scene.setHighlightedModel(initial.id);
       this.scene.setStabilization(this.session.stabilization);
 
       const placement = Placement.initial(initial.id, initial.defaultScale);

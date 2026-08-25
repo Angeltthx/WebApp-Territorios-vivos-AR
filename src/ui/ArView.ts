@@ -5,9 +5,9 @@ import type { StabilizationLevel } from '@domain/value-objects/Stabilization';
 const HINTS: Record<SessionStatus, string> = {
   idle: 'Pulsa Iniciar para activar la cámara',
   preparing: 'Preparando la escena…',
-  searching: 'Apunta la cámara al marcador',
-  tracking: 'Tócalo para que suene · arrastra para girar · pellizca para escalar',
-  lost: 'Marcador fuera de encuadre. Vuelve a apuntar',
+  searching: 'Apunta la cámara al mapa de Nuquí',
+  tracking: 'Toca un animal para que suene · arrastra para girar · pellizca para escalar',
+  lost: 'Mapa fuera de encuadre. Vuelve a apuntar',
   error: 'Ocurrió un problema',
 };
 

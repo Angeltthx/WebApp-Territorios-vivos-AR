@@ -4,7 +4,7 @@
  * 'primitive' existe para que la app funcione sin assets: puedes desplegar
  * y probar en el teléfono hoy, y migrar a 'gltf' cuando tengas los .glb.
  */
-export type PrimitiveShape = 'torus-knot' | 'crystal' | 'headphones';
+export type PrimitiveShape = 'whale' | 'bird' | 'crab' | 'turtle';
 
 export type ModelSource =
   | { readonly kind: 'gltf'; readonly url: string }
