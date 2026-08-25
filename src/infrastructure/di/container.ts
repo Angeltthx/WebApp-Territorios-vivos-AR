@@ -7,13 +7,15 @@ import { ConsoleAnalyticsAdapter } from '../analytics/ConsoleAnalyticsAdapter';
 import { WebAudioAdapter } from '../audio/WebAudioAdapter';
 import { PointerInteractionAdapter } from '../interaction/PointerInteractionAdapter';
 import { MindArRuntime } from '../mindar/MindArRuntime';
-import { DEMO_CATALOG, StaticModelRepository } from '../repositories/StaticModelRepository';
+import { NUQUI_CATALOG, StaticModelRepository } from '../repositories/StaticModelRepository';
 import { ThreeSceneAdapter } from '../rendering/ThreeSceneAdapter';
 import { MindArTrackingAdapter } from '../tracking/MindArTrackingAdapter';
 
 export interface ContainerConfig {
   container: HTMLElement;
   imageTargetSrc: string;
+  /** Alto/ancho de la imagen compilada en `imageTargetSrc`. */
+  targetAspect: number;
   onSessionChange: (session: ArSession) => void;
 }
 
@@ -29,13 +31,13 @@ export function buildContainer(config: ContainerConfig) {
 
   // ↓↓↓ Las dos líneas que cambiarías al migrar de motor de tracking ↓↓↓
   const tracking = new MindArTrackingAdapter(runtime);
-  const scene = new ThreeSceneAdapter(runtime);
+  const scene = new ThreeSceneAdapter(runtime, config.targetAspect);
   // ↑↑↑
 
   const audio = new WebAudioAdapter();
   const analytics = new ConsoleAnalyticsAdapter();
   const interaction = new PointerInteractionAdapter(runtime, scene);
-  const models = new StaticModelRepository(DEMO_CATALOG);
+  const models = new StaticModelRepository(NUQUI_CATALOG);
 
   const startArExperience = new StartArExperience(
     tracking,
@@ -64,6 +66,6 @@ export function buildContainer(config: ContainerConfig) {
     switchModel,
     playModelSound,
     interaction,
-    catalog: DEMO_CATALOG,
+    catalog: NUQUI_CATALOG,
   } as const;
 }

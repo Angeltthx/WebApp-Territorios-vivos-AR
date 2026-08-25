@@ -1,11 +1,12 @@
 import type { ArSession } from '@domain/entities/ArSession';
+import { ModelId } from '@domain/value-objects/ModelId';
 import type { AnalyticsPort } from '../ports/AnalyticsPort';
 import type { AudioPort } from '../ports/AudioPort';
 import type { ModelRepository } from '../ports/ModelRepository';
 import type { ScenePort } from '../ports/ScenePort';
 
 /**
- * Toque sobre el objeto: suena y da realimentación visual.
+ * Toque sobre un icono: suena y da realimentación visual sobre ESE icono.
  * El sonido lo define el dominio (SoundProfile); aquí solo se dispara.
  */
 export class PlayModelSound {
@@ -17,18 +18,15 @@ export class PlayModelSound {
     private readonly getSession: () => ArSession,
   ) {}
 
-  async execute(): Promise<void> {
+  async execute(rawModelId: string): Promise<void> {
     const session = this.getSession();
     if (!session.isInteractive) return;
 
-    const modelId = session.activeModelId;
-    if (modelId === null) return;
-
-    const model = await this.models.findById(modelId);
+    const model = await this.models.findById(ModelId.of(rawModelId));
     if (model === null) return;
 
     this.audio.play(model.sound);
-    this.scene.pulse();
-    this.analytics.track('model_tapped', { modelId: modelId.value });
+    this.scene.pulse(model.id);
+    this.analytics.track('model_tapped', { modelId: model.id.value });
   }
 }

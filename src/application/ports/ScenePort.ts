@@ -11,17 +11,22 @@ import type { Stabilization } from '@domain/value-objects/Stabilization';
  * cambio. El bucle vive dentro del adaptador.
  */
 export interface ScenePort {
-  /** Carga todo el catálogo por adelantado para que cambiar sea instantáneo. */
+  /**
+   * Monta TODOS los iconos del catálogo, cada uno clavado a su MarkerSpot.
+   * A diferencia de la versión de un solo objeto, aquí no hay uno "activo"
+   * que oculte a los demás: los cuatro conviven sobre el mapa.
+   */
   preload(models: readonly ArModel[]): Promise<void>;
 
-  setActiveModel(id: ModelId): void;
+  /** Destaca uno de los iconos. El resto sigue visible, solo atenuado. */
+  setHighlightedModel(id: ModelId): void;
 
   applyPlacement(placement: Placement): void;
 
   setStabilization(stabilization: Stabilization): void;
 
-  /** Realimentación visual breve al tocar el objeto. */
-  pulse(): void;
+  /** Realimentación visual breve sobre un icono concreto. */
+  pulse(id: ModelId): void;
 
   clear(): void;
 

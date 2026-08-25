@@ -7,7 +7,7 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1"
     />
     <meta name="theme-color" content="#000000" />
-    <title>WebAR · Demo hexagonal</title>
+    <title>Territorios Vivos AR · Nuquí, Chocó</title>
     <style>
       :root {
         color-scheme: dark;
@@ -152,14 +152,10 @@
       <div id="ui">
         <p id="hint"></p>
 
-        <!-- Sin esta imagen delante de la cámara no aparece ningún objeto:
-             la app rastrea un marcador, no el entorno. -->
-        <a
-          id="marker-link"
-          href="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png"
-          target="_blank"
-          rel="noopener"
-          >¿No ves nada? Abre el marcador aquí</a
+        <!-- Sin el mapa delante de la cámara no aparece ningún icono:
+             la app rastrea esa imagen concreta, no el entorno. -->
+        <a id="marker-link" href="/targets/map.jpg" target="_blank" rel="noopener"
+          >¿No ves nada? Abre el mapa de Nuquí aquí</a
         >
 
         <div id="picker" hidden></div>

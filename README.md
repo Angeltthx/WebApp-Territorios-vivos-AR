@@ -1,6 +1,8 @@
-# WebAR — Demo con arquitectura hexagonal
+# Territorios Vivos AR — Nuquí, Chocó
 
 Realidad aumentada en el navegador, funcional en **iPhone (Safari) y Android (Chrome)**, sin instalar ninguna app y sin licencias de pago.
+
+Apuntas la cámara al mapa ilustrado de Nuquí y sobre él aparecen cuatro iconos 3D flotando, uno sobre cada animal: la **ballena**, la **pava**, el **cangrejo** y la **tortuga**. Cada uno suena distinto al tocarlo.
 
 ---
 
@@ -29,23 +31,27 @@ MindAR no depende de WebXR: procesa el video de la cámara con su propio motor d
 
 ## Qué hace la app
 
-- **Tres objetos** intercambiables desde la barra inferior: Audífonos, Cristal y Nudo.
-- **Sonido al tocar**: cada objeto tiene un timbre propio, sintetizado en vivo.
-- **Gestos**: arrastra para girar, pellizca para escalar, toca para que suene.
+- **Cuatro iconos clavados al mapa**: cada uno flota sobre su animal y se queda ahí aunque muevas el teléfono.
+- **Sonido al tocar**: cada animal tiene un timbre propio, sintetizado en vivo. Se toca el icono concreto, no "el objeto".
+- **Barra inferior**: destaca uno de los cuatro y lo hace sonar.
+- **Gestos**: arrastra para girar los iconos, pellizca para escalarlos, toca uno para que suene.
 - **Control de estabilización** en tres niveles, ajustable sobre la marcha.
-- **Funciona sin assets**: los tres objetos son geometría generada por código.
+- **Funciona sin assets**: los cuatro son geometría generada por código, y los sonidos se sintetizan. No hay un solo `.glb` ni `.mp3` que descargar.
+
+Los iconos giran y escalan **sobre sí mismos**: nunca se despegan del animal que señalan. Esa es la razón de que `Placement` documente explícitamente que `rotationY` y `scale` no tocan las posiciones.
 
 ### Sobre el sonido
 
 No hay archivos de audio. Los sonidos se sintetizan con Web Audio a partir de un `SoundProfile` declarado en el dominio: forma de onda, frecuencia fundamental, armónicos y duración. Ventajas: nada que licenciar, nada que descargar, el bundle no crece, y ajustar un timbre es cambiar un número.
 
-Los tres perfiles son deliberadamente distintos para que se reconozcan de oído:
+Los cuatro perfiles son deliberadamente distintos para que se reconozcan de oído:
 
-| Objeto | Carácter | Cómo se logra |
+| Animal | Carácter | Cómo se logra |
 |---|---|---|
-| Audífonos | Golpe grave y sordo | Onda senoidal a 110 Hz, pocos armónicos |
-| Cristal | Campana metálica | Armónicos **no enteros** (2.76, 5.4, 8.93) |
-| Nudo | Blip sintético corto | Onda cuadrada, solo armónicos impares |
+| Ballena | Canto grave y largo | Senoidal a 90 Hz, armónicos casi puros, 1.8 s |
+| Pava | Graznido áspero y corto | Onda cuadrada a 520 Hz, armónicos impares |
+| Cangrejo | Chasquido de pinza | Triangular a 880 Hz, armónicos **no enteros**, 140 ms |
+| Tortuga | Burbujeo redondo | Senoidal a 240 Hz, armónicos enteros |
 
 > Nota de iOS: Safari mantiene el audio bloqueado hasta que hay un gesto real del usuario. Por eso `audio.unlock()` se llama dentro del handler del botón Iniciar. Si lo mueves de sitio, el sonido deja de funcionar en iPhone.
 
@@ -80,29 +86,70 @@ npm run typecheck
 npm run dev
 ```
 
+| Comando | Para qué |
+|---|---|
+| `npm run dev` | Servidor de desarrollo con HTTPS, para probar desde el teléfono |
+| `VITE_HTTP=1 npm run dev` | Igual pero sin TLS. Solo para mirar cosas en el escritorio (`/verify.html`): sin HTTPS no hay cámara fuera de localhost |
+| `npm run build` | Sitio estático en `dist/` |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run compile-target` | Recompila `map.jpg` → `map.mind` |
+
 Vite imprime dos direcciones. Usa la de tu red local (`https://192.168.x.x:5173`) **desde el teléfono**. Debe ser `https://` — la cámara no funciona sobre `http://`.
 
 Safari mostrará una advertencia de certificado autofirmado. Acéptala: *Mostrar detalles → Visitar este sitio web*.
 
 ### El marcador
 
-De fábrica usa el marcador de ejemplo de MindAR, así que funciona sin configurar nada. Necesitas mostrarle esa imagen a la cámara: descárgala desde la guía de inicio de MindAR (`hiukim.github.io/mind-ar-js-doc`) y ábrela en tu laptop o imprímela.
+El marcador es el mapa de Nuquí, ya compilado en `public/targets/map.mind`. Para verlo funcionar necesitas mostrarle esa imagen a la cámara: **imprímela**, o ábrela en otra pantalla desde `public/targets/map.jpg` (la propia app enlaza a ella con "¿No ves nada?").
 
-Para usar **tu propia imagen**: compílala en el compilador oficial de MindAR, guarda el `.mind` en `public/targets/` y cambia `TARGET_SRC` en `src/main.ts`.
+> Imprimir funciona mejor que una pantalla: los reflejos y el refresco del monitor le quitan puntos al rastreo.
 
-> Funcionan mejor las imágenes con mucho detalle y contraste. Las planas, simétricas o con grandes zonas de color uniforme se rastrean mal.
+Para **recompilar el target** (porque cambió la imagen, o para usar otra):
+
+```bash
+npm run compile-target
+```
+
+Eso lee `public/targets/map.jpg` y escribe `public/targets/map.mind`. Si cambias de imagen tienes además que:
+
+1. Actualizar `TARGET_ASPECT` en `src/main.ts` (alto/ancho de la imagen nueva).
+2. Volver a medir los `spot` del catálogo — ver la sección siguiente.
+
+> El compilador oficial de MindAR (`OfflineCompiler`) importa el paquete nativo `canvas`, que aquí no se compila porque `.npmrc` fija `ignore-scripts=true`. `scripts/compile-target.mjs` esquiva eso: subclasea `CompilerBase` —que no depende de canvas— y le pasa el JPEG ya decodificado con jpeg-js. Sin navegador y sin dependencias nativas.
+
+> Funcionan mejor las imágenes con mucho detalle y contraste. Las planas, simétricas o con grandes zonas de color uniforme se rastrean mal. Este mapa da 3410 puntos de features en 11 escalas, que es mucho: se rastrea bien.
+
+### Mover un icono, o añadir otro
+
+Cada entrada de `NUQUI_CATALOG` (en `src/infrastructure/repositories/StaticModelRepository.ts`) lleva un `spot` con las coordenadas del animal **normalizadas 0–1 desde la esquina superior izquierda** de la imagen.
+
+Para comprobar que un `spot` cae donde crees, dibuja una mira encima:
+
+```bash
+node scripts/preview-spots.mjs '[{"u":0.262,"v":0.220}]' mira.jpg
+```
+
+Y para ver los iconos reales sobre el mapa, sin cámara ni teléfono:
+
+```bash
+VITE_HTTP=1 npm run dev     # y abre /verify.html
+```
+
+Esa página monta **los mismos `MarkerPin` que usa la app** sobre el mapa colocado con el plano y el tamaño exactos del anchor de MindAR. La vista ortográfica no tiene perspectiva, así que si un halo no rodea a su animal, las coordenadas están mal.
 
 ### Tus modelos 3D
 
-En `src/infrastructure/repositories/StaticModelRepository.ts`, cambia:
+En `NUQUI_CATALOG`, cambia:
 
 ```ts
-source: ModelSource.primitive('headphones', 0xe8442f)
+source: ModelSource.primitive('whale', 0x2c3e6b)
 // por
-source: ModelSource.gltf('/models/mis-audifonos.glb')
+source: ModelSource.gltf('/models/mi-ballena.glb')
 ```
 
-y pon el `.glb` en `public/models/`. Si un archivo falta o falla, ese objeto cae a una geometría de reemplazo en vez de tumbar la sesión completa.
+y pon el `.glb` en `public/models/`. Si un archivo falta o falla, ese icono cae a una geometría de reemplazo en vez de tumbar la sesión completa.
+
+Ten en cuenta la escala: en coordenadas del anchor, **el ancho del mapa es 1 unidad**. Un `.glb` exportado en metros aparecerá gigantesco.
 
 ---
 
@@ -145,7 +192,7 @@ Hexagonal (puertos y adaptadores). Regla única: **las dependencias apuntan haci
 src/
 ├── domain/                    Reglas puras. Cero imports externos.
 │   ├── entities/              ArModel, ArSession, Placement
-│   └── value-objects/         ModelId, Scale, Vector3,
+│   └── value-objects/         ModelId, Scale, Vector3, MarkerSpot,
 │                              ModelSource, SoundProfile, Stabilization
 ├── application/
 │   ├── ports/                 TrackingPort, ScenePort, AudioPort,
@@ -155,12 +202,33 @@ src/
 ├── infrastructure/            Aquí y solo aquí viven MindAR y Three.js.
 │   ├── mindar/                MindArRuntime (instancia compartida)
 │   ├── tracking/              MindArTrackingAdapter
-│   ├── rendering/             ThreeSceneAdapter, PrimitiveFactory
+│   ├── rendering/             ThreeSceneAdapter, MarkerPin, PrimitiveFactory
 │   ├── interaction/           PointerInteractionAdapter (raycast + gestos)
 │   ├── audio/                 WebAudioAdapter (síntesis)
-│   ├── repositories/          StaticModelRepository + catálogo demo
+│   ├── repositories/          StaticModelRepository + NUQUI_CATALOG
 │   └── di/container.ts        ← composition root
-└── ui/                        Pinta estado, emite intenciones.
+├── ui/                        Pinta estado, emite intenciones.
+└── verify.ts                  Página de verificación (solo desarrollo).
+```
+
+**`MarkerSpot` y `MarkerPin` son la pareja que sostiene esta versión.** `MarkerSpot` es dominio: "el cangrejo está en (0.487, 0.472) de la imagen", medido como se mide sobre un archivo de imagen. `MarkerPin` es infraestructura: sabe traducir eso a coordenadas del anchor de MindAR y montar el halo, la zona de toque y el icono flotante.
+
+Están separados a propósito, y `MarkerPin` **no depende de MindAR ni del runtime**. Por eso `verify.html` puede montar exactamente los mismos pines sobre una foto del mapa y comprobar la alineación sin cámara, sin teléfono y sin tracking.
+
+### Sistema de coordenadas del anchor
+
+Está verificado leyendo el código de MindAR, no deducido:
+
+- El origen es el **centro** de la imagen del marcador.
+- El **ancho** de la imagen mide 1 unidad; el alto mide `targetAspect` (`image-target/three.js`, líneas 214-229).
+- **+X** a la derecha, **+Y arriba** — MindAR invierte el eje Y de la imagen con `y' = h - y`, documentado en el comentario de `controller.js:_glModelViewMatrix`.
+- **+Z** sale del papel hacia la cámara.
+
+De ahí sale la conversión, que vive en una sola función (`anchorPositionOf`):
+
+```
+x = u - 0.5
+y = (0.5 - v) * targetAspect
 ```
 
 **El puerto que justifica todo esto es `TrackingPort`.** El motor de tracking es la pieza volátil. El día que Apple habilite WebXR en Safari, o que decidas pagar Zappar, escribes un adaptador nuevo y cambias **dos líneas** en `container.ts` (están marcadas con flechas en el código). Dominio, casos de uso y UI no se tocan.
@@ -173,34 +241,43 @@ src/
 
 ```
 scene → follower (pose del marcador, SUAVIZADA)
-          ├── content (inclinación base + posición)
-          │     └── spinner (rotación del usuario)
-          │           └── modelo activo
-          └── anillo de contacto
+          └── overlay (ajuste global)
+                └── MarkerPin ×4 (posición fija = su MarkerSpot)
+                      ├── halo (anillo tumbado sobre el papel)
+                      ├── zona de toque (invisible, generosa)
+                      └── lift (flota en +Z, con vaivén)
+                            └── icono (girado y escalado sobre sí mismo)
 ```
+
+La versión anterior inclinaba el contenido 90° para "poner de pie" un objeto sobre el marcador. Aquí eso **no existe**: los iconos viven en el plano del mapa y se elevan en +Z, como chinchetas. El giro de 90° sigue apareciendo, pero dentro de `MarkerPin`, y con un propósito distinto y verificado: convertir el "+Y arriba" con el que se modelan los iconos en Three.js al "+Z hacia fuera" del mapa.
 
 ---
 
 ## Estado de verificación
 
-Lo que **sí** verifiqué en mi entorno:
+Lo que **sí** está verificado:
 
-- **Typecheck completo: 0 errores en 31 archivos**, con TypeScript en modo `strict` + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`. Confirmé que el chequeo era real inyectando un error a propósito y viendo que lo detectaba.
-- Los nombres de la API de MindAR, inspeccionando el bundle real de `mind-ar@1.2.5`.
-- La semántica de los parámetros de tracking, en la documentación oficial.
-- Licencias MIT y versiones, en el registro de npm.
+- **Typecheck: 0 errores**, con TypeScript en `strict` + `noUncheckedIndexedAccess` + `exactOptionalPropertyTypes`.
+- **`vite build` completa.** (Antes no: `vite.config.ts` declaraba una entrada `place.html` que no existía en el repo, así que el build fallaba en cualquier clon limpio. Esa entrada se eliminó.)
+- **El `.mind` compilado es válido y el mapa se detecta.** No es solo que el archivo tenga la forma correcta: se cargó el `Controller` real de MindAR en el navegador, se le pasó un fotograma sintético con el mapa dentro y **encontró el marcador** (`match` devolvió pose). La matriz resultó ser prácticamente la identidad en rotación, con el centro del mapa sobre el eje óptico — exactamente lo que se le dio de entrada.
+- **Las coordenadas de los cuatro animales caen donde deben.** Comprobado en `/verify.html`, montando los `MarkerPin` reales sobre el mapa en el plano y el tamaño exactos del anchor, con cámara ortográfica (sin perspectiva que disimule un error).
+- **La dirección de +Z es la correcta**: en la vista en perspectiva de `/verify.html` los iconos flotan **hacia fuera** del papel, no hundidos en él.
+- **`targetAspect` (1280/880)** coincide con las dimensiones que el propio runtime de MindAR reporta al cargar el `.mind`: `[[880, 1280]]`.
+- El detalle del marcador: **3410 puntos de features repartidos en 11 escalas**, que es un target holgadamente rastreable.
 
-Lo que **no** pude verificar:
+Lo que **no** está verificado, y solo se puede comprobar con el mapa impreso delante:
 
-- **El build de producción (`vite build`).** La instalación completa de dependencias no terminó en mi entorno.
-- **Nada en un dispositivo real.** No tengo cámara ni teléfono. Todo el comportamiento en runtime —tracking, gestos, audio, orientación— está sin probar de mi lado.
+- **El rastreo con una cámara real.** La detección está probada contra un fotograma sintético y perfecto: sin desenfoque, sin reflejos, sin ángulo, sin luz mala. Eso valida el `.mind` y la tubería, no la experiencia.
+- **Los gestos, el audio y la estabilización en un teléfono.** Sin cámara ni dispositivo de mi lado.
+- **Cómo de bien se leen los iconos** a tamaño real, sobre el mapa impreso y en movimiento.
 
 ### Ajustes probables en la primera prueba real
 
-1. **Si el objeto aparece acostado o enterrado en el marcador**: cambia el signo de `this.content.rotation.x = Math.PI / 2` en `ThreeSceneAdapter.mount()`. Deduje la orientación del plano del anchor de la documentación, pero no pude confirmarla visualmente. Es el ajuste más probable de todos.
-2. **Si el render se desalinea del video**: quita la línea `renderer.setPixelRatio(...)` en `MindArRuntime.configureRenderer()`. Mejora la nitidez en pantallas retina, pero es el punto donde más podría chocar con los cálculos internos de MindAR.
-3. **Si el objeto tiembla demasiado**: pulsa el botón hasta "Estable". Si aun así, baja `filterMinCF` en `DEFAULT_TUNING`.
-4. **Si el sonido no suena en iPhone**: confirma que el teléfono no está en modo silencio, y que `audio.unlock()` sigue llamándose dentro del gesto del botón.
+1. **Si los iconos se ven grandes o pequeños**: `ICON_SCALE` en `MarkerPin.ts` (0.58). Están dimensionados para que el halo quede por fuera y el animal se siga viendo debajo.
+2. **Si flotan demasiado separados del papel**: `HOVER_HEIGHT` (0.11, en anchos de mapa).
+3. **Si el render se desalinea del video**: quita `renderer.setPixelRatio(...)` en `MindArRuntime.configureRenderer()`. Mejora la nitidez en pantallas retina, pero es el punto donde más podría chocar con los cálculos internos de MindAR.
+4. **Si los iconos tiemblan**: pulsa el botón hasta "Estable". Si aun así, baja `filterMinCF` en `DEFAULT_TUNING`.
+5. **Si el sonido no suena en iPhone**: confirma que el teléfono no está en modo silencio, y que `audio.unlock()` sigue llamándose dentro del gesto del botón.
 
 ---
 

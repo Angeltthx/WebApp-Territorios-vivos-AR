@@ -28,51 +28,79 @@ export class StaticModelRepository implements ModelRepository {
 }
 
 /**
- * Catálogo de demostración: tres objetos con timbres deliberadamente
- * distintos para que se distingan al oído sin mirar la pantalla.
+ * Fauna del mapa de Nuquí (Chocó).
  *
- * Los tres usan geometría procedural, así que la app funciona en cuanto
- * la despliegas, sin necesidad de conseguir ni subir archivos .glb.
- * Para usar los tuyos: cambia `source` por ModelSource.gltf('/models/x.glb').
+ * Cada `spot` es la posición del animal sobre `public/targets/map.jpg`, en
+ * coordenadas normalizadas 0–1 desde la esquina SUPERIOR IZQUIERDA. Están
+ * medidos sobre la imagen de 880×1280 y verificados dibujando una mira
+ * encima:
+ *
+ *     node scripts/preview-spots.mjs \
+ *       '[{"u":0.262,"v":0.220},{"u":0.884,"v":0.264}]' salida.jpg
+ *
+ * Si algún día se reemplaza el mapa, hay que volver a medir estos cuatro
+ * valores y recompilar el target — son solidarios con esa imagen concreta.
+ *
+ * Los timbres son deliberadamente distintos para que se reconozcan de oído
+ * sin mirar la pantalla, y todo es geometría procedural: la app funciona en
+ * cuanto la despliegas, sin subir un solo .glb.
  */
-export const DEMO_CATALOG: readonly ArModelSnapshot[] = [
+export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   {
-    id: 'headphones',
-    name: 'Audífonos',
-    source: ModelSource.primitive('headphones', 0xe8442f),
-    defaultScale: 0.85,
+    id: 'whale',
+    name: '🐋 Ballena',
+    source: ModelSource.primitive('whale', 0x2c3e6b),
+    spot: { u: 0.262, v: 0.22 },
+    defaultScale: 1,
     sound: {
-      // Timbre grave y redondo, tipo golpe sordo.
+      // Canto grave y largo, lo más cerca que se llega de una jorobada
+      // con tres osciladores.
       waveform: 'sine',
-      rootFrequencyHz: 110,
-      overtoneRatios: [1, 2, 3.2],
-      durationMs: 700,
+      rootFrequencyHz: 90,
+      overtoneRatios: [1, 1.5, 2.02],
+      durationMs: 1800,
     },
   },
   {
-    id: 'crystal',
-    name: 'Cristal',
-    source: ModelSource.primitive('crystal', 0x4ea8ff),
+    id: 'bird',
+    name: '🦃 Pava',
+    source: ModelSource.primitive('bird', 0x6b4a2f),
+    spot: { u: 0.884, v: 0.264 },
     defaultScale: 1,
     sound: {
-      // Campana: armónicos no enteros, que es lo que da el brillo metálico.
-      waveform: 'triangle',
-      rootFrequencyHz: 660,
-      overtoneRatios: [1, 2.76, 5.4, 8.93],
-      durationMs: 1600,
-    },
-  },
-  {
-    id: 'knot',
-    name: 'Nudo',
-    source: ModelSource.primitive('torus-knot', 0xf5c542),
-    defaultScale: 1,
-    sound: {
-      // Blip sintético, corto y con cuerpo por los armónicos impares.
+      // Graznido: agudo, corto y con armónicos impares que lo hacen áspero.
       waveform: 'square',
-      rootFrequencyHz: 330,
-      overtoneRatios: [1, 3, 5],
-      durationMs: 320,
+      rootFrequencyHz: 520,
+      overtoneRatios: [1, 3, 5.1],
+      durationMs: 260,
+    },
+  },
+  {
+    id: 'crab',
+    name: '🦀 Cangrejo',
+    source: ModelSource.primitive('crab', 0xe2622c),
+    spot: { u: 0.487, v: 0.472 },
+    defaultScale: 1,
+    sound: {
+      // Chasquido de pinza: armónicos no enteros, muy breve.
+      waveform: 'triangle',
+      rootFrequencyHz: 880,
+      overtoneRatios: [1, 2.76, 5.4],
+      durationMs: 140,
+    },
+  },
+  {
+    id: 'turtle',
+    name: '🐢 Tortuga',
+    source: ModelSource.primitive('turtle', 0x6f9a4a),
+    spot: { u: 0.38, v: 0.635 },
+    defaultScale: 1,
+    sound: {
+      // Burbujeo redondo y tranquilo, a juego con cómo se mueve.
+      waveform: 'sine',
+      rootFrequencyHz: 240,
+      overtoneRatios: [1, 2, 3],
+      durationMs: 620,
     },
   },
 ];

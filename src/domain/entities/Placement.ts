@@ -3,7 +3,14 @@ import { Scale } from '../value-objects/Scale';
 import { Vector3 } from '../value-objects/Vector3';
 
 /**
- * Dónde y cómo queda un modelo respecto al anchor.
+ * Ajuste global de la capa de iconos sobre el mapa, más cuál está
+ * seleccionado.
+ *
+ * OJO con `rotationY` y `scale`: NO mueven los iconos de su sitio. Cada
+ * icono está clavado a su MarkerSpot; estos valores solo lo hacen girar
+ * sobre sí mismo y cambiar de tamaño. Desplazar un icono de su animal
+ * sería justamente el bug que hay que evitar.
+ *
  * Inmutable: cada transformación devuelve una instancia nueva.
  */
 export class Placement {
