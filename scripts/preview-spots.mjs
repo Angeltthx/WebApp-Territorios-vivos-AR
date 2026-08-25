@@ -1,36 +1,62 @@
+/**
+ * Dibuja una mira sobre el mapa en las coordenadas que le pases, para
+ * comprobar a ojo que un MarkerSpot del catálogo cae sobre su animal.
+ *
+ * Las coordenadas van normalizadas 0–1 desde la esquina SUPERIOR
+ * IZQUIERDA, igual que en NUQUI_CATALOG.
+ *
+ * Uso:
+ *   node scripts/preview-spots.mjs '[{"u":0.262,"v":0.220}]' mira.jpg
+ *   node scripts/preview-spots.mjs '[...]' mira.jpg otra-imagen.jpg
+ */
 import { readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import jpeg from 'jpeg-js';
 
-const { width, height, data } = jpeg.decode(readFileSync('C:/dev/webar/Map.jpeg'), { useTArray: true });
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-// u,v normalizados desde la esquina superior izquierda
-const SPOTS = JSON.parse(process.argv[2]);
+const [spotsArg, outputArg, imageArg] = process.argv.slice(2);
+if (!spotsArg || !outputArg) {
+  console.error('Uso: node scripts/preview-spots.mjs \'[{"u":0.26,"v":0.22}]\' <salida.jpg> [imagen.jpg]');
+  process.exit(1);
+}
 
-function px(x, y, r, g, b) {
+// Por defecto, la misma imagen que se compila al .mind y que sirve la app.
+const imagePath = resolve(repoRoot, imageArg ?? 'public/targets/map.jpg');
+const spots = JSON.parse(spotsArg);
+
+const { width, height, data } = jpeg.decode(readFileSync(imagePath), { useTArray: true });
+
+const RING_RADII = [40, 41, 42, 43];
+const CROSS_REACH = 55;
+const MARK = [255, 0, 255]; // magenta: no aparece en el mapa, así que no se confunde
+
+function paint(x, y) {
   if (x < 0 || y < 0 || x >= width || y >= height) return;
-  const o = (y * width + x) * 4;
-  data[o] = r; data[o + 1] = g; data[o + 2] = b;
+  const offset = (y * width + x) * 4;
+  [data[offset], data[offset + 1], data[offset + 2]] = MARK;
 }
 
-for (const s of SPOTS) {
-  const cx = Math.round(s.u * width);
-  const cy = Math.round(s.v * height);
-  // circulo
-  for (let a = 0; a < 360; a += 0.25) {
-    const rad = (a * Math.PI) / 180;
-    for (const R of [40, 41, 42, 43]) {
-      px(Math.round(cx + R * Math.cos(rad)), Math.round(cy + R * Math.sin(rad)), 255, 0, 255);
+for (const spot of spots) {
+  const cx = Math.round(spot.u * width);
+  const cy = Math.round(spot.v * height);
+
+  for (let degrees = 0; degrees < 360; degrees += 0.25) {
+    const radians = (degrees * Math.PI) / 180;
+    for (const radius of RING_RADII) {
+      paint(Math.round(cx + radius * Math.cos(radians)), Math.round(cy + radius * Math.sin(radians)));
     }
   }
-  // cruz
-  for (let d = -55; d <= 55; d++) {
-    for (const t of [-1, 0, 1]) {
-      px(cx + d, cy + t, 255, 0, 255);
-      px(cx + t, cy + d, 255, 0, 255);
+
+  for (let d = -CROSS_REACH; d <= CROSS_REACH; d++) {
+    for (const thickness of [-1, 0, 1]) {
+      paint(cx + d, cy + thickness);
+      paint(cx + thickness, cy + d);
     }
   }
 }
 
-const out = jpeg.encode({ data, width, height }, 90);
-writeFileSync(process.argv[3], out.data);
-console.log('ok', width, height);
+const outputPath = resolve(outputArg);
+writeFileSync(outputPath, jpeg.encode({ data, width, height }, 90).data);
+console.log(`${spots.length} mira(s) sobre ${width}x${height} → ${outputPath}`);
