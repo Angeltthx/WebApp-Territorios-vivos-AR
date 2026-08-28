@@ -7,6 +7,7 @@ import {
   MeshBasicMaterial,
   Object3D,
   RingGeometry,
+  Texture,
 } from 'three';
 import type { MarkerSpot } from '@domain/value-objects/MarkerSpot';
 
@@ -165,9 +166,9 @@ export class MarkerPin {
       object.geometry.dispose();
       const material: unknown = object.material;
       if (Array.isArray(material)) {
-        material.forEach((entry: { dispose(): void }) => entry.dispose());
-      } else if (material !== null && typeof material === 'object' && 'dispose' in material) {
-        (material as { dispose(): void }).dispose();
+        material.forEach(disposeMaterial);
+      } else {
+        disposeMaterial(material);
       }
     });
   }
@@ -185,5 +186,27 @@ export class MarkerPin {
 
     this.halo.scale.setScalar(size);
     this.haloMaterial.opacity = 0.22 + 0.5 * this.emphasis + 0.25 * (bump - 1);
+  }
+}
+
+/**
+ * Libera un material y TAMBIÉN sus texturas.
+ *
+ * Con los iconos procedurales daba igual: no tenían ninguna. Los .glb de la
+ * fauna traen tres mapas cada uno (color, normal, metallic-roughness), que
+ * son varios megas de memoria de GPU. `material.dispose()` NO libera las
+ * texturas —three las trata como recursos compartidos, porque dos
+ * materiales pueden apuntar al mismo mapa—, así que hay que recorrer sus
+ * propiedades y soltarlas a mano o se filtran en cada `clear()`.
+ */
+function disposeMaterial(material: unknown): void {
+  if (material === null || typeof material !== 'object') return;
+
+  for (const value of Object.values(material)) {
+    if (value instanceof Texture) value.dispose();
+  }
+
+  if ('dispose' in material && typeof material.dispose === 'function') {
+    (material as { dispose(): void }).dispose();
   }
 }

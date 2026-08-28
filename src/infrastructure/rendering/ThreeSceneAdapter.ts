@@ -1,25 +1,20 @@
 import {
   ACESFilmicToneMapping,
-  CircleGeometry,
   DirectionalLight,
-  DoubleSide,
   Group,
   HemisphereLight,
-  Mesh,
-  MeshStandardMaterial,
   Object3D,
   Quaternion,
   Vector3 as ThreeVector3,
 } from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { ArModel } from '@domain/entities/ArModel';
 import type { Placement } from '@domain/entities/Placement';
 import type { ModelId } from '@domain/value-objects/ModelId';
 import { Stabilization } from '@domain/value-objects/Stabilization';
 import type { ScenePort } from '@application/ports/ScenePort';
 import type { MindArRuntime } from '../mindar/MindArRuntime';
+import { IconLoader } from './IconLoader';
 import { MarkerPin } from './MarkerPin';
-import { createPrimitive } from './PrimitiveFactory';
 
 /**
  * Adaptador de render.
@@ -40,7 +35,7 @@ import { createPrimitive } from './PrimitiveFactory';
  * cámara.
  */
 export class ThreeSceneAdapter implements ScenePort {
-  private readonly loader = new GLTFLoader();
+  private readonly icons = new IconLoader();
   private readonly follower = new Group();
   private readonly overlay = new Group();
   private readonly pins = new Map<string, MarkerPin>();
@@ -69,7 +64,7 @@ export class ThreeSceneAdapter implements ScenePort {
     this.mount();
 
     const icons = await Promise.all(
-      models.map(async (model) => [model, await this.build(model)] as const),
+      models.map(async (model) => [model, await this.icons.load(model)] as const),
     );
 
     icons.forEach(([model, icon], index) => {
@@ -114,6 +109,7 @@ export class ThreeSceneAdapter implements ScenePort {
     this.unsubscribeFrame?.();
     this.unsubscribeFrame = null;
     this.clear();
+    this.icons.dispose();
     if (this.runtime.isInitialized) {
       this.runtime.mindar.renderer.dispose();
     }
@@ -190,22 +186,6 @@ export class ThreeSceneAdapter implements ScenePort {
     this.follower.scale.lerp(this.tmpScale, step);
   }
 
-  private async build(model: ArModel): Promise<Object3D> {
-    if (model.source.kind === 'primitive') {
-      return createPrimitive(model.source.shape, model.source.colorHex);
-    }
-
-    try {
-      const gltf = await this.loader.loadAsync(model.source.url);
-      return gltf.scene;
-    } catch (error) {
-      // Fallback deliberado: si un .glb falta o falla, el resto del catálogo
-      // sigue funcionando en vez de tumbar toda la sesión.
-      console.warn(`[ThreeSceneAdapter] No se pudo cargar ${model.source.url}`, error);
-      return buildMissingMarker();
-    }
-  }
-
   private configureRendering(): void {
     const renderer = this.runtime.mindar.renderer;
     // Tone mapping fílmico: evita que los blancos del modelo se "quemen"
@@ -231,12 +211,4 @@ export function addLights(scene: Object3D): void {
   const fill = new DirectionalLight(0xdfe8ff, 0.5);
   fill.position.set(-1.5, 0.5, -1);
   scene.add(fill);
-}
-
-/** Marcador gris y neutro para un modelo que no se pudo cargar. */
-function buildMissingMarker(): Object3D {
-  return new Mesh(
-    new CircleGeometry(0.06, 20),
-    new MeshStandardMaterial({ color: 0x8a8a8a, roughness: 0.9, side: DoubleSide }),
-  );
 }

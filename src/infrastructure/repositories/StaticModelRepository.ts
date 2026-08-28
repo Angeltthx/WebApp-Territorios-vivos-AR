@@ -42,14 +42,23 @@ export class StaticModelRepository implements ModelRepository {
  * valores y recompilar el target — son solidarios con esa imagen concreta.
  *
  * Los timbres son deliberadamente distintos para que se reconozcan de oído
- * sin mirar la pantalla, y todo es geometría procedural: la app funciona en
- * cuanto la despliegas, sin subir un solo .glb.
+ * sin mirar la pantalla.
+ *
+ * La geometría son los .glb del diseñador del equipo, en public/models/.
+ * Llegan modelados en unidades de Blender (entre 9 y 23 de lado, con el
+ * pivote descentrado): IconLoader los recentra y los encaja a ICON_TARGET_SIZE
+ * al cargarlos, así que aquí no hay que tocar `defaultScale` por modelo.
+ *
+ * Si un .glb faltara, ese animal cae a un disco gris y los otros tres siguen
+ * funcionando. Para volver a los iconos procedurales de PrimitiveFactory —que
+ * siguen ahí y no necesitan ningún archivo— basta con cambiar su `source` de
+ * vuelta a `ModelSource.primitive(...)`.
  */
 export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   {
     id: 'whale',
     name: '🐋 Ballena',
-    source: ModelSource.primitive('whale', 0x2c3e6b),
+    source: ModelSource.gltf('/models/Ballena_PBR.glb'),
     spot: { u: 0.262, v: 0.22 },
     defaultScale: 1,
     sound: {
@@ -64,7 +73,7 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   {
     id: 'bird',
     name: '🦃 Pava',
-    source: ModelSource.primitive('bird', 0x6b4a2f),
+    source: ModelSource.gltf('/models/Pava_PBR.glb'),
     spot: { u: 0.884, v: 0.264 },
     defaultScale: 1,
     sound: {
@@ -78,7 +87,7 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   {
     id: 'crab',
     name: '🦀 Cangrejo',
-    source: ModelSource.primitive('crab', 0xe2622c),
+    source: ModelSource.gltf('/models/Cangrejo_PBR.glb'),
     spot: { u: 0.487, v: 0.472 },
     defaultScale: 1,
     sound: {
@@ -92,7 +101,7 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   {
     id: 'turtle',
     name: '🐢 Tortuga',
-    source: ModelSource.primitive('turtle', 0x6f9a4a),
+    source: ModelSource.gltf('/models/Tortuga_PBR.glb'),
     spot: { u: 0.38, v: 0.635 },
     defaultScale: 1,
     sound: {

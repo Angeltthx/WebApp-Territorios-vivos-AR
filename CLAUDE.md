@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A browser-based WebAR experience (image tracking, not markerless/world tracking) that works on iPhone Safari and Android Chrome with no app install. Uses **MindAR** for computer-vision tracking (WebXR is not an option — Safari on iPhone doesn't support it) and **Three.js** for rendering.
 
-The marker is an illustrated map of Nuquí, Chocó (`public/targets/map.jpg`). When the camera sees it, **four 3D icons appear pinned to the four animals drawn on the map** — whale, guan (pava), crab, turtle — each floating out of the paper with its own synthesized sound. All four are procedural geometry and Web Audio synthesis: no `.glb` or audio files are needed to run it.
+The marker is an illustrated map of Nuquí, Chocó (`public/targets/map.jpg`). When the camera sees it, **four 3D icons appear pinned to the four animals drawn on the map** — whale, guan (pava), crab, turtle — each floating out of the paper with its own synthesized sound. The four icons are `.glb` models made by the team's 3D designer, in `public/models/`; the sound is Web Audio synthesis, so no audio files are needed. `PrimitiveFactory` still builds a procedural stand-in for every animal — switch a catalog entry back to `ModelSource.primitive(...)` and it runs with no assets at all.
 
 ## Commands
 
@@ -45,7 +45,7 @@ src/
 ├── infrastructure/     MindAR and Three.js live ONLY here.
 │   ├── mindar/          MindArRuntime — shared instance, owns the 60fps render loop
 │   ├── tracking/        MindArTrackingAdapter
-│   ├── rendering/       ThreeSceneAdapter, MarkerPin, PrimitiveFactory
+│   ├── rendering/       ThreeSceneAdapter, MarkerPin, IconLoader, PrimitiveFactory
 │   ├── interaction/      PointerInteractionAdapter (raycast + gestures)
 │   ├── audio/            WebAudioAdapter (synthesis, no audio files)
 │   ├── repositories/    StaticModelRepository + NUQUI_CATALOG
@@ -82,9 +82,12 @@ src/
 - **`WebAudioAdapter.unlock()` must be called synchronously inside the Start button's click handler** (see `StartArExperience.execute`). iOS Safari keeps the `AudioContext` suspended forever if unlock happens outside a real user gesture. Don't move audio unlocking behind an `await` chain or into a different handler.
 - **`three` is pinned to `0.160.0`** — the version MindAR's docs were verified against. Do not bump it without testing on a real device; MindAR has never been tested against newer Three.js releases.
 - **`src/types/mindar.d.ts` is hand-written**, not official types — names were verified against the actual `mind-ar@1.2.5` bundle, not against a spec.
-- If a `.glb` referenced via `ModelSource.gltf(...)` is missing or fails to load, that model falls back to a procedural placeholder instead of crashing the session — this is intentional, don't add a try/catch that hides the failure differently.
 - `.npmrc` sets `ignore-scripts=true`, so install-time scripts (postinstall, etc.) are skipped for all dependencies. **This is why the target compiler is hand-rolled:** MindAR's own `OfflineCompiler` imports the native `canvas` package, which never gets built here. `scripts/compile-target.mjs` subclasses `CompilerBase` (which has no canvas dependency) and feeds it a jpeg-js-decoded buffer through a two-method canvas shim. Don't "fix" it by adding `canvas` — it needs a native toolchain on Windows.
 - **`TARGET_ASPECT` in `src/main.ts` must match the compiled image**, and the catalog's `spot` values are measured against that same image. Changing the map means: re-run `npm run compile-target`, update `TARGET_ASPECT`, and re-measure all four spots. They are one unit, not three independent settings.
 - **The tap raycast resolves *which* icon was hit**, via a `userData.modelId` set on each pin group and walked up from the hit mesh (`findModelId`). The tap zone uses `opacity: 0` rather than `visible: false` on purpose: three's raycaster still traverses invisible objects, so `visible: false` would not have made it untappable — but it also wouldn't have been reliable across versions.
-- If a `.glb` referenced via `ModelSource.gltf(...)` is missing or fails to load, that model falls back to a procedural placeholder instead of crashing the session — this is intentional, don't add a try/catch that hides the failure differently. Note the scale: **map width = 1 unit**, so a `.glb` exported in meters will be enormous.
-- To replace a procedural icon with a real asset: change the corresponding `source:` entry in `NUQUI_CATALOG` from `ModelSource.primitive(...)` to `ModelSource.gltf('/models/....glb')` and put the file in `public/models/`. Icons are modeled **+Y up** (Three.js's natural orientation); `MarkerPin` rotates the containing group 90° about X so that up becomes "out of the map".
+- **`IconLoader` is the only place a model becomes an `Object3D`**, shared by `ThreeSceneAdapter` and `verify.html` so the verification page tests the real assets. It also owns the two things every incoming `.glb` needs:
+  - **Normalization (`fitToIconSize`).** **Map width = 1 unit**, so a `.glb` authored in Blender units or metres is enormous — the delivered models are 9–23 units across. `fitToIconSize` recentres each model on its bounding box and scales its longest side to `ICON_TARGET_SIZE` (0.21, the size `PrimitiveFactory` draws to), so real and procedural icons are interchangeable and no per-model `defaultScale` tuning is needed. It returns a **wrapper** group: `MarkerPin` overwrites `icon.scale`/`icon.rotation` every frame, so the fit factor must live on an inner node or it gets wiped.
+  - **Draco.** The models ship `KHR_draco_mesh_compression` in `extensionsRequired`. `public/draco/` holds the decoder copied from `three@0.160.0`; re-copy it if three is ever bumped. `EXT_texture_webp` (also required by these files) needs no setup — three 0.160 supports it natively.
+- If a `.glb` is missing or fails to load, that model falls back to a grey disc instead of crashing the session — this is intentional, don't add a try/catch that hides the failure differently. A grey disc on screen means *check the console for `[IconLoader]`*, usually a codec the loader wasn't configured for.
+- To swap an icon for a different asset: change its `source:` entry in `NUQUI_CATALOG` and drop the file in `public/models/`. Icons are modeled **+Y up** (Three.js's natural orientation); `MarkerPin` rotates the containing group 90° about X so that up becomes "out of the map".
+- **`MarkerPin.dispose()` frees textures, not just materials.** `material.dispose()` deliberately leaves textures alone (three treats them as shared), so with textured `.glb`s every `clear()` would leak several MB of GPU memory without the explicit walk.
