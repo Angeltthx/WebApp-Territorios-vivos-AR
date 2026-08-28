@@ -27,21 +27,14 @@ if (root === null || arContainer === null) {
 let view: ArView;
 let gesturesAttached = false;
 
-const {
-  startArExperience,
-  transformPlacement,
-  switchModel,
-  playModelSound,
-  interaction,
-  catalog,
-} = buildContainer({
+const { startArExperience, transformPlacement, playModelSound, interaction } = buildContainer({
   container: arContainer,
   imageTargetSrc: TARGET_SRC,
   targetAspect: TARGET_ASPECT,
   onSessionChange: (session) => view?.render(session),
 });
 
-view = new ArView(root, catalog, {
+view = new ArView(root, {
   onStart: async () => {
     const session = await startArExperience.execute('whale');
 
@@ -56,7 +49,6 @@ view = new ArView(root, catalog, {
       onScale: (factor) => transformPlacement.scaleBy(factor),
     });
   },
-  onSelectModel: (modelId) => void switchModel.execute(modelId),
   onRotateLeft: () => transformPlacement.rotateBy(-ROTATION_STEP),
   onRotateRight: () => transformPlacement.rotateBy(ROTATION_STEP),
   onScaleUp: () => transformPlacement.scaleBy(SCALE_STEP),

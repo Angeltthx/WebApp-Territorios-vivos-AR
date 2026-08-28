@@ -107,7 +107,6 @@
         border: 1px dashed var(--border);
       }
 
-      #picker { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
       #controls { display: flex; gap: 8px; align-items: center; }
 
       button {
@@ -124,13 +123,6 @@
         transition: transform 0.12s ease, background 0.15s ease;
       }
       button:active { transform: scale(0.94); }
-
-      .chip { padding: 10px 16px; min-height: 42px; font-size: 14px; border-radius: 999px; }
-      .chip[data-active="true"] {
-        background: var(--accent);
-        border-color: transparent;
-        font-weight: 600;
-      }
 
       #stabilization { font-size: 13px; padding: 13px 14px; min-width: 92px; }
 
@@ -157,8 +149,6 @@
         <a id="marker-link" href="/targets/map.jpg" target="_blank" rel="noopener"
           >¿No ves nada? Abre el mapa de Nuquí aquí</a
         >
-
-        <div id="picker" hidden></div>
 
         <div id="controls" hidden>
           <button type="button" id="rot-left" aria-label="Girar a la izquierda">&#8634;</button>

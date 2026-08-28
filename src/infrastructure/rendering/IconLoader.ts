@@ -64,13 +64,20 @@ export class IconLoader {
   }
 
   async load(model: ArModel): Promise<Object3D> {
+    // Cada animal ocupa lo suyo: una ballena no puede salir del tamaño de un
+    // cangrejo. El factor vive en el catálogo (IconPose.size).
+    const targetSize = ICON_TARGET_SIZE * model.pose.size;
+
     if (model.source.kind === 'primitive') {
-      return createPrimitive(model.source.shape, model.source.colorHex);
+      // Las figuras procedurales SÍ están dibujadas a mano con proporciones
+      // pensadas entre sí, así que no se normalizan: solo se les aplica el
+      // factor del catálogo, envuelto para que MarkerPin no lo pise.
+      return wrapScaled(createPrimitive(model.source.shape, model.source.colorHex), model.pose.size);
     }
 
     try {
       const gltf = await this.gltf.loadAsync(model.source.url);
-      return fitToIconSize(gltf.scene);
+      return fitToIconSize(gltf.scene, targetSize);
     } catch (error) {
       // Respaldo deliberado: si un .glb falta o falla, el resto del
       // catálogo sigue funcionando en vez de tumbar toda la sesión.
@@ -128,6 +135,25 @@ export function fitToIconSize(object: Object3D, targetSize = ICON_TARGET_SIZE): 
 
   const wrapper = new Group();
   wrapper.add(fit);
+  return wrapper;
+}
+
+/**
+ * Envuelve un objeto en un grupo escalado.
+ *
+ * Mismo motivo que la jerarquía de `fitToIconSize`: MarkerPin sobrescribe el
+ * `scale` de lo que se le entrega en cada frame, así que cualquier factor
+ * propio tiene que ir en un nodo interior.
+ */
+function wrapScaled(object: Object3D, factor: number): Object3D {
+  if (factor === 1) return object;
+
+  const scaled = new Group();
+  scaled.scale.setScalar(factor);
+  scaled.add(object);
+
+  const wrapper = new Group();
+  wrapper.add(scaled);
   return wrapper;
 }
 

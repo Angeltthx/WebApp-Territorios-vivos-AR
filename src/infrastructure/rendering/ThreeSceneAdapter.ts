@@ -68,7 +68,7 @@ export class ThreeSceneAdapter implements ScenePort {
     );
 
     icons.forEach(([model, icon], index) => {
-      const pin = new MarkerPin(model.id.value, model.spot, icon, index, this.targetAspect);
+      const pin = new MarkerPin(model, icon, index, this.targetAspect);
       this.overlay.add(pin.group);
       this.pins.set(model.id.value, pin);
     });

@@ -55,13 +55,7 @@ const pins: MarkerPin[] = [];
 const ready = Promise.all(
   NUQUI_CATALOG.map(async (snapshot, index) => {
     const model = ArModel.fromSnapshot(snapshot);
-    const pin = new MarkerPin(
-      model.id.value,
-      model.spot,
-      await icons.load(model),
-      index,
-      TARGET_ASPECT,
-    );
+    const pin = new MarkerPin(model, await icons.load(model), index, TARGET_ASPECT);
     scene.add(pin.group);
     return [index, pin] as const;
   }),

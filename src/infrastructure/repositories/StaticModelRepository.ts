@@ -49,6 +49,11 @@ export class StaticModelRepository implements ModelRepository {
  * pivote descentrado): IconLoader los recentra y los encaja a ICON_TARGET_SIZE
  * al cargarlos, así que aquí no hay que tocar `defaultScale` por modelo.
  *
+ * `view` e `iconSize` son por animal a propósito. Una sola regla global no
+ * sirve: la ballena y la pava están dibujadas de lado y de perfil se
+ * reconocen; el cangrejo y la tortuga están dibujados en planta y así se
+ * quedan. Y una ballena no puede ocupar lo mismo que un cangrejo.
+ *
  * Si un .glb faltara, ese animal cae a un disco gris y los otros tres siguen
  * funcionando. Para volver a los iconos procedurales de PrimitiveFactory —que
  * siguen ahí y no necesitan ningún archivo— basta con cambiar su `source` de
@@ -60,6 +65,10 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     name: '🐋 Ballena',
     source: ModelSource.gltf('/models/Ballena_PBR.glb'),
     spot: { u: 0.262, v: 0.22 },
+    // De perfil y grande: es el animal más grande del mapa y en la
+    // ilustración está dibujada de lado. Vista en planta no se reconocía.
+    view: 'side',
+    iconSize: 1.6,
     defaultScale: 1,
     sound: {
       // Canto grave y largo, lo más cerca que se llega de una jorobada
@@ -75,6 +84,9 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     name: '🦃 Pava',
     source: ModelSource.gltf('/models/Pava_PBR.glb'),
     spot: { u: 0.884, v: 0.264 },
+    // También de perfil: un ave vista desde arriba es una mancha.
+    view: 'side',
+    iconSize: 1.1,
     defaultScale: 1,
     sound: {
       // Graznido: agudo, corto y con armónicos impares que lo hacen áspero.
@@ -89,6 +101,9 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     name: '🦀 Cangrejo',
     source: ModelSource.gltf('/models/Cangrejo_PBR.glb'),
     spot: { u: 0.487, v: 0.472 },
+    // En planta, como está dibujado: es su silueta reconocible.
+    view: 'top',
+    iconSize: 1,
     defaultScale: 1,
     sound: {
       // Chasquido de pinza: armónicos no enteros, muy breve.
@@ -103,6 +118,8 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     name: '🐢 Tortuga',
     source: ModelSource.gltf('/models/Tortuga_PBR.glb'),
     spot: { u: 0.38, v: 0.635 },
+    view: 'top',
+    iconSize: 1.15,
     defaultScale: 1,
     sound: {
       // Burbujeo redondo y tranquilo, a juego con cómo se mueve.

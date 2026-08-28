@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A browser-based WebAR experience (image tracking, not markerless/world tracking) that works on iPhone Safari and Android Chrome with no app install. Uses **MindAR** for computer-vision tracking (WebXR is not an option — Safari on iPhone doesn't support it) and **Three.js** for rendering.
 
-The marker is an illustrated map of Nuquí, Chocó (`public/targets/map.jpg`). When the camera sees it, **four 3D icons appear pinned to the four animals drawn on the map** — whale, guan (pava), crab, turtle — each floating out of the paper with its own synthesized sound. The four icons are `.glb` models made by the team's 3D designer, in `public/models/`; the sound is Web Audio synthesis, so no audio files are needed. `PrimitiveFactory` still builds a procedural stand-in for every animal — switch a catalog entry back to `ModelSource.primitive(...)` and it runs with no assets at all.
+The marker is an illustrated map of Nuquí, Chocó (`public/targets/map.jpg`). When the camera sees it, **four 3D icons appear pinned to the four animals drawn on the map** — whale, guan (pava), crab, turtle. **Tapping an animal is the only way to select one**: it plays that animal's sound, pulses it and lights its halo. There is deliberately no picker bar (it was removed along with a `SwitchModel` use case that existed only to serve it). The four icons are `.glb` models made by the team's 3D designer, in `public/models/`; the sound is Web Audio synthesis, so no audio files are needed. `PrimitiveFactory` still builds a procedural stand-in for every animal — switch a catalog entry back to `ModelSource.primitive(...)` and it runs with no assets at all.
 
 ## Commands
 
@@ -18,6 +18,7 @@ npm run build           # vite build
 npm run preview         # vite preview --host
 npm run typecheck       # tsc --noEmit
 npm run compile-target  # public/targets/map.jpg -> public/targets/map.mind
+npm run optimize-models # models-src/*.glb -> public/models/*.glb (webp + draco)
 ```
 
 There is no test suite and no lint script configured.
@@ -38,10 +39,10 @@ Hexagonal (ports and adapters). The single rule: **dependencies point inward.** 
 src/
 ├── domain/            Pure rules, zero external imports.
 │   ├── entities/       ArModel, ArSession, Placement
-│   └── value-objects/  ModelId, Scale, Vector3, MarkerSpot, ModelSource, SoundProfile, Stabilization
+│   └── value-objects/  ModelId, Scale, Vector3, MarkerSpot, ModelSource, SoundProfile, Stabilization, IconPose
 ├── application/
 │   ├── ports/          TrackingPort, ScenePort, AudioPort, InteractionPort, ModelRepository, AnalyticsPort
-│   └── use-cases/       StartArExperience, SwitchModel, TransformPlacement, PlayModelSound
+│   └── use-cases/       StartArExperience, TransformPlacement, PlayModelSound
 ├── infrastructure/     MindAR and Three.js live ONLY here.
 │   ├── mindar/          MindArRuntime — shared instance, owns the 60fps render loop
 │   ├── tracking/        MindArTrackingAdapter
@@ -74,7 +75,7 @@ src/
   ```
   Content is deliberately not parented directly to MindAR's anchor because doing so inherits its raw frame-to-frame tracking jitter. `follower` copies the anchor pose every frame with framerate-independent exponential smoothing instead; the Fast/Balanced/Stable button changes that smoothing factor live.
 - **Rotation and scale never move an icon off its animal.** `Placement.rotationY`/`scale` spin and resize each icon *in place*; a change that makes them displace the icons is a bug, not a feature. `Placement.offset` moves the whole overlay and is currently always zero.
-- `ArSession` (in `domain/entities/ArSession.ts`) is a frozen state machine (`idle → preparing → searching → tracking/lost → error`) with guarded transitions — invalid states (e.g. `tracking()` without a prior `Placement`) throw. `SwitchModel`/`TransformPlacement`/etc. read/write this via the use cases, never by mutating fields directly.
+- `ArSession` (in `domain/entities/ArSession.ts`) is a frozen state machine (`idle → preparing → searching → tracking/lost → error`) with guarded transitions — invalid states (e.g. `tracking()` without a prior `Placement`) throw. `TransformPlacement`/etc. read/write this via the use cases, never by mutating fields directly.
 - Path aliases (`@domain`, `@application`, `@infrastructure`, `@ui`) are defined in both `tsconfig.json` and `vite.config.ts` — keep them in sync if either changes.
 
 ## Project-specific gotchas (read before touching related code)
@@ -83,6 +84,8 @@ src/
 - **`three` is pinned to `0.160.0`** — the version MindAR's docs were verified against. Do not bump it without testing on a real device; MindAR has never been tested against newer Three.js releases.
 - **`src/types/mindar.d.ts` is hand-written**, not official types — names were verified against the actual `mind-ar@1.2.5` bundle, not against a spec.
 - `.npmrc` sets `ignore-scripts=true`, so install-time scripts (postinstall, etc.) are skipped for all dependencies. **This is why the target compiler is hand-rolled:** MindAR's own `OfflineCompiler` imports the native `canvas` package, which never gets built here. `scripts/compile-target.mjs` subclasses `CompilerBase` (which has no canvas dependency) and feeds it a jpeg-js-decoded buffer through a two-method canvas shim. Don't "fix" it by adding `canvas` — it needs a native toolchain on Windows.
+- **Models are a two-folder pipeline: `models-src/` (the designer's originals, not served) → `npm run optimize-models` → `public/models/` (what ships).** Never optimize in place: texture compression is lossy, so re-running over its own output degrades quality a little each time. The delivered originals were 8.4 MB and 96–99 % of that was **textures**, not geometry — so the thing that cuts weight is WebP re-encoding, not Draco (which three of the four already had). The script does both anyway and lands at 3.2 MB. Both folders are committed: Netlify runs `npm run build` only, so `public/models/` must already hold the optimized files.
+- **`view` and `iconSize` in the catalog are per-animal on purpose.** The whale and the guan are drawn in profile on the map and are unrecognisable from above, so they use `view: 'side'`; the crab and turtle are drawn in plan and stay `'top'`. `MarkerPin.applyView` is the single place that turns that into a rotation. A whale also can't be the size of a crab — hence `iconSize`, a multiplier over `ICON_TARGET_SIZE` applied in `IconLoader`.
 - **`TARGET_ASPECT` in `src/main.ts` must match the compiled image**, and the catalog's `spot` values are measured against that same image. Changing the map means: re-run `npm run compile-target`, update `TARGET_ASPECT`, and re-measure all four spots. They are one unit, not three independent settings.
 - **The tap raycast resolves *which* icon was hit**, via a `userData.modelId` set on each pin group and walked up from the hit mesh (`findModelId`). The tap zone uses `opacity: 0` rather than `visible: false` on purpose: three's raycaster still traverses invisible objects, so `visible: false` would not have made it untappable — but it also wouldn't have been reliable across versions.
 - **`IconLoader` is the only place a model becomes an `Object3D`**, shared by `ThreeSceneAdapter` and `verify.html` so the verification page tests the real assets. It also owns the two things every incoming `.glb` needs:

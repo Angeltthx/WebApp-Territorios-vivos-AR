@@ -9,6 +9,8 @@ import {
   RingGeometry,
   Texture,
 } from 'three';
+import type { ArModel } from '@domain/entities/ArModel';
+import type { IconView } from '@domain/value-objects/IconPose';
 import type { MarkerSpot } from '@domain/value-objects/MarkerSpot';
 
 const PULSE_DURATION_S = 0.45;
@@ -59,6 +61,35 @@ export function anchorPositionOf(
 }
 
 /**
+ * Tumba el icono sobre el mapa según desde qué cara hay que mirarlo.
+ *
+ * Los modelos vienen con +Y arriba y su eje largo en +Z. El mapa está en el
+ * plano XY del anchor, con +Z saliendo del papel hacia la cámara.
+ *
+ *   'top'   giro de 90° en X: el +Y del modelo pasa a ser el +Z del anchor.
+ *           El animal se apoya sobre el papel y quien mira el mapa desde
+ *           arriba le ve el lomo. Es lo que quieres para el cangrejo y la
+ *           tortuga, dibujados en planta.
+ *
+ *   'side'  giro de −90° en Y, sin tocar X: el +Y del modelo sigue siendo el
+ *           +Y del anchor (arriba EN EL PLANO del mapa) y su eje largo cae
+ *           sobre −X. El animal queda de perfil, como una figura de cartón
+ *           levantada sobre el papel, y desde arriba se le ve el costado.
+ *           Es lo que quieres para la ballena y la pava.
+ *
+ * En ambos casos el giro que hace el usuario (`Placement.rotationY`) se
+ * aplica DENTRO de este grupo, sobre el eje Y propio del icono, así que
+ * sigue girando en el sitio y no lo despega de su animal.
+ */
+function applyView(lift: Group, view: IconView): void {
+  if (view === 'side') {
+    lift.rotation.set(0, -Math.PI / 2, 0);
+    return;
+  }
+  lift.rotation.set(Math.PI / 2, 0, 0);
+}
+
+/**
  * Un icono clavado a un punto del mapa: halo tumbado sobre el papel, zona
  * de toque, y el icono flotando hacia fuera.
  *
@@ -83,19 +114,18 @@ export class MarkerPin {
   private spin = 0;
 
   constructor(
-    id: string,
-    spot: MarkerSpot,
+    model: ArModel,
     private readonly icon: Object3D,
     index: number,
     targetAspect: number,
   ) {
     this.phase = index * 1.7;
 
-    const { x, y } = anchorPositionOf(spot, targetAspect);
+    const { x, y } = anchorPositionOf(model.spot, targetAspect);
     this.group.position.set(x, y, 0);
     // Cada icono lleva su id encima: así el raycast sabe a qué animal le
     // acertó sin depender del orden de la escena.
-    this.group.userData['modelId'] = id;
+    this.group.userData['modelId'] = model.id.value;
 
     this.haloMaterial = new MeshBasicMaterial({
       color: 0xffffff,
@@ -121,9 +151,9 @@ export class MarkerPin {
     hit.position.z = 0.001;
     this.group.add(hit);
 
-    // El icono se construye con +Y arriba (lo natural en Three.js); girar
-    // 90° en X hace que ese "arriba" apunte hacia fuera del mapa.
-    this.lift.rotation.x = Math.PI / 2;
+    // Los iconos se modelan con +Y arriba (lo natural en Three.js). Cómo se
+    // tumba ese "arriba" sobre el mapa depende del animal: ver applyView.
+    applyView(this.lift, model.pose.view);
     this.lift.position.z = HOVER_HEIGHT;
     this.lift.add(icon);
     this.group.add(this.lift);

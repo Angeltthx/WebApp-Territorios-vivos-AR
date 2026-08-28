@@ -1,6 +1,5 @@
 import { PlayModelSound } from '@application/use-cases/PlayModelSound';
 import { StartArExperience } from '@application/use-cases/StartArExperience';
-import { SwitchModel } from '@application/use-cases/SwitchModel';
 import { TransformPlacement } from '@application/use-cases/TransformPlacement';
 import type { ArSession } from '@domain/entities/ArSession';
 import { ConsoleAnalyticsAdapter } from '../analytics/ConsoleAnalyticsAdapter';
@@ -54,18 +53,12 @@ export function buildContainer(config: ContainerConfig) {
     startArExperience.update(session),
   );
 
-  const switchModel = new SwitchModel(scene, audio, models, analytics, getSession, (session) =>
-    startArExperience.update(session),
-  );
-
   const playModelSound = new PlayModelSound(audio, scene, models, analytics, getSession);
 
   return {
     startArExperience,
     transformPlacement,
-    switchModel,
     playModelSound,
     interaction,
-    catalog: NUQUI_CATALOG,
   } as const;
 }
