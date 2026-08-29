@@ -32,23 +32,40 @@ export class IconPose {
     readonly view: IconView,
     /** Multiplica el tamaño base del icono. 1 = como los demás. */
     readonly size: number,
+    /**
+     * Hacia dónde mira, en RADIANES, girando sobre su propio eje vertical.
+     *
+     * Hace falta porque cada modelo viene mirando hacia donde le convino a
+     * quien lo esculpió, y sobre el mapa cada animal tiene que mirar hacia
+     * donde mira su dibujo. Se compone con el giro que hace el usuario, así
+     * que sigue siendo un giro EN EL SITIO: no despega al icono de su punto.
+     */
+    readonly facing: number,
   ) {
     Object.freeze(this);
   }
 
-  static of(view: IconView, size = 1): IconPose {
+  /** @param facingDegrees grados; es como se lee y se ajusta en el catálogo. */
+  static of(view: IconView, size = 1, facingDegrees = 0): IconPose {
     if (!VIEWS.includes(view)) {
       throw new RangeError(`Vista desconocida: "${view}". Usa ${VIEWS.join(' o ')}.`);
     }
     if (!Number.isFinite(size) || size <= 0) {
       throw new RangeError(`Tamaño inválido: ${size}. Debe ser un número positivo.`);
     }
+    if (!Number.isFinite(facingDegrees)) {
+      throw new RangeError(`Giro inválido: ${facingDegrees}. Debe ser un número de grados.`);
+    }
     // Se reutilizan los topes de Scale: un icono tampoco puede desaparecer
     // ni tragarse el mapa entero.
-    return new IconPose(view, Math.min(Scale.MAX, Math.max(Scale.MIN, size)));
+    return new IconPose(
+      view,
+      Math.min(Scale.MAX, Math.max(Scale.MIN, size)),
+      (facingDegrees * Math.PI) / 180,
+    );
   }
 
   static default(): IconPose {
-    return IconPose.of('top', 1);
+    return IconPose.of('top', 1, 0);
   }
 }

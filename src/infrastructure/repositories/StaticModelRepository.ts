@@ -69,6 +69,8 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     // ilustración está dibujada de lado. Vista en planta no se reconocía.
     view: 'side',
     iconSize: 1.6,
+    // El modelo nace mirando a la izquierda; el dibujo mira a la derecha.
+    facing: 180,
     defaultScale: 1,
     sound: {
       // Canto grave y largo, lo más cerca que se llega de una jorobada
@@ -86,7 +88,13 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     spot: { u: 0.884, v: 0.264 },
     // También de perfil: un ave vista desde arriba es una mancha.
     view: 'side',
-    iconSize: 1.1,
+    // Medido contra el dibujo: la pava ilustrada ocupa ~0.23 del ancho del
+    // mapa. Con este factor el icono queda del mismo tamaño que ella.
+    // El número es alto porque el eje mayor del modelo apunta hacia la
+    // cámara y se ve escorzado: lo que manda es lo medido en pantalla.
+    iconSize: 2.7,
+    // Ya nace mirando a la izquierda, igual que su dibujo.
+    facing: 0,
     defaultScale: 1,
     sound: {
       // Graznido: agudo, corto y con armónicos impares que lo hacen áspero.
@@ -101,9 +109,11 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     name: '🦀 Cangrejo',
     source: ModelSource.gltf('/models/Cangrejo_PBR.glb'),
     spot: { u: 0.487, v: 0.472 },
-    // En planta, como está dibujado: es su silueta reconocible.
-    view: 'top',
+    // Único que mira a la cámara: de pie y de frente, no tumbado. Con
+    // 'side' queda erguido y el giro lo pone de cara a quien mira.
+    view: 'side',
     iconSize: 1,
+    facing: 90,
     defaultScale: 1,
     sound: {
       // Chasquido de pinza: armónicos no enteros, muy breve.
@@ -118,8 +128,11 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     name: '🐢 Tortuga',
     source: ModelSource.gltf('/models/Tortuga_PBR.glb'),
     spot: { u: 0.38, v: 0.635 },
+    // En planta, como está dibujada. El modelo nace mirando hacia abajo del
+    // mapa; su dibujo mira a la izquierda, así que gira un cuarto de vuelta.
     view: 'top',
     iconSize: 1.15,
+    facing: -90,
     defaultScale: 1,
     sound: {
       // Burbujeo redondo y tranquilo, a juego con cómo se mueve.

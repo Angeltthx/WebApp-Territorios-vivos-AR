@@ -8,6 +8,16 @@
     />
     <meta name="theme-color" content="#000000" />
     <title>Territorios Vivos AR · Nuquí, Chocó</title>
+
+    <!-- Fuente solo para el rótulo de la guía. `display=swap` para que la
+         página nunca se quede en blanco esperándola: si tarda o falla, se
+         ve en la serif del sistema y luego cambia. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
         color-scheme: dark;
@@ -96,19 +106,6 @@
         border-color: rgba(255, 120, 120, 0.4);
       }
 
-      #marker-link {
-        font-size: 13px;
-        color: #fff;
-        text-decoration: none;
-        padding: 9px 16px;
-        border-radius: 999px;
-        background: var(--surface);
-        backdrop-filter: blur(12px);
-        border: 1px dashed var(--border);
-      }
-
-      #controls { display: flex; gap: 8px; align-items: center; }
-
       button {
         font: inherit;
         color: #fff;
@@ -124,14 +121,126 @@
       }
       button:active { transform: scale(0.94); }
 
-      #stabilization { font-size: 13px; padding: 13px 14px; min-width: 92px; }
-
       #start {
         font-size: 17px;
         font-weight: 600;
         padding: 17px 44px;
         background: var(--accent);
         border-color: transparent;
+      }
+
+      /* ------------------------------------------------------------------
+         GUÍA DE ENCUADRE
+
+         Lo primero que ve el usuario tras dar permiso de cámara. Un marco
+         con la proporción EXACTA del mapa (880x1280) y una instrucción:
+         sin esto, la pantalla es la imagen de la cámara y nada indica que
+         haya que buscar un mapa impreso.
+
+         `pointer-events: none` en todo el bloque: es una guía, no una capa
+         que se pueda tocar. Los toques siguen llegando al canvas.
+         ------------------------------------------------------------------ */
+      #guide {
+        position: fixed;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        padding: 24px;
+        pointer-events: none;
+        background: radial-gradient(
+          ellipse at center,
+          rgba(0, 0, 0, 0.28) 0%,
+          rgba(0, 0, 0, 0.66) 100%
+        );
+        /* Se anima con opacidad, no con [hidden]: `display:none` corta
+           cualquier transición y la guía aparecería y desaparecería de
+           golpe. */
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.45s ease, visibility 0.45s;
+      }
+      #guide[data-visible="true"] { opacity: 1; visibility: visible; }
+
+      #guide-frame {
+        position: relative;
+        aspect-ratio: 880 / 1280;
+        height: min(52vh, 112vw);
+        max-width: 74vw;
+        border: 2px dashed rgba(255, 255, 255, 0.5);
+        border-radius: 16px;
+        animation: breathe 2.6s ease-in-out infinite;
+      }
+      /* Esquinas de visor: marcan el encuadre sin cerrar el marco. */
+      #guide-frame span {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        border: 3px solid #fff;
+      }
+      #guide-frame span:nth-child(1) {
+        top: -3px; left: -3px;
+        border-right: 0; border-bottom: 0; border-radius: 16px 0 0 0;
+      }
+      #guide-frame span:nth-child(2) {
+        top: -3px; right: -3px;
+        border-left: 0; border-bottom: 0; border-radius: 0 16px 0 0;
+      }
+      #guide-frame span:nth-child(3) {
+        bottom: -3px; left: -3px;
+        border-right: 0; border-top: 0; border-radius: 0 0 0 16px;
+      }
+      #guide-frame span:nth-child(4) {
+        bottom: -3px; right: -3px;
+        border-left: 0; border-top: 0; border-radius: 0 0 16px 0;
+      }
+      @keyframes breathe {
+        0%, 100% { transform: scale(1); opacity: 0.85; }
+        50% { transform: scale(1.022); opacity: 1; }
+      }
+
+      #guide-title {
+        margin: 0;
+        text-align: center;
+        font-family: "Fraunces", Georgia, "Times New Roman", serif;
+        font-weight: 600;
+        font-size: clamp(23px, 6.4vw, 34px);
+        line-height: 1.2;
+        text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
+      }
+
+      /* El enlace al mapa vivía suelto en la pantalla. Aquí sigue estando
+         para quien no lo tenga impreso, pero solo cuando la guía se
+         muestra: el resto del tiempo no estorba. */
+      #guide-link {
+        pointer-events: auto;
+        font-size: 13px;
+        color: rgba(255, 255, 255, 0.82);
+        text-decoration: none;
+        padding: 9px 16px;
+        border-radius: 999px;
+        background: var(--surface);
+        backdrop-filter: blur(12px);
+        border: 1px dashed var(--border);
+      }
+
+      /* Único botón además de Iniciar: devuelve la guía. En una esquina
+         para no competir con la escena. */
+      #help {
+        position: absolute;
+        top: calc(14px + env(safe-area-inset-top));
+        right: calc(14px + env(safe-area-inset-right));
+        width: 46px;
+        min-width: 46px;
+        height: 46px;
+        min-height: 46px;
+        padding: 0;
+        border-radius: 50%;
+        font-size: 19px;
+        font-weight: 600;
       }
 
       [hidden] { display: none !important; }
@@ -141,23 +250,23 @@
     <div id="ar-container"></div>
 
     <div id="app">
-      <div id="ui">
-        <p id="hint"></p>
-
+      <!-- Guía de encuadre. El marco tiene la proporción real del mapa. -->
+      <div id="guide" data-visible="false" aria-hidden="true">
+        <div id="guide-frame">
+          <span></span><span></span><span></span><span></span>
+        </div>
+        <p id="guide-title">Apunta al mapa de Nuquí</p>
         <!-- Sin el mapa delante de la cámara no aparece ningún icono:
              la app rastrea esa imagen concreta, no el entorno. -->
-        <a id="marker-link" href="/targets/map.jpg" target="_blank" rel="noopener"
-          >¿No ves nada? Abre el mapa de Nuquí aquí</a
+        <a id="guide-link" href="/targets/map.jpg" target="_blank" rel="noopener"
+          >¿No tienes el mapa? Ábrelo aquí</a
         >
+      </div>
 
-        <div id="controls" hidden>
-          <button type="button" id="rot-left" aria-label="Girar a la izquierda">&#8634;</button>
-          <button type="button" id="scale-down" aria-label="Reducir">&minus;</button>
-          <button type="button" id="scale-up" aria-label="Ampliar">+</button>
-          <button type="button" id="rot-right" aria-label="Girar a la derecha">&#8635;</button>
-          <button type="button" id="stabilization" aria-label="Cambiar estabilización"></button>
-        </div>
+      <div id="ui">
+        <button type="button" id="help" aria-label="Volver a mostrar la guía" hidden>?</button>
 
+        <p id="hint"></p>
         <button type="button" id="start">Iniciar AR</button>
       </div>
     </div>

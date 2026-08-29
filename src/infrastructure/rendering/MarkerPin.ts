@@ -112,6 +112,8 @@ export class MarkerPin {
   private emphasisTarget = 0;
   private scale = 1;
   private spin = 0;
+  /** Giro propio del animal, del catálogo. Se suma al del usuario. */
+  private readonly facing: number;
 
   constructor(
     model: ArModel,
@@ -154,6 +156,7 @@ export class MarkerPin {
     // Los iconos se modelan con +Y arriba (lo natural en Three.js). Cómo se
     // tumba ese "arriba" sobre el mapa depende del animal: ver applyView.
     applyView(this.lift, model.pose.view);
+    this.facing = model.pose.facing;
     this.lift.position.z = HOVER_HEIGHT;
     this.lift.add(icon);
     this.group.add(this.lift);
@@ -210,9 +213,9 @@ export class MarkerPin {
     const size = this.scale * emphasised * bump;
 
     this.icon.scale.setScalar(size * ICON_SCALE);
-    // El icono está dentro de `lift` (girado 90° en X), así que girarlo
-    // sobre su propio eje Y equivale a girarlo sobre el plano del mapa.
-    this.icon.rotation.y = this.spin;
+    // Giro propio del animal (catálogo) MÁS el del usuario, sobre el mismo
+    // eje: el Y local del icono, que `applyView` ya dejó donde toca.
+    this.icon.rotation.y = this.facing + this.spin;
 
     this.halo.scale.setScalar(size);
     this.haloMaterial.opacity = 0.22 + 0.5 * this.emphasis + 0.25 * (bump - 1);

@@ -16,6 +16,8 @@ export interface ArModelSnapshot {
   readonly view?: IconView;
   /** Tamaño del icono respecto al base. Por defecto 1. */
   readonly iconSize?: number;
+  /** Hacia dónde mira, en grados sobre su eje vertical. Por defecto 0. */
+  readonly facing?: number;
   readonly defaultScale?: number;
 }
 
@@ -43,7 +45,7 @@ export class ArModel {
       snapshot.source,
       SoundProfile.of(snapshot.sound),
       MarkerSpot.of(snapshot.spot.u, snapshot.spot.v),
-      IconPose.of(snapshot.view ?? 'top', snapshot.iconSize ?? 1),
+      IconPose.of(snapshot.view ?? 'top', snapshot.iconSize ?? 1, snapshot.facing ?? 0),
       Scale.of(snapshot.defaultScale ?? 1),
     );
   }

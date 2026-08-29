@@ -14,9 +14,6 @@ import { ArView } from '@ui/ArView';
 const TARGET_SRC = '/targets/map.mind';
 const TARGET_ASPECT = 1280 / 880;
 
-const ROTATION_STEP = Math.PI / 12; // 15 grados
-const SCALE_STEP = 1.15;
-
 const root = document.querySelector<HTMLElement>('#app');
 const arContainer = document.querySelector<HTMLElement>('#ar-container');
 
@@ -48,14 +45,6 @@ view = new ArView(root, {
       onRotate: (delta) => transformPlacement.rotateBy(delta),
       onScale: (factor) => transformPlacement.scaleBy(factor),
     });
-  },
-  onRotateLeft: () => transformPlacement.rotateBy(-ROTATION_STEP),
-  onRotateRight: () => transformPlacement.rotateBy(ROTATION_STEP),
-  onScaleUp: () => transformPlacement.scaleBy(SCALE_STEP),
-  onScaleDown: () => transformPlacement.scaleBy(1 / SCALE_STEP),
-  onCycleStabilization: () => {
-    const next = startArExperience.current.stabilization.next();
-    startArExperience.applyStabilization(next);
   },
 });
 
