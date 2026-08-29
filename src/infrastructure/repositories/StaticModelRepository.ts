@@ -49,10 +49,14 @@ export class StaticModelRepository implements ModelRepository {
  * pivote descentrado): IconLoader los recentra y los encaja a ICON_TARGET_SIZE
  * al cargarlos, así que aquí no hay que tocar `defaultScale` por modelo.
  *
- * `view` e `iconSize` son por animal a propósito. Una sola regla global no
- * sirve: la ballena y la pava están dibujadas de lado y de perfil se
- * reconocen; el cangrejo y la tortuga están dibujados en planta y así se
- * quedan. Y una ballena no puede ocupar lo mismo que un cangrejo.
+ * Los cuatro van en `view: 'front'`: erguidos sobre el mapa y mirando a
+ * quien sostiene el teléfono. Arrastrando el dedo se giran hacia los lados,
+ * así que quien quiera ver a un animal de perfil lo gira.
+ *
+ * `iconSize` es por animal porque de frente cada uno enseña una silueta
+ * distinta: la pava se ve entera, la tortuga es baja y ancha, y la ballena
+ * se ve escorzada porque su longitud apunta a la cámara. Los números están
+ * medidos en pantalla, no calculados sobre el tamaño del archivo.
  *
  * Si un .glb faltara, ese animal cae a un disco gris y los otros tres siguen
  * funcionando. Para volver a los iconos procedurales de PrimitiveFactory —que
@@ -65,12 +69,12 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     name: '🐋 Ballena',
     source: ModelSource.gltf('/models/Ballena_PBR.glb'),
     spot: { u: 0.262, v: 0.22 },
-    // De perfil y grande: es el animal más grande del mapa y en la
-    // ilustración está dibujada de lado. Vista en planta no se reconocía.
-    view: 'side',
-    iconSize: 1.6,
-    // El modelo nace mirando a la izquierda; el dibujo mira a la derecha.
-    facing: 180,
+    // Lo más grande que cabe de frente sin hundirse en el papel: mirando a
+    // la cámara la ballena se extiende HACIA FUERA, no a lo ancho, así que
+    // el límite lo pone su fondo, no su silueta. Silueta: 0.204 x 0.141.
+    view: 'front',
+    iconSize: 3.2,
+    facing: 0,
     defaultScale: 1,
     sound: {
       // Canto grave y largo, lo más cerca que se llega de una jorobada
@@ -86,14 +90,10 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     name: '🦃 Pava',
     source: ModelSource.gltf('/models/Pava_PBR.glb'),
     spot: { u: 0.884, v: 0.264 },
-    // También de perfil: un ave vista desde arriba es una mancha.
-    view: 'side',
-    // Medido contra el dibujo: la pava ilustrada ocupa ~0.23 del ancho del
-    // mapa. Con este factor el icono queda del mismo tamaño que ella.
-    // El número es alto porque el eje mayor del modelo apunta hacia la
-    // cámara y se ve escorzado: lo que manda es lo medido en pantalla.
-    iconSize: 2.7,
-    // Ya nace mirando a la izquierda, igual que su dibujo.
+    // La referencia de tamaño del conjunto: es la que ya se veía bien.
+    // Silueta 0.219 x 0.155, prácticamente la de su dibujo (0.22).
+    view: 'front',
+    iconSize: 1.8,
     facing: 0,
     defaultScale: 1,
     sound: {
@@ -109,11 +109,11 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     name: '🦀 Cangrejo',
     source: ModelSource.gltf('/models/Cangrejo_PBR.glb'),
     spot: { u: 0.487, v: 0.472 },
-    // Único que mira a la cámara: de pie y de frente, no tumbado. Con
-    // 'side' queda erguido y el giro lo pone de cara a quien mira.
-    view: 'side',
-    iconSize: 1,
-    facing: 90,
+    // Ya se veía de frente; 'front' es exactamente la misma orientación
+    // que tenía con 'side' + 90°, escrita de forma directa.
+    view: 'front',
+    iconSize: 1.2,
+    facing: 0,
     defaultScale: 1,
     sound: {
       // Chasquido de pinza: armónicos no enteros, muy breve.
@@ -128,11 +128,11 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     name: '🐢 Tortuga',
     source: ModelSource.gltf('/models/Tortuga_PBR.glb'),
     spot: { u: 0.38, v: 0.635 },
-    // En planta, como está dibujada. El modelo nace mirando hacia abajo del
-    // mapa; su dibujo mira a la izquierda, así que gira un cuarto de vuelta.
-    view: 'top',
-    iconSize: 1.15,
-    facing: -90,
+    // De frente es una silueta baja y ancha —una tortuga lo es—, así que
+    // se agranda por encima de su dibujo para que no quede como una raya.
+    view: 'front',
+    iconSize: 2,
+    facing: 0,
     defaultScale: 1,
     sound: {
       // Burbujeo redondo y tranquilo, a juego con cómo se mueve.

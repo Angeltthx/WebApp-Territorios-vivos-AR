@@ -12,7 +12,7 @@ export interface ArModelSnapshot {
   readonly sound: SoundSnapshot;
   /** Dónde vive este modelo sobre la imagen del marcador (u, v en 0–1). */
   readonly spot: { readonly u: number; readonly v: number };
-  /** Desde qué cara se mira el icono. Por defecto 'top' (en planta). */
+  /** Desde qué cara se mira el icono. Por defecto 'front' (de frente). */
   readonly view?: IconView;
   /** Tamaño del icono respecto al base. Por defecto 1. */
   readonly iconSize?: number;
@@ -45,7 +45,7 @@ export class ArModel {
       snapshot.source,
       SoundProfile.of(snapshot.sound),
       MarkerSpot.of(snapshot.spot.u, snapshot.spot.v),
-      IconPose.of(snapshot.view ?? 'top', snapshot.iconSize ?? 1, snapshot.facing ?? 0),
+      IconPose.of(snapshot.view ?? 'front', snapshot.iconSize ?? 1, snapshot.facing ?? 0),
       Scale.of(snapshot.defaultScale ?? 1),
     );
   }

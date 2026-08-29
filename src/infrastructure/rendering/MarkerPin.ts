@@ -1,5 +1,6 @@
 import {
   AdditiveBlending,
+  Box3,
   CircleGeometry,
   DoubleSide,
   Group,
@@ -24,8 +25,10 @@ const PULSE_AMPLITUDE = 0.3;
  */
 const ICON_SCALE = 0.58;
 
-/** Altura a la que flota el icono sobre el papel, en anchos de mapa. */
+/** Altura MÍNIMA a la que flota el icono sobre el papel, en anchos de mapa. */
 const HOVER_HEIGHT = 0.11;
+/** Holgura entre lo más bajo del icono y el papel, cuando hay que subirlo. */
+const CLEARANCE = 0.02;
 const BOB_AMPLITUDE = 0.016;
 const BOB_SPEED = 1.7;
 
@@ -63,30 +66,38 @@ export function anchorPositionOf(
 /**
  * Tumba el icono sobre el mapa según desde qué cara hay que mirarlo.
  *
- * Los modelos vienen con +Y arriba y su eje largo en +Z. El mapa está en el
- * plano XY del anchor, con +Z saliendo del papel hacia la cámara.
+ * Los modelos vienen con +Y arriba y mirando hacia su +Z (comprobado con los
+ * cuatro en /verify.html). El mapa está en el plano XY del anchor, con +Z
+ * saliendo del papel hacia la cámara.
+ *
+ *   'front' sin giro: el +Y del modelo es el +Y del anchor y su frente, el
+ *           +Z, sale del papel. El animal se yergue sobre el mapa MIRANDO A
+ *           LA CÁMARA. Es la que usan los cuatro.
  *
  *   'top'   giro de 90° en X: el +Y del modelo pasa a ser el +Z del anchor.
- *           El animal se apoya sobre el papel y quien mira el mapa desde
- *           arriba le ve el lomo. Es lo que quieres para el cangrejo y la
- *           tortuga, dibujados en planta.
+ *           El animal se apoya sobre el papel y quien mira desde arriba le
+ *           ve el lomo, como está dibujado un animal en planta.
  *
- *   'side'  giro de −90° en Y, sin tocar X: el +Y del modelo sigue siendo el
- *           +Y del anchor (arriba EN EL PLANO del mapa) y su eje largo cae
- *           sobre −X. El animal queda de perfil, como una figura de cartón
- *           levantada sobre el papel, y desde arriba se le ve el costado.
- *           Es lo que quieres para la ballena y la pava.
+ *   'side'  giro de −90° en Y: el +Y del modelo sigue siendo el +Y del
+ *           anchor y su frente cae sobre −X. Queda de perfil, como una
+ *           figura de cartón levantada sobre el papel.
  *
- * En ambos casos el giro que hace el usuario (`Placement.rotationY`) se
+ * En los tres casos el giro que hace el usuario (`Placement.rotationY`) se
  * aplica DENTRO de este grupo, sobre el eje Y propio del icono, así que
- * sigue girando en el sitio y no lo despega de su animal.
+ * sigue girando en el sitio y no lo despega de su animal. Con 'front' ese
+ * eje es la vertical del mapa: arrastrar el dedo los hace girar hacia los
+ * lados, como una peana.
  */
 function applyView(lift: Group, view: IconView): void {
+  if (view === 'top') {
+    lift.rotation.set(Math.PI / 2, 0, 0);
+    return;
+  }
   if (view === 'side') {
     lift.rotation.set(0, -Math.PI / 2, 0);
     return;
   }
-  lift.rotation.set(Math.PI / 2, 0, 0);
+  lift.rotation.set(0, 0, 0);
 }
 
 /**
@@ -112,8 +123,18 @@ export class MarkerPin {
   private emphasisTarget = 0;
   private scale = 1;
   private spin = 0;
+  private bob = 0;
   /** Giro propio del animal, del catálogo. Se suma al del usuario. */
   private readonly facing: number;
+  /**
+   * Medio fondo del icono a escala 1, medido tras orientarlo.
+   *
+   * Mirando a la cámara, un animal largo —la ballena— se extiende HACIA
+   * FUERA del papel, no a lo ancho. Con una altura de vuelo fija, la mitad
+   * trasera se hundiría bajo el mapa y se vería cortada por él. Con esto se
+   * sabe cuánto hay que levantarlo para que no pase.
+   */
+  private readonly halfDepth: number;
 
   constructor(
     model: ArModel,
@@ -161,6 +182,8 @@ export class MarkerPin {
     this.lift.add(icon);
     this.group.add(this.lift);
 
+    this.halfDepth = measureHalfDepth(this.group, this.lift, icon);
+
     this.sync();
   }
 
@@ -188,7 +211,7 @@ export class MarkerPin {
       (this.emphasisTarget - this.emphasis) * Math.min(1, deltaSeconds * EMPHASIS_SPEED);
 
     // Vaivén suave: da sensación de que el icono flota sobre el papel.
-    this.lift.position.z = HOVER_HEIGHT + Math.sin(elapsed * BOB_SPEED + this.phase) * BOB_AMPLITUDE;
+    this.bob = Math.sin(elapsed * BOB_SPEED + this.phase) * BOB_AMPLITUDE;
 
     this.sync();
   }
@@ -212,7 +235,13 @@ export class MarkerPin {
     const emphasised = 1 + EMPHASIS_SCALE * this.emphasis;
     const size = this.scale * emphasised * bump;
 
-    this.icon.scale.setScalar(size * ICON_SCALE);
+    const applied = size * ICON_SCALE;
+    this.icon.scale.setScalar(applied);
+
+    // Se vuela lo justo para no atravesar el papel, y nunca menos de
+    // HOVER_HEIGHT: los iconos planos siguen flotando como antes.
+    const hover = Math.max(HOVER_HEIGHT, this.halfDepth * applied + CLEARANCE);
+    this.lift.position.z = hover + this.bob;
     // Giro propio del animal (catálogo) MÁS el del usuario, sobre el mismo
     // eje: el Y local del icono, que `applyView` ya dejó donde toca.
     this.icon.rotation.y = this.facing + this.spin;
@@ -232,6 +261,30 @@ export class MarkerPin {
  * materiales pueden apuntar al mismo mapa—, así que hay que recorrer sus
  * propiedades y soltarlas a mano o se filtran en cada `clear()`.
  */
+/**
+ * Cuánto sobresale el icono hacia el papel, a escala 1 y ya orientado.
+ *
+ * Se mide sobre `lift` —no sobre el modelo suelto— porque es el giro de
+ * `applyView` el que decide qué eje del modelo acaba apuntando a la cámara,
+ * y por tanto cuál es el que puede hundirse.
+ */
+function measureHalfDepth(group: Group, lift: Group, icon: Object3D): number {
+  const scale = icon.scale.clone();
+  const z = lift.position.z;
+
+  icon.scale.setScalar(1);
+  lift.position.z = 0;
+  group.updateMatrixWorld(true);
+  const box = new Box3().setFromObject(lift);
+
+  icon.scale.copy(scale);
+  lift.position.z = z;
+  group.updateMatrixWorld(true);
+
+  if (box.isEmpty()) return 0;
+  return Math.max(Math.abs(box.min.z), Math.abs(box.max.z));
+}
+
 function disposeMaterial(material: unknown): void {
   if (material === null || typeof material !== 'object') return;
 

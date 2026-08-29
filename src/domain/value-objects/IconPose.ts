@@ -3,20 +3,22 @@ import { Scale } from './Scale';
 /**
  * Desde qué cara se mira un icono cuando el mapa está sobre la mesa.
  *
- *  - `top`  el icono se apoya sobre el papel y se ve DESDE ARRIBA (su lomo).
- *           Es lo natural para un cangrejo o una tortuga, que en el mapa
- *           están dibujados en planta.
- *  - `side` el icono queda de perfil, como una figura de cartón levantada
- *           sobre el papel. Es lo natural para la ballena y la pava, que en
- *           el mapa están dibujadas de lado: vistas desde arriba se
- *           reconocen mucho peor.
+ *  - `front` el icono se levanta del papel MIRANDO A QUIEN SOSTIENE EL
+ *            teléfono. Es la que usan hoy los cuatro animales: da una
+ *            lectura uniforme, y como el dedo los hace girar sobre su eje
+ *            vertical, quien quiera verlos de lado los gira y ya.
+ *  - `top`   el icono se apoya sobre el papel y se ve DESDE ARRIBA (su
+ *            lomo), como está dibujado un cangrejo o una tortuga en planta.
+ *  - `side`  el icono queda de perfil, como una figura de cartón levantada
+ *            sobre el papel.
  *
- * No es una preferencia estética suelta: cada animal se reconoce por una
- * silueta concreta, y es la misma que eligió la ilustradora del mapa.
+ * `top` y `side` ya no las usa ningún animal, pero se quedan porque son el
+ * vocabulario con el que se ajusta el catálogo: volver a poner a la tortuga
+ * en planta es cambiar una palabra, no reescribir MarkerPin.
  */
-export type IconView = 'top' | 'side';
+export type IconView = 'front' | 'top' | 'side';
 
-const VIEWS: readonly IconView[] = ['top', 'side'];
+const VIEWS: readonly IconView[] = ['front', 'top', 'side'];
 
 /**
  * Cómo se presenta un icono sobre el mapa: desde qué cara se mira y cuánto
@@ -66,6 +68,6 @@ export class IconPose {
   }
 
   static default(): IconPose {
-    return IconPose.of('top', 1, 0);
+    return IconPose.of('front', 1, 0);
   }
 }
