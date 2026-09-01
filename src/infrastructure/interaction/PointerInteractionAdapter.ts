@@ -2,9 +2,19 @@ import { Object3D, Raycaster, Vector2 } from 'three';
 import type { InteractionHandlers, InteractionPort } from '@application/ports/InteractionPort';
 import type { MindArRuntime } from '../mindar/MindArRuntime';
 
-/** Umbrales para distinguir un toque de un arrastre. */
-const TAP_MAX_MOVE_PX = 12;
-const TAP_MAX_DURATION_MS = 350;
+/**
+ * Umbrales para distinguir un toque de un arrastre.
+ *
+ * Eran 12 px y 350 ms, medidas de ratón. Con el teléfono en una mano y el
+ * mapa en la otra, un dedo se desplaza más que eso solo por el pulso, y
+ * quien toca un animal esperando oírlo se queda apoyado bastante más de un
+ * tercio de segundo. Cada vez que se pasaba de cualquiera de los dos, el
+ * toque se descartaba como arrastre y no sonaba nada. Se ensanchan hasta
+ * donde sigue sin confundirse con el gesto de girar, que es continuo y
+ * recorre mucho más de 20 px.
+ */
+const TAP_MAX_MOVE_PX = 20;
+const TAP_MAX_DURATION_MS = 650;
 const ROTATION_PER_PIXEL = 0.008;
 
 export interface InteractiveSource {
@@ -159,8 +169,8 @@ export class PointerInteractionAdapter implements InteractionPort {
 }
 
 /**
- * El rayo acierta a una malla suelta (una aleta, el halo…), no al grupo del
- * icono. Subimos por el árbol hasta encontrar quién lleva el id.
+ * El rayo acierta a una malla suelta (una aleta, la zona de toque…), no al
+ * grupo del icono. Subimos por el árbol hasta encontrar quién lleva el id.
  */
 function findModelId(object: Object3D): string | null {
   let current: Object3D | null = object;

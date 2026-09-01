@@ -13,6 +13,8 @@ export class WebAudioAdapter implements AudioPort {
   private context: AudioContext | null = null;
 
   async unlock(): Promise<void> {
+    this.claimPlaybackSession();
+
     const context = this.ensureContext();
     if (context === null) return;
     if (context.state === 'suspended') {
@@ -115,6 +117,33 @@ export class WebAudioAdapter implements AudioPort {
   dispose(): void {
     void this.context?.close();
     this.context = null;
+  }
+
+  /**
+   * En iPhone, el INTERRUPTOR DE SILENCIO lateral calla el audio de la Web
+   * Audio API aunque el volumen esté alto y todo lo demás funcione. Es
+   * comportamiento del sistema, no un fallo: por defecto Safari clasifica
+   * lo que sale de un AudioContext como sonido "de ambiente", y el ambiente
+   * se calla con el interruptor. Un vídeo de YouTube sí suena porque su
+   * categoría es otra.
+   *
+   * Safari 16.4 expone `navigator.audioSession`: declarando el tipo
+   * 'playback' —"esto es contenido que el usuario ha pedido oír"— el sonido
+   * pasa por encima del interruptor, que es lo que queremos aquí porque
+   * sonar ES la interacción.
+   *
+   * Fuera de Safari la propiedad no existe y esto no hace nada. En iOS
+   * anteriores a 16.4 tampoco hay forma limpia de conseguirlo: ahí el
+   * interruptor manda y hay que bajarlo a mano.
+   */
+  private claimPlaybackSession(): void {
+    const session = (navigator as { audioSession?: { type?: string } }).audioSession;
+    if (session === undefined) return;
+    try {
+      session.type = 'playback';
+    } catch (error) {
+      console.warn('[WebAudioAdapter] No se pudo fijar la sesión de audio', error);
+    }
   }
 
   private ensureContext(): AudioContext | null {
