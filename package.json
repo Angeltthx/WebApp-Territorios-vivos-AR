@@ -9,6 +9,7 @@
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
     "compile-target": "node scripts/compile-target.mjs public/targets/map.jpg public/targets/map.mind",
+    "bench-detection": "node scripts/detection-bench.mjs public/targets/map.mind",
     "optimize-models": "node scripts/optimize-models.mjs"
   },
   "dependencies": {

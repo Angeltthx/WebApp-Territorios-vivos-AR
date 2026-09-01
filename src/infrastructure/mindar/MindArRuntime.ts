@@ -147,5 +147,17 @@ export class MindArRuntime {
   private configureRenderer(): void {
     const renderer = this.mindar.renderer;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    // MindAR mete SIEMPRE un CSS3DRenderer en el contenedor, se use o no
+    // (three.js:42-43), y lo añade DESPUÉS del canvas WebGL. Su div queda
+    // por encima, a pantalla completa y transparente... pero con
+    // pointer-events por defecto: `viewElement` sí lleva 'none' dentro de
+    // three, el div exterior NO. Un div transparente se traga los eventos
+    // igual que uno opaco, así que ningún toque llegaba nunca al canvas y
+    // el raycast no se ejecutaba jamás: tocar un animal no hacía nada.
+    //
+    // No usamos anclas CSS3D en ningún sitio, así que la capa se marca
+    // como no tocable y los punteros vuelven a caer en el canvas.
+    this.mindar.cssRenderer.domElement.style.pointerEvents = 'none';
   }
 }

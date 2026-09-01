@@ -101,7 +101,7 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       waveform: 'square',
       rootFrequencyHz: 520,
       overtoneRatios: [1, 3, 5.1],
-      durationMs: 260,
+      durationMs: 320,
     },
   },
   {
@@ -116,11 +116,13 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     facing: 0,
     defaultScale: 1,
     sound: {
-      // Chasquido de pinza: armónicos no enteros, muy breve.
+      // Chasquido de pinza: armónicos no enteros, muy breve. 140 ms era
+      // tan corto que en un móvil con ruido alrededor se confundía con no
+      // haber sonado; 220 sigue siendo un chasquido pero no deja dudas.
       waveform: 'triangle',
       rootFrequencyHz: 880,
       overtoneRatios: [1, 2.76, 5.4],
-      durationMs: 140,
+      durationMs: 220,
     },
   },
   {

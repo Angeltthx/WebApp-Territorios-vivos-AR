@@ -12,6 +12,19 @@
  * "canvas" puede ser un objeto trivial que devuelve el buffer RGBA tal
  * cual y un `drawImage` que no hace nada.
  *
+ * GRIS: OJO, no es un detalle cosmético. El compilador de MindAR pasa la
+ * imagen a gris con la media plana (R+G+B)/3, pero EN EL MÓVIL el shader de
+ * `input-loader.js` la pasa con luma Rec.601 (0.299R + 0.587G + 0.114B).
+ * Compilando tal cual, los descriptores guardados describen una imagen que
+ * la cámara nunca produce, y el emparejamiento arranca con una desventaja
+ * gratuita — grande en un mapa tan saturado como este, donde un azul pesa
+ * 0.114 en el móvil y 0.333 en el compilador.
+ *
+ * Como nuestro `createProcessCanvas` decide qué píxeles ve el compilador,
+ * le entregamos la luma ya calculada en los tres canales: su media plana
+ * devuelve entonces exactamente la misma señal que el shader. No se toca
+ * MindAR, no pesa un byte más, y no cuesta nada en tiempo de ejecución.
+ *
  * Uso:  node scripts/compile-target.mjs <entrada.jpg> <salida.mind>
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -25,11 +38,32 @@ import { extractTrackingFeatures } from 'mind-ar/src/image-target/tracker/extrac
 // operaciones propias de MindAR fuera de WebGL.
 import 'mind-ar/src/image-target/detector/kernels/cpu/index.js';
 
+/**
+ * Luma Rec.601 replicada en los tres canales, que es lo que hace el shader
+ * de MindAR en el móvil. Se redondea igual que allí (el shader entrega un
+ * float que el detector consume tal cual; aquí el compilador hace floor de
+ * la media, así que redondear antes evita perder medio nivel por píxel).
+ */
+function toLumaRgba(img) {
+  const out = new Uint8Array(img.data.length);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const luma = Math.round(
+      0.299 * img.data[i] + 0.587 * img.data[i + 1] + 0.114 * img.data[i + 2],
+    );
+    out[i] = luma;
+    out[i + 1] = luma;
+    out[i + 2] = luma;
+    out[i + 3] = 255;
+  }
+  return { data: out, width: img.width, height: img.height };
+}
+
 class NodeCompiler extends CompilerBase {
   createProcessCanvas(img) {
+    const grey = toLumaRgba(img);
     const context = {
       drawImage: () => {},
-      getImageData: () => ({ data: img.data, width: img.width, height: img.height }),
+      getImageData: () => ({ data: grey.data, width: grey.width, height: grey.height }),
     };
     return { getContext: () => context };
   }

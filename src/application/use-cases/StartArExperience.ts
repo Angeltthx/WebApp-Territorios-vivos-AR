@@ -35,6 +35,14 @@ export class StartArExperience {
     if (!this.session.canStart) return this.session;
 
     try {
+      // El desbloqueo del audio arranca AQUÍ, antes del primer `await`:
+      // hasta esta línea seguimos dentro del gesto que disparó el click, y
+      // eso es lo único que iOS acepta para poner en marcha un
+      // AudioContext. Estaba después del await de isSupported(), fuera ya
+      // del gesto. Lo que importa es dónde EMPIEZA, no dónde se espera:
+      // la promesa se recoge más abajo.
+      const unlocking = this.audio.unlock();
+
       if (!(await this.tracking.isSupported())) {
         return this.emit(
           this.session.failed(
@@ -45,10 +53,7 @@ export class StartArExperience {
       }
 
       this.emit(this.session.preparing());
-
-      // Debe ocurrir dentro del gesto del usuario que disparó execute(),
-      // o iOS deja el AudioContext suspendido para siempre.
-      await this.audio.unlock();
+      await unlocking;
 
       const catalog = await this.models.findAll();
       if (catalog.length === 0) {
