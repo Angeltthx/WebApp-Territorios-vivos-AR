@@ -8,6 +8,14 @@ import type { ScenePort } from '../ports/ScenePort';
 /**
  * Toque sobre un icono: suena y da realimentación visual sobre ESE icono.
  * El sonido lo define el dominio (SoundProfile); aquí solo se dispara.
+ *
+ * Desde que se quitó la barra de selección, el toque es la ÚNICA forma de
+ * elegir un animal, así que además de sonar y dar el pulso deja el halo
+ * encendido en el que se tocó. Sin eso no quedaría ninguna señal de cuál
+ * fue el último.
+ *
+ * A propósito NO corta por "ya estaba seleccionado": tocar dos veces el
+ * mismo animal tiene que sonar las dos veces.
  */
 export class PlayModelSound {
   constructor(
@@ -26,6 +34,7 @@ export class PlayModelSound {
     if (model === null) return;
 
     this.audio.play(model.sound);
+    this.scene.setHighlightedModel(model.id);
     this.scene.pulse(model.id);
     this.analytics.track('model_tapped', { modelId: model.id.value });
   }

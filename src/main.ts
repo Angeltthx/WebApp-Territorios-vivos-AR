@@ -14,9 +14,6 @@ import { ArView } from '@ui/ArView';
 const TARGET_SRC = '/targets/map.mind';
 const TARGET_ASPECT = 1280 / 880;
 
-const ROTATION_STEP = Math.PI / 12; // 15 grados
-const SCALE_STEP = 1.15;
-
 const root = document.querySelector<HTMLElement>('#app');
 const arContainer = document.querySelector<HTMLElement>('#ar-container');
 
@@ -27,21 +24,14 @@ if (root === null || arContainer === null) {
 let view: ArView;
 let gesturesAttached = false;
 
-const {
-  startArExperience,
-  transformPlacement,
-  switchModel,
-  playModelSound,
-  interaction,
-  catalog,
-} = buildContainer({
+const { startArExperience, transformPlacement, playModelSound, interaction } = buildContainer({
   container: arContainer,
   imageTargetSrc: TARGET_SRC,
   targetAspect: TARGET_ASPECT,
   onSessionChange: (session) => view?.render(session),
 });
 
-view = new ArView(root, catalog, {
+view = new ArView(root, {
   onStart: async () => {
     const session = await startArExperience.execute('whale');
 
@@ -55,15 +45,6 @@ view = new ArView(root, catalog, {
       onRotate: (delta) => transformPlacement.rotateBy(delta),
       onScale: (factor) => transformPlacement.scaleBy(factor),
     });
-  },
-  onSelectModel: (modelId) => void switchModel.execute(modelId),
-  onRotateLeft: () => transformPlacement.rotateBy(-ROTATION_STEP),
-  onRotateRight: () => transformPlacement.rotateBy(ROTATION_STEP),
-  onScaleUp: () => transformPlacement.scaleBy(SCALE_STEP),
-  onScaleDown: () => transformPlacement.scaleBy(1 / SCALE_STEP),
-  onCycleStabilization: () => {
-    const next = startArExperience.current.stabilization.next();
-    startArExperience.applyStabilization(next);
   },
 });
 

@@ -8,16 +8,22 @@
     "build": "vite build",
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
-    "compile-target": "node scripts/compile-target.mjs public/targets/map.jpg public/targets/map.mind"
+    "compile-target": "node scripts/compile-target.mjs public/targets/map.jpg public/targets/map.mind",
+    "optimize-models": "node scripts/optimize-models.mjs"
   },
   "dependencies": {
     "mind-ar": "1.2.5",
     "three": "0.160.0"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.4.2",
+    "@gltf-transform/extensions": "^4.4.2",
+    "@gltf-transform/functions": "^4.4.2",
     "@types/three": "0.160.0",
-    "jpeg-js": "^0.4.4",
     "@vitejs/plugin-basic-ssl": "^1.1.0",
+    "draco3dgltf": "^1.5.7",
+    "jpeg-js": "^0.4.4",
+    "sharp": "^0.35.4",
     "typescript": "^5.4.0",
     "vite": "^5.2.0"
   }

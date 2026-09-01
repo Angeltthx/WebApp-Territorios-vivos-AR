@@ -28,8 +28,8 @@ import {
 } from 'three';
 import { ArModel } from '@domain/entities/ArModel';
 import { addLights } from '@infrastructure/rendering/ThreeSceneAdapter';
+import { IconLoader } from '@infrastructure/rendering/IconLoader';
 import { MarkerPin } from '@infrastructure/rendering/MarkerPin';
-import { createPrimitive } from '@infrastructure/rendering/PrimitiveFactory';
 import { NUQUI_CATALOG } from '@infrastructure/repositories/StaticModelRepository';
 
 const TARGET_ASPECT = 1280 / 880;
@@ -45,19 +45,29 @@ const texture = new TextureLoader().load(MAP_URL);
 texture.colorSpace = SRGBColorSpace;
 scene.add(new Mesh(new PlaneGeometry(1, TARGET_ASPECT), new MeshBasicMaterial({ map: texture })));
 
-const pins = NUQUI_CATALOG.map((snapshot, index) => {
-  const model = ArModel.fromSnapshot(snapshot);
-  const icon = createPrimitive(
-    model.source.kind === 'primitive' ? model.source.shape : 'crab',
-    model.source.kind === 'primitive' ? model.source.colorHex : 0x888888,
-  );
-  const pin = new MarkerPin(model.id.value, model.spot, icon, index, TARGET_ASPECT);
-  scene.add(pin.group);
-  return pin;
-});
+// Se usa el MISMO IconLoader que la app: si un .glb no carga, o carga con
+// mala escala o mal pivote, aquí se ve exactamente igual que en el teléfono.
+// Antes esta página forzaba las figuras procedurales, así que dejó de
+// verificar nada en cuanto el catálogo pasó a .glb.
+const icons = new IconLoader();
+const pins: MarkerPin[] = [];
 
-// Se destaca uno para comprobar de un vistazo que el resaltado funciona.
-pins[0]?.highlight(true);
+const ready = Promise.all(
+  NUQUI_CATALOG.map(async (snapshot, index) => {
+    const model = ArModel.fromSnapshot(snapshot);
+    const pin = new MarkerPin(model, await icons.load(model), index, TARGET_ASPECT);
+    scene.add(pin.group);
+    return [index, pin] as const;
+  }),
+);
+
+// Los .glb llegan de forma asíncrona: se ordenan al final para que el
+// desfase del vaivén siga correspondiendo al orden del catálogo.
+void ready.then((loaded) => {
+  for (const [index, pin] of loaded) pins[index] = pin;
+  // Se destaca uno para comprobar de un vistazo que el resaltado funciona.
+  pins[0]?.highlight(true);
+});
 
 const half = TARGET_ASPECT / 2;
 const flat = new OrthographicCamera(-0.5, 0.5, half, -half, 0.01, 10);
