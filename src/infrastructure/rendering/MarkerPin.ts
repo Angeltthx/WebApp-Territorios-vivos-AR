@@ -1,13 +1,10 @@
 import {
-  AdditiveBlending,
   Box3,
   CircleGeometry,
-  DoubleSide,
   Group,
   Mesh,
   MeshBasicMaterial,
   Object3D,
-  RingGeometry,
   Texture,
 } from 'three';
 import type { ArModel } from '@domain/entities/ArModel';
@@ -21,7 +18,7 @@ const PULSE_AMPLITUDE = 0.3;
  * Los iconos se modelan a tamaño cómodo de leer en PrimitiveFactory y se
  * reducen aquí. A tamaño natural tapaban por completo al animal que están
  * señalando, que es justo lo contrario de lo que debe hacer una chincheta:
- * a esta escala el halo queda por fuera y la ilustración se sigue viendo.
+ * a esta escala la ilustración de debajo se sigue viendo.
  */
 const ICON_SCALE = 0.58;
 
@@ -32,12 +29,10 @@ const CLEARANCE = 0.02;
 const BOB_AMPLITUDE = 0.016;
 const BOB_SPEED = 1.7;
 
-/** Cuánto crece y cuánto se ilumina el halo del icono destacado. */
+/** Cuánto crece el icono destacado. */
 const EMPHASIS_SCALE = 0.2;
 const EMPHASIS_SPEED = 6;
 
-const HALO_INNER = 0.085;
-const HALO_OUTER = 0.1;
 const TAP_RADIUS = 0.12;
 
 /**
@@ -101,8 +96,15 @@ function applyView(lift: Group, view: IconView): void {
 }
 
 /**
- * Un icono clavado a un punto del mapa: halo tumbado sobre el papel, zona
- * de toque, y el icono flotando hacia fuera.
+ * Un icono clavado a un punto del mapa: zona de toque invisible y el icono
+ * flotando hacia fuera.
+ *
+ * Hubo un halo —un anillo tumbado sobre el papel— que marcaba el sitio y
+ * señalaba cuál era el último animal tocado. Se quitó: sobre la
+ * ilustración se leía como un circulito translúcido pegado a cada animal y
+ * ensuciaba el dibujo, que es exactamente lo que esta capa no debe hacer.
+ * El destacado no se pierde, se mueve al propio icono: el elegido se queda
+ * un 20% más grande (EMPHASIS_SCALE), y el toque sigue dando su pulso.
  *
  * Vive aparte de ThreeSceneAdapter a propósito: no depende de MindAR ni del
  * runtime, así que la página de verificación (`verify.html`) puede montar
@@ -113,8 +115,6 @@ export class MarkerPin {
   readonly group = new Group();
 
   private readonly lift = new Group();
-  private readonly halo: Mesh;
-  private readonly haloMaterial: MeshBasicMaterial;
   /** Desfase del vaivén, para que los iconos no floten todos al unísono. */
   private readonly phase: number;
 
@@ -149,19 +149,6 @@ export class MarkerPin {
     // Cada icono lleva su id encima: así el raycast sabe a qué animal le
     // acertó sin depender del orden de la escena.
     this.group.userData['modelId'] = model.id.value;
-
-    this.haloMaterial = new MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.3,
-      side: DoubleSide,
-      blending: AdditiveBlending,
-      depthWrite: false,
-    });
-    // RingGeometry ya nace en el plano XY, que es justo el plano del mapa.
-    this.halo = new Mesh(new RingGeometry(HALO_INNER, HALO_OUTER, 48), this.haloMaterial);
-    this.halo.position.z = 0.002;
-    this.group.add(this.halo);
 
     // Zona de toque generosa e invisible: acertarle a un icono pequeño con
     // el dedo, a pulso y con el teléfono en la mano, es difícil. Se usa
@@ -245,9 +232,6 @@ export class MarkerPin {
     // Giro propio del animal (catálogo) MÁS el del usuario, sobre el mismo
     // eje: el Y local del icono, que `applyView` ya dejó donde toca.
     this.icon.rotation.y = this.facing + this.spin;
-
-    this.halo.scale.setScalar(size);
-    this.haloMaterial.opacity = 0.22 + 0.5 * this.emphasis + 0.25 * (bump - 1);
   }
 }
 

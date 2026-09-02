@@ -4,8 +4,8 @@
  * Estas declaraciones las escribí a mano tras inspeccionar el bundle real:
  * verifiqué que los identificadores addAnchor, onTargetFound, onTargetLost,
  * imageTargetSrc, maxTrack, filterMinCF, filterBeta, warmupTolerance,
- * missTolerance, uiLoading, uiScanning y uiError existen dentro de
- * dist/mindar-image-three.prod.js.
+ * missTolerance, uiLoading, uiScanning, uiError, cssRenderer y video
+ * existen dentro de dist/mindar-image-three.prod.js.
  *
  * No son tipos oficiales. Si algo no compila o se comporta distinto,
  * la fuente de verdad es el bundle, no este archivo.
@@ -39,9 +39,21 @@ declare module 'mind-ar/dist/mindar-image-three.prod.js' {
     uiError?: string;
   }
 
+  /**
+   * Solo se declara lo que usamos de CSS3DRenderer: su `domElement`. MindAR
+   * lo crea siempre, lo usemos o no, y por eso hay que poder alcanzarlo.
+   */
+  export interface MindARCssRenderer {
+    domElement: HTMLElement;
+  }
+
   export class MindARThree {
     constructor(options: MindARThreeOptions);
     readonly renderer: WebGLRenderer;
+    /** Capa CSS3D. Nunca la usamos, pero se superpone al canvas. */
+    readonly cssRenderer: MindARCssRenderer;
+    /** El <video> de la cámara, creado dentro de start(). */
+    readonly video: HTMLVideoElement;
     readonly scene: Scene;
     readonly camera: PerspectiveCamera;
     addAnchor(targetIndex: number): MindARAnchor;
