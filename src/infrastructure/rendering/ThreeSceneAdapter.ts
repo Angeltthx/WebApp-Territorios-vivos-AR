@@ -1,5 +1,6 @@
 import {
   ACESFilmicToneMapping,
+  Box3,
   DirectionalLight,
   Group,
   HemisphereLight,
@@ -9,7 +10,9 @@ import {
 } from 'three';
 import type { ArModel } from '@domain/entities/ArModel';
 import type { Placement } from '@domain/entities/Placement';
-import type { ModelId } from '@domain/value-objects/ModelId';
+import type { Discovery } from '@domain/value-objects/Discovery';
+import { ModelId } from '@domain/value-objects/ModelId';
+import { Proximity } from '@domain/value-objects/Proximity';
 import { Stabilization } from '@domain/value-objects/Stabilization';
 import type { ScenePort } from '@application/ports/ScenePort';
 import type { MindArRuntime } from '../mindar/MindArRuntime';
@@ -34,21 +37,59 @@ import { MarkerPin } from './MarkerPin';
  * MarkerPin, que no depende de MindAR y por eso se puede verificar sin
  * cámara.
  */
+/**
+ * A qué distancia de la cámara se planta el animal en primer plano, medido
+ * en anchos de mapa. Tiene que quedar MÁS CERCA que el marcador para que se
+ * dibuje por delante de él: el mapa suele estar a más de un ancho.
+ */
+const STAGE_DISTANCE = 0.5;
+/** Cuánto del alto de la pantalla ocupa el animal en primer plano. */
+const STAGE_FILL = 0.42;
+/** Giro lento de cortesía, para que se vea que es un objeto y no una foto. */
+const STAGE_IDLE_SPIN = 0.25;
+
 export class ThreeSceneAdapter implements ScenePort {
   private readonly icons = new IconLoader();
   private readonly follower = new Group();
   private readonly overlay = new Group();
+  private readonly stage = new Group();
   private readonly pins = new Map<string, MarkerPin>();
 
   private stabilization: Stabilization = Stabilization.default();
+  private proximity: Proximity = Proximity.default();
   private elapsed = 0;
   private hasPose = false;
   private mounted = false;
   private unsubscribeFrame: (() => void) | null = null;
 
+  /** Qué animal está dentro del alcance de la cámara ahora mismo. */
+  private nearbyId: string | null = null;
+  private nearbyListener: ((modelId: string | null) => void) | null = null;
+
+  /** El animal en primer plano: su id, su icono prestado y su tamaño natural. */
+  private focusedId: string | null = null;
+  private stagedIcon: Object3D | null = null;
+  private stagedNaturalSize = 1;
+  private stageIdle = 0;
+  /** Giro que el usuario imprime con el dedo. */
+  private spin = 0;
+  /**
+   * Cuánto mide un ancho de mapa en unidades de mundo, del último fotograma
+   * con marcador a la vista. Se guarda para que el primer plano siga
+   * colocado aunque el mapa se salga de cuadro: alejar la cámara no debe
+   * cerrar la ficha.
+   */
+  private unit = 1;
+  /** Para no inundar la consola: la calibración se registra una vez por segundo. */
+  private sinceLastLog = 0;
+
   private readonly tmpPosition = new ThreeVector3();
   private readonly tmpQuaternion = new Quaternion();
   private readonly tmpScale = new ThreeVector3();
+  private readonly tmpWorld = new ThreeVector3();
+  private readonly tmpView = new ThreeVector3();
+  private readonly tmpNdc = new ThreeVector3();
+  private readonly tmpUnit = new ThreeVector3();
 
   /**
    * @param targetAspect alto/ancho de la imagen compilada en el `.mind`.
@@ -85,11 +126,99 @@ export class ThreeSceneAdapter implements ScenePort {
     // relativo sobre el mapa.
     this.overlay.position.set(offset.x, offset.y, offset.z);
 
+    this.spin = rotationY;
     for (const pin of this.pins.values()) pin.applyTransform(scale.value, rotationY);
+  }
+
+  /**
+   * Pone la escena de acuerdo con lo descubierto.
+   *
+   * Fíjate en que revelar es solo hacia adelante: `setRevealed(true)` sobre
+   * un animal ya revelado no hace nada, y nunca se llama con `false`. Lo
+   * que se descubrió se queda.
+   */
+  applyDiscovery(discovery: Discovery): void {
+    for (const [key, pin] of this.pins) {
+      if (discovery.isUnlocked(ModelId.of(key))) pin.setRevealed(true);
+    }
+    this.setFocus(discovery.focused?.value ?? null);
   }
 
   setStabilization(stabilization: Stabilization): void {
     this.stabilization = stabilization;
+  }
+
+  setProximity(proximity: Proximity): void {
+    this.proximity = proximity;
+  }
+
+  /**
+   * Presta el icono de un animal al escenario de primer plano, o lo
+   * devuelve a su sitio sobre el mapa.
+   *
+   * Se MUEVE el objeto en vez de duplicarlo: una copia serían varios megas
+   * más de texturas en la GPU, y además tendría que mantenerse igual que el
+   * original. Mientras está prestado, su MarkerPin deja de tocarlo.
+   */
+  private setFocus(id: string | null): void {
+    if (this.focusedId === id) return;
+
+    if (this.focusedId !== null) {
+      this.pins.get(this.focusedId)?.reclaimIcon();
+      this.stagedIcon = null;
+    }
+
+    this.focusedId = id;
+    this.stageIdle = 0;
+
+    if (id !== null) {
+      const pin = this.pins.get(id);
+      if (pin !== undefined) {
+        const icon = pin.releaseIcon();
+        // Se mide AHORA, mientras el icono no cuelga de nadie: una vez
+        // dentro del escenario su caja de mundo llevaría encima la
+        // transformación del escenario y saldría otro número.
+        icon.scale.setScalar(1);
+        icon.rotation.set(0, 0, 0);
+        icon.updateMatrixWorld(true);
+        const size = new Box3().setFromObject(icon).getSize(this.tmpWorld);
+        this.stagedNaturalSize = Math.max(size.x, size.y, size.z) || 1;
+
+        this.stage.add(icon);
+        this.stagedIcon = icon;
+      }
+    }
+
+    this.stage.visible = this.stagedIcon !== null;
+  }
+
+  /**
+   * Coloca el primer plano delante de la cámara, fotograma a fotograma.
+   *
+   * No se cuelga de la cámara como hijo porque MindAR no mete su cámara en
+   * la escena, y three solo dibuja lo que cuelga de la escena. Copiar su
+   * pose cada fotograma da el mismo resultado y no depende de ese detalle.
+   */
+  private updateStage(deltaSeconds: number): void {
+    const icon = this.stagedIcon;
+    if (icon === null) return;
+
+    const camera = this.runtime.mindar.camera;
+    const distance = STAGE_DISTANCE * this.unit;
+
+    this.stage.quaternion.copy(camera.quaternion);
+    this.stage.position.set(0, 0, -distance).applyQuaternion(camera.quaternion).add(camera.position);
+
+    const fov = (camera.fov * Math.PI) / 180;
+    const visibleHeight = 2 * distance * Math.tan(fov / 2);
+    icon.scale.setScalar((visibleHeight * STAGE_FILL) / this.stagedNaturalSize);
+
+    this.stageIdle += deltaSeconds * STAGE_IDLE_SPIN;
+    icon.rotation.set(0, this.spin + this.stageIdle, 0);
+  }
+
+  onNearbyModel(listener: (modelId: string | null) => void): void {
+    this.nearbyListener = listener;
   }
 
   pulse(id: ModelId): void {
@@ -103,6 +232,10 @@ export class ThreeSceneAdapter implements ScenePort {
     }
     this.pins.clear();
     this.hasPose = false;
+    this.nearbyId = null;
+    this.focusedId = null;
+    this.stagedIcon = null;
+    this.stage.clear();
   }
 
   dispose(): void {
@@ -121,9 +254,23 @@ export class ThreeSceneAdapter implements ScenePort {
    * sentido acertarle a un icono que no se está mostrando.
    */
   get pickables(): ReadonlyMap<string, Object3D> | null {
-    if (!this.follower.visible) return null;
     const map = new Map<string, Object3D>();
-    for (const [key, pin] of this.pins) map.set(key, pin.group);
+
+    // El animal en primer plano es tocable siempre, esté el mapa a la vista
+    // o no: es lo único que se está mirando.
+    if (this.focusedId !== null && this.stagedIcon !== null) {
+      map.set(this.focusedId, this.stagedIcon);
+      return map;
+    }
+
+    if (!this.follower.visible) return null;
+
+    // Solo lo revelado es tocable. Un animal que todavía es un contorno
+    // punteado no debe sonar: la recompensa por acercarse dejaría de serlo
+    // si se pudiera cobrar desde lejos.
+    for (const [key, pin] of this.pins) {
+      if (pin.isRevealed) map.set(key, pin.group);
+    }
     return map;
   }
 
@@ -141,13 +288,129 @@ export class ThreeSceneAdapter implements ScenePort {
     this.follower.visible = false;
     mindar.scene.add(this.follower);
 
+    // El escenario NO cuelga del marcador: por eso el primer plano sigue
+    // ahí cuando el mapa se sale de cuadro.
+    this.stage.visible = false;
+    mindar.scene.add(this.stage);
+
     this.unsubscribeFrame = this.runtime.onFrame((delta) => this.onFrame(delta));
   }
 
   private onFrame(deltaSeconds: number): void {
     this.elapsed += deltaSeconds;
     this.followAnchor(deltaSeconds);
+    this.evaluateProximity(deltaSeconds);
+    this.updateStage(deltaSeconds);
     for (const pin of this.pins.values()) pin.advance(deltaSeconds, this.elapsed);
+  }
+
+  /**
+   * ¿A qué animal se está acercando la cámara?
+   *
+   * Dos medidas por icono, y las dos hacen falta:
+   *
+   *  - DISTANCIA de la cámara al icono, que dice si te has acercado.
+   *  - DESVÍO respecto al centro de la pantalla, que dice a cuál. Sobre un
+   *    mapa plano los cuatro animales quedan a distancias parecidas, así
+   *    que sin esto acercarse a la ballena sacaría también al cangrejo.
+   *
+   * Gana el más centrado, y solo sale si además está lo bastante cerca. La
+   * histéresis vive en `Proximity`, en el dominio: aquí solo se mide.
+   */
+  private evaluateProximity(deltaSeconds: number): void {
+    if (!this.follower.visible || this.pins.size === 0) {
+      this.publishNearby(null);
+      return;
+    }
+
+    const camera = this.runtime.mindar.camera;
+    // Las poses se acaban de escribir en followAnchor, así que las matrices
+    // de mundo de los pines son de hace un fotograma si no se refrescan.
+    this.follower.updateMatrixWorld(true);
+    camera.updateMatrixWorld();
+    camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+
+    // CUÁNTO MIDE UN ANCHO DE MAPA EN ESTE MUNDO.
+    //
+    // MindAR no trabaja en unidades de mapa: su `postMatrix` escala el
+    // contenido por el ancho de la imagen compilada EN PÍXELES (880 aquí),
+    // así que una distancia cruda a un icono sale en miles. Los umbrales de
+    // `Proximity` están en anchos de mapa —la única unidad que significa
+    // algo para una regla del dominio—, así que hay que dividir. Sin esta
+    // división la comparación era contra un número mil veces mayor y
+    // ningún animal salía por más que uno se acercara.
+    const unit = this.follower.getWorldScale(this.tmpUnit).x;
+    if (unit <= 0) return;
+    this.unit = unit;
+
+    let bestId: string | null = null;
+    let bestOffCentre = Number.POSITIVE_INFINITY;
+    let bestDistance = 0;
+
+    for (const [id, pin] of this.pins) {
+      pin.group.getWorldPosition(this.tmpWorld);
+
+      const view = this.tmpView.copy(this.tmpWorld).applyMatrix4(camera.matrixWorldInverse);
+      // En Three.js la cámara mira hacia su -Z: un z positivo queda detrás.
+      if (view.z > 0) continue;
+
+      const ndc = this.tmpNdc.copy(this.tmpWorld).project(camera);
+      const offCentre = Math.hypot(ndc.x, ndc.y);
+      if (offCentre >= bestOffCentre) continue;
+
+      bestOffCentre = offCentre;
+      bestDistance = view.length() / unit;
+      bestId = id;
+    }
+
+    this.logCalibration(deltaSeconds, bestId, bestDistance, bestOffCentre);
+
+    if (bestId === null) {
+      this.publishNearby(null);
+      return;
+    }
+
+    const wasRevealed = this.nearbyId === bestId;
+    const reveal = this.proximity.decide(bestDistance, bestOffCentre, wasRevealed);
+    this.publishNearby(reveal ? bestId : null);
+  }
+
+  /**
+   * Avisa hacia fuera, solo si cambió algo.
+   *
+   * Ya NO revela nada por su cuenta: quién sale y quién no lo decide el
+   * caso de uso, que es donde vive la regla de que lo descubierto se queda
+   * descubierto. Aquí solo se mide y se avisa.
+   */
+  private publishNearby(id: string | null): void {
+    if (this.nearbyId === id) return;
+    this.nearbyId = id;
+    this.nearbyListener?.(id);
+  }
+
+  /**
+   * Escribe en consola la distancia medida, una vez por segundo.
+   *
+   * Los umbrales de `Proximity` NO se pueden deducir en el escritorio:
+   * dependen del campo de visión de la cámara real y del tamaño al que se
+   * imprima el mapa. Este registro es la única forma de calibrarlos, y por
+   * eso se queda.
+   */
+  private logCalibration(
+    deltaSeconds: number,
+    id: string | null,
+    distance: number,
+    offCentre: number,
+  ): void {
+    this.sinceLastLog += deltaSeconds;
+    if (this.sinceLastLog < 1) return;
+    this.sinceLastLog = 0;
+    if (id === null) return;
+
+    console.info(
+      `[Proximity] ${id}  distancia=${distance.toFixed(2)}  desvío=${offCentre.toFixed(2)}  ` +
+        `(sale por debajo de ${this.proximity.revealDistance})`,
+    );
   }
 
   /**

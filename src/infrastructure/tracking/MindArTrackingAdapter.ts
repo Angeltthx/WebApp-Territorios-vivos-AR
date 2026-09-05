@@ -39,13 +39,24 @@ export class MindArTrackingAdapter implements TrackingPort {
       this.dispatch('anchor-lost');
     };
 
+    // El <video> se silencia ANTES de esperar a `start()`, y ese orden es
+    // el arreglo entero: ver `silenceVideoChrome`.
+    const starting = mindar.start();
+    const early = mindar.video as HTMLVideoElement | undefined;
+    if (early !== undefined) this.silenceVideoChrome(early);
+
     try {
-      await mindar.start();
+      await starting;
     } catch (error) {
       if (this.isPermissionError(error)) throw new CameraPermissionDeniedError();
       throw error;
     }
 
+    // Otra vez con el stream ya puesto: barato, y deshace cualquier atributo
+    // que MindAR haya reescrito por el camino (al llegar los metadatos
+    // reescribe `width` y `height`).
+    this.silenceVideoChrome(mindar.video);
+    this.resumePlayback(mindar.video);
     this.tuneCamera(mindar.video);
     this.runtime.startLoop();
   }
@@ -73,6 +84,58 @@ export class MindArTrackingAdapter implements TrackingPort {
 
   private dispatch(event: TrackingEvent): void {
     this.handlers.get(event)?.forEach((handler) => handler());
+  }
+
+  /**
+   * Quita los mandos de reproducción del vídeo de la cámara.
+   *
+   * MindAR crea el `<video>` poniendo `muted` y `autoplay` como ATRIBUTOS
+   * (three.js:92-96). Con `muted` no basta: el atributo solo alimenta
+   * `defaultMuted`, y `defaultMuted` únicamente decide el estado del
+   * elemento en el momento de CREARLO. Puesto después, como hace MindAR, la
+   * propiedad `muted` se queda en `false` y el vídeo se reproduce sin
+   * silenciar aunque el HTML diga lo contrario.
+   *
+   * Para Safari eso es un vídeo grande, sin silenciar y que arranca solo:
+   * exactamente el caso para el que enseña sus mandos, y de ahí el botón de
+   * pausa en mitad de la pantalla. El CSS no lo tapa —los mandos modernos de
+   * iOS ya no atienden a los pseudoelementos `::-webkit-media-controls-*`—,
+   * así que el arreglo tiene que llegar antes que el problema.
+   *
+   * **Por eso esto se llama ANTES de esperar a `mindar.start()`.** MindAR
+   * crea el elemento y lo mete en el DOM nada más entrar en `_startVideo`, y
+   * solo DESPUÉS pide la cámara; entre esas dos cosas hay un hueco asíncrono
+   * —el permiso, el hardware— y ahí es donde el vídeo todavía no se está
+   * reproduciendo. Silenciarlo al terminar `start()` llega tarde: para
+   * entonces ya empezó a sonar sin silenciar y Safari ya le enganchó los
+   * mandos, que no suelta por mucho que se le ponga `muted` después.
+   */
+  private silenceVideoChrome(video: HTMLVideoElement): void {
+    video.muted = true;
+    video.defaultMuted = true;
+    video.controls = false;
+    video.removeAttribute('controls');
+    video.playsInline = true;
+    video.setAttribute('muted', '');
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    video.disablePictureInPicture = true;
+    video.setAttribute('disableRemotePlayback', '');
+    // Solo lo entiende Chrome; en Safari es un atributo desconocido y ya.
+    video.setAttribute('controlslist', 'nodownload nofullscreen noremoteplayback noplaybackrate');
+  }
+
+  /**
+   * Arranca la reproducción a mano.
+   *
+   * El `autoplay` del atributo pudo quedarse bloqueado si el navegador
+   * evaluó el vídeo antes de que contara como silenciado. Con el stream ya
+   * puesto y el elemento en silencio, este `play()` sí sale adelante.
+   */
+  private resumePlayback(video: HTMLVideoElement): void {
+    void video.play().catch(() => {
+      // Si el navegador se niega, el fotograma congelado ya se ve igual.
+    });
   }
 
   /**

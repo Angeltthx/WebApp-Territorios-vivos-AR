@@ -1,15 +1,24 @@
 import {
   Box3,
   CircleGeometry,
+  DoubleSide,
   Group,
   Mesh,
   MeshBasicMaterial,
   Object3D,
+  PlaneGeometry,
   Texture,
 } from 'three';
 import type { ArModel } from '@domain/entities/ArModel';
 import type { IconView } from '@domain/value-objects/IconPose';
 import type { MarkerSpot } from '@domain/value-objects/MarkerSpot';
+import {
+  offsetOutline,
+  prepareOutline,
+  traceIconSilhouette,
+  type SilhouettePoint,
+} from './IconSilhouette';
+import { SmokePuff } from './SmokePuff';
 
 const PULSE_DURATION_S = 0.45;
 const PULSE_AMPLITUDE = 0.3;
@@ -34,6 +43,33 @@ const EMPHASIS_SCALE = 0.2;
 const EMPHASIS_SPEED = 6;
 
 const TAP_RADIUS = 0.12;
+
+/** Lo que tarda un animal en materializarse, y en volver a esconderse. */
+const REVEAL_TIME_S = 0.55;
+const CONCEAL_TIME_S = 0.3;
+
+/**
+ * El contorno punteado que marca donde hay un animal esperando.
+ *
+ * Es la misma gramatica visual que el visor de "Apunta al mapa": linea
+ * blanca discontinua. Alli encuadra el mapa entero; aqui encuadra a cada
+ * animal, y su trabajo es decir "aqui hay algo, ven a buscarlo" sin tapar
+ * el dibujo que hay debajo.
+ *
+ * Se construye con planos sueltos en vez de con LineDashedMaterial porque
+ * el grosor de linea de WebGL esta clavado a 1 pixel en la practica: en un
+ * movil de alta densidad, una linea de 1 px es invisible.
+ */
+const OUTLINE_DASHES = 68;
+const OUTLINE_THICKNESS = 0.004;
+/**
+ * Separación entre un contorno CALCADO DEL DIBUJO y el borde del dibujo, en
+ * anchos de mapa. Los calcados del modelo ya salen separados de fábrica
+ * (IconSilhouette engorda la mancha antes de recorrerla).
+ */
+const DRAWN_OUTLINE_OFFSET = 0.009;
+const OUTLINE_BREATH = 0.022;
+const OUTLINE_BREATH_SPEED = 2.2;
 
 /**
  * Convierte un punto de la imagen del marcador a coordenadas del anchor.
@@ -115,8 +151,22 @@ export class MarkerPin {
   readonly group = new Group();
 
   private readonly lift = new Group();
+  private readonly outline = new Group();
+  private readonly outlineMaterial: MeshBasicMaterial;
+  private readonly smoke = new SmokePuff();
   /** Desfase del vaivén, para que los iconos no floten todos al unísono. */
   private readonly phase: number;
+
+  /** Si este animal está a la vista o todavía escondido tras su contorno. */
+  private revealed = false;
+  /**
+   * Si está en primer plano. Mientras lo esté, el icono NO cuelga de aquí:
+   * se lo lleva el adaptador a su escenario delante de la cámara, y este
+   * pin deja de tocarlo para no pelearse con él por la escala.
+   */
+  private focused = false;
+  /** 0 = escondido del todo, 1 = materializado. Lo anima `advance`. */
+  private revealProgress = 0;
 
   private pulseRemaining = 0;
   private emphasis = 0;
@@ -171,6 +221,28 @@ export class MarkerPin {
 
     this.halfDepth = measureHalfDepth(this.group, this.lift, icon);
 
+    // El contorno NO es un circulo: se CALCA del modelo. IconSilhouette lo
+    // aplasta contra el papel desde la cara que diga el catalogo y recorre
+    // el borde de la mancha que sale, asi que la pava sale con forma de
+    // pava y la ballena con su cintura y su cola. Como se deduce del .glb,
+    // cambiar un modelo redibuja su contorno solo.
+    this.outlineMaterial = new MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.85,
+      side: DoubleSide,
+      depthWrite: false,
+    });
+    buildDashedSilhouette(
+      this.outline,
+      outlineLoopOf(model, icon, targetAspect),
+      this.outlineMaterial,
+    );
+    this.outline.position.z = 0.002;
+    this.group.add(this.outline);
+
+    this.group.add(this.smoke.group);
+
     this.sync();
   }
 
@@ -182,6 +254,50 @@ export class MarkerPin {
     this.pulseRemaining = PULSE_DURATION_S;
   }
 
+  /**
+   * Saca al animal de su escondite, o lo devuelve a el.
+   *
+   * Quien decide esto es ThreeSceneAdapter, que es el unico que sabe donde
+   * esta la camara. Aqui solo se dispara la animacion, y el humo, que se
+   * lanza unicamente al aparecer: verlo tambien al esconderse convertiria
+   * un detalle en un tic.
+   */
+  setRevealed(revealed: boolean): void {
+    if (this.revealed === revealed) return;
+    this.revealed = revealed;
+    if (revealed) this.smoke.burst();
+  }
+
+  get isRevealed(): boolean {
+    return this.revealed;
+  }
+
+  /**
+   * Suelta el icono para que lo muestre otro (el primer plano).
+   *
+   * A partir de aquí este pin deja de escribir su escala y su giro: si
+   * siguiera haciéndolo lo devolvería al tamaño de chincheta en cada
+   * fotograma. Se devuelve el objeto para que quien lo pide lo cuelgue
+   * donde toque.
+   */
+  releaseIcon(): Object3D {
+    this.focused = true;
+    this.lift.remove(this.icon);
+    return this.icon;
+  }
+
+  /** Recupera el icono y vuelve a mandar sobre él. */
+  reclaimIcon(): void {
+    if (!this.focused) return;
+    this.focused = false;
+    this.lift.add(this.icon);
+    this.sync();
+  }
+
+  get isFocused(): boolean {
+    return this.focused;
+  }
+
   /** Rotación y escala se aplican al icono SOBRE SÍ MISMO, nunca a su
    *  posición: debe seguir señalando a su animal pase lo que pase. */
   applyTransform(scale: number, spin: number): void {
@@ -191,6 +307,13 @@ export class MarkerPin {
   }
 
   advance(deltaSeconds: number, elapsed: number): void {
+    // Aparecer cuesta mas que desaparecer: la entrada tiene que dar tiempo
+    // a mirarla, la salida solo tiene que no dar un tiron.
+    const step = deltaSeconds / (this.revealed ? REVEAL_TIME_S : CONCEAL_TIME_S);
+    this.revealProgress = clamp01(this.revealProgress + (this.revealed ? step : -step));
+
+    this.smoke.advance(deltaSeconds);
+
     if (this.pulseRemaining > 0) {
       this.pulseRemaining = Math.max(0, this.pulseRemaining - deltaSeconds);
     }
@@ -200,10 +323,16 @@ export class MarkerPin {
     // Vaivén suave: da sensación de que el icono flota sobre el papel.
     this.bob = Math.sin(elapsed * BOB_SPEED + this.phase) * BOB_AMPLITUDE;
 
+    // El contorno respira, como el visor de la guia: un marco quieto sobre
+    // una ilustracion quieta no se distingue de la propia ilustracion.
+    const breath = 1 + Math.sin(elapsed * OUTLINE_BREATH_SPEED + this.phase) * OUTLINE_BREATH;
+    this.outline.scale.setScalar(breath);
+
     this.sync();
   }
 
   dispose(): void {
+    this.smoke.dispose();
     this.group.traverse((object) => {
       if (!(object instanceof Mesh)) return;
       object.geometry.dispose();
@@ -222,8 +351,17 @@ export class MarkerPin {
     const emphasised = 1 + EMPHASIS_SCALE * this.emphasis;
     const size = this.scale * emphasised * bump;
 
-    const applied = size * ICON_SCALE;
-    this.icon.scale.setScalar(applied);
+    // La materializacion se aplica a la escala del icono: sale creciendo
+    // desde el papel, con un pelin de rebote al final.
+    const materialised = easeOutBack(this.revealProgress);
+    const applied = size * ICON_SCALE * materialised;
+
+    this.lift.visible = this.revealProgress > 0.001 && !this.focused;
+    if (!this.focused) this.icon.scale.setScalar(Math.max(applied, 0.0001));
+
+    // El contorno se apaga a medida que el animal ocupa su sitio.
+    this.outline.visible = this.revealProgress < 0.999;
+    this.outlineMaterial.opacity = 0.85 * (1 - this.revealProgress);
 
     // Se vuela lo justo para no atravesar el papel, y nunca menos de
     // HOVER_HEIGHT: los iconos planos siguen flotando como antes.
@@ -231,7 +369,7 @@ export class MarkerPin {
     this.lift.position.z = hover + this.bob;
     // Giro propio del animal (catálogo) MÁS el del usuario, sobre el mismo
     // eje: el Y local del icono, que `applyView` ya dejó donde toca.
-    this.icon.rotation.y = this.facing + this.spin;
+    if (!this.focused) this.icon.rotation.y = this.facing + this.spin;
   }
 }
 
@@ -261,12 +399,100 @@ function measureHalfDepth(group: Group, lift: Group, icon: Object3D): number {
   group.updateMatrixWorld(true);
   const box = new Box3().setFromObject(lift);
 
+  // TRAMPA: setFromObject devuelve la caja en coordenadas de MUNDO, y este
+  // grupo ya está trasladado hasta su animal. Sin descontar esa posición,
+  // el "ancho" medido incluye la distancia desde el centro del mapa: la
+  // pava, que está en el borde derecho, salía casi cuatro veces más ancha
+  // de lo que es, y el cangrejo —que cae casi en el centro— era el único
+  // que parecía correcto. En este punto el grupo aún no tiene padre y no
+  // gira ni escala, así que restar su posición devuelve la caja local
+  // exacta.
+  box.translate(group.position.clone().negate());
+
   icon.scale.copy(scale);
   lift.position.z = z;
   group.updateMatrixWorld(true);
 
   if (box.isEmpty()) return 0;
   return Math.max(Math.abs(box.min.z), Math.abs(box.max.z));
+}
+
+/**
+ * El contorno de este animal, ya en coordenadas del pin.
+ *
+ * Dos procedencias, y la del catálogo manda:
+ *
+ *  - `outlineShape` CALCADO DEL DIBUJO del mapa. Se usa cuando el dibujo
+ *    está en una pose que el modelo no puede dar: la ballena del mapa bucea
+ *    con la cola alzada y la aleta extendida, y ninguna proyección rígida
+ *    del .glb —ni de frente, ni de perfil, ni desde arriba— se parece a eso.
+ *    Sus puntos vienen en coordenadas de la IMAGEN, igual que `spot`, así
+ *    que se convierten a coordenadas del anchor y se les resta la posición
+ *    del pin, que ya está en el sitio.
+ *  - Deducido del modelo con IconSilhouette, que es lo que hacen los otros
+ *    tres. Ese viene en unidades de icono y hay que pasarlo a la escala a la
+ *    que el icono se ve de verdad sobre el mapa (ICON_SCALE).
+ */
+function outlineLoopOf(
+  model: ArModel,
+  icon: Object3D,
+  targetAspect: number,
+): SilhouettePoint[] {
+  if (model.outlineShape.length >= 3) {
+    const origin = anchorPositionOf(model.spot, targetAspect);
+    const drawn = model.outlineShape.map((point) => {
+      const at = anchorPositionOf(point, targetAspect);
+      return { x: at.x - origin.x, y: at.y - origin.y };
+    });
+    return offsetOutline(prepareOutline(drawn, OUTLINE_DASHES), DRAWN_OUTLINE_OFFSET);
+  }
+
+  const traced = traceIconSilhouette(icon, model.pose, OUTLINE_DASHES);
+  return traced.map((point) => ({ x: point.x * ICON_SCALE, y: point.y * ICON_SCALE }));
+}
+
+/**
+ * Rellena `target` con los trazos discontinuos que siguen el contorno.
+ *
+ * Cada trazo se orienta segun la direccion que llevan sus vecinos, no la
+ * suya propia: usar el angulo del punto los dejaria todos apuntando al
+ * centro, como los radios de una rueda, en vez de seguir el borde.
+ */
+function buildDashedSilhouette(
+  target: Group,
+  loop: readonly SilhouettePoint[],
+  material: MeshBasicMaterial,
+): void {
+  const n = loop.length;
+
+  for (let i = 0; i < n; i += 1) {
+    const point = loop[i]!;
+    const next = loop[(i + 1) % n]!;
+    const previous = loop[(i - 1 + n) % n]!;
+
+    const length = Math.hypot(next.x - point.x, next.y - point.y) * 0.62;
+    const dash = new Mesh(new PlaneGeometry(Math.max(length, 0.004), OUTLINE_THICKNESS), material);
+    dash.position.set(point.x, point.y, 0);
+    dash.rotation.z = Math.atan2(next.y - previous.y, next.x - previous.x);
+    target.add(dash);
+  }
+}
+
+function clamp01(value: number): number {
+  return value < 0 ? 0 : value > 1 ? 1 : value;
+}
+
+/**
+ * Entrada con un rebote corto al final. Un crecimiento lineal parece que la
+ * app va lenta; el rebote hace que el animal se lea como que SALTA fuera
+ * del papel.
+ */
+function easeOutBack(x: number): number {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
 }
 
 function disposeMaterial(material: unknown): void {
