@@ -43,14 +43,49 @@ export class IconPose {
      * que sigue siendo un giro EN EL SITIO: no despega al icono de su punto.
      */
     readonly facing: number,
+    /**
+     * Desde qué cara se calca el contorno punteado del suelo.
+     *
+     * Se separa de `view` porque son dos preguntas distintas: `view` decide
+     * cómo se levanta el MODELO sobre el mapa, y esto decide desde dónde se
+     * mira para dibujar su SILUETA sobre el papel. La ballena está de
+     * frente para que se le vea la cara, pero en el mapa está dibujada de
+     * perfil, así que su contorno hay que sacarlo de perfil o no se parece
+     * en nada al dibujo.
+     */
+    readonly outlineView: IconView,
+    /** Giro del contorno para cuadrarlo con el dibujo, en RADIANES. */
+    readonly outlineSpin: number,
+    /**
+     * Si el contorno va ESPEJADO respecto al modelo.
+     *
+     * Un perfil tiene dos lados y el ilustrador eligió uno por animal: la
+     * pava del mapa mira a la izquierda y la ballena a la derecha, y el
+     * modelo solo puede dar uno de los dos. Girar 180° no sirve como
+     * espejo, porque eso además deja al animal panza arriba.
+     */
+    readonly outlineMirror: boolean,
   ) {
     Object.freeze(this);
   }
 
   /** @param facingDegrees grados; es como se lee y se ajusta en el catálogo. */
-  static of(view: IconView, size = 1, facingDegrees = 0): IconPose {
+  static of(
+    view: IconView,
+    size = 1,
+    facingDegrees = 0,
+    outlineView: IconView = view,
+    outlineSpinDegrees = 0,
+    outlineMirror = false,
+  ): IconPose {
     if (!VIEWS.includes(view)) {
       throw new RangeError(`Vista desconocida: "${view}". Usa ${VIEWS.join(' o ')}.`);
+    }
+    if (!VIEWS.includes(outlineView)) {
+      throw new RangeError(`Vista de contorno desconocida: "${outlineView}".`);
+    }
+    if (!Number.isFinite(outlineSpinDegrees)) {
+      throw new RangeError(`Giro de contorno inválido: ${outlineSpinDegrees}.`);
     }
     if (!Number.isFinite(size) || size <= 0) {
       throw new RangeError(`Tamaño inválido: ${size}. Debe ser un número positivo.`);
@@ -64,6 +99,9 @@ export class IconPose {
       view,
       Math.min(Scale.MAX, Math.max(Scale.MIN, size)),
       (facingDegrees * Math.PI) / 180,
+      outlineView,
+      (outlineSpinDegrees * Math.PI) / 180,
+      outlineMirror,
     );
   }
 

@@ -8,16 +8,39 @@ import { SoundProfile, type SoundSnapshot } from '../value-objects/SoundProfile'
 export interface ArModelSnapshot {
   readonly id: string;
   readonly name: string;
+  /** Ficha corta que se lee en el primer plano, bajo el modelo. */
+  readonly description: string;
   readonly source: ModelSource;
   readonly sound: SoundSnapshot;
   /** Dónde vive este modelo sobre la imagen del marcador (u, v en 0–1). */
   readonly spot: { readonly u: number; readonly v: number };
+  /**
+   * Contorno CALCADO DEL DIBUJO, en las mismas coordenadas que `spot`.
+   *
+   * Opcional: sin él, el contorno punteado se deduce de la silueta del .glb,
+   * que es lo que hacen tres de los cuatro. Se pone cuando el dibujo está en
+   * una pose que ninguna proyección del modelo reproduce.
+   */
+  readonly outlineShape?: readonly { readonly u: number; readonly v: number }[];
   /** Desde qué cara se mira el icono. Por defecto 'front' (de frente). */
   readonly view?: IconView;
   /** Tamaño del icono respecto al base. Por defecto 1. */
   readonly iconSize?: number;
   /** Hacia dónde mira, en grados sobre su eje vertical. Por defecto 0. */
   readonly facing?: number;
+  /**
+   * Desde qué cara se calca el CONTORNO punteado. Por defecto, la misma
+   * desde la que se mira el icono; se separa porque el dibujo del mapa y el
+   * modelo 3D no tienen por qué estar vistos desde el mismo sitio.
+   */
+  readonly outlineView?: IconView;
+  /** Giro del contorno para cuadrarlo con el dibujo, en grados. */
+  readonly outlineSpin?: number;
+  /**
+   * Si el contorno va espejado: el dibujo del mapa mira hacia el otro lado
+   * que el modelo. Por defecto no.
+   */
+  readonly outlineMirror?: boolean;
   readonly defaultScale?: number;
 }
 
@@ -25,9 +48,12 @@ export class ArModel {
   private constructor(
     readonly id: ModelId,
     readonly name: string,
+    readonly description: string,
     readonly source: ModelSource,
     readonly sound: SoundProfile,
     readonly spot: MarkerSpot,
+    /** Vacío si el contorno se deduce del modelo. */
+    readonly outlineShape: readonly MarkerSpot[],
     readonly pose: IconPose,
     readonly defaultScale: Scale,
   ) {
@@ -39,13 +65,23 @@ export class ArModel {
     if (name.length === 0) {
       throw new RangeError('ArModel requiere un nombre no vacío');
     }
+    const view = snapshot.view ?? 'front';
     return new ArModel(
       ModelId.of(snapshot.id),
       name,
+      snapshot.description.trim(),
       snapshot.source,
       SoundProfile.of(snapshot.sound),
       MarkerSpot.of(snapshot.spot.u, snapshot.spot.v),
-      IconPose.of(snapshot.view ?? 'front', snapshot.iconSize ?? 1, snapshot.facing ?? 0),
+      (snapshot.outlineShape ?? []).map((point) => MarkerSpot.of(point.u, point.v)),
+      IconPose.of(
+        view,
+        snapshot.iconSize ?? 1,
+        snapshot.facing ?? 0,
+        snapshot.outlineView ?? view,
+        snapshot.outlineSpin ?? 0,
+        snapshot.outlineMirror ?? false,
+      ),
       Scale.of(snapshot.defaultScale ?? 1),
     );
   }

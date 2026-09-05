@@ -1,4 +1,5 @@
 import { ArSession } from '@domain/entities/ArSession';
+import type { ArModel } from '@domain/entities/ArModel';
 import { Placement } from '@domain/entities/Placement';
 import { ModelId } from '@domain/value-objects/ModelId';
 import type { Stabilization } from '@domain/value-objects/Stabilization';
@@ -10,6 +11,15 @@ import { CameraPermissionDeniedError, type TrackingPort, type Unsubscribe } from
 
 export type SessionListener = (session: ArSession) => void;
 
+/** El catálogo llegó vacío. Se distingue para dar un mensaje concreto. */
+class EmptyCatalogError extends Error {}
+
+/** Lo que deja lista `prepare`: el catálogo entero y con cuál se empieza. */
+export interface PreparedScene {
+  readonly catalog: readonly ArModel[];
+  readonly initial: ArModel;
+}
+
 /**
  * Orquesta el arranque completo. No sabe qué es MindAR, ni Three.js,
  * ni el DOM. Solo habla con puertos, por lo que es testeable sin navegador.
@@ -17,6 +27,8 @@ export type SessionListener = (session: ArSession) => void;
 export class StartArExperience {
   private session = ArSession.idle();
   private subscriptions: Unsubscribe[] = [];
+  /** La descarga de modelos en curso, para no lanzarla dos veces. */
+  private preparation: Promise<PreparedScene> | null = null;
 
   constructor(
     private readonly tracking: TrackingPort,
@@ -31,18 +43,63 @@ export class StartArExperience {
     return this.session;
   }
 
+  /**
+   * Baja y monta los modelos, SIN tocar la camara.
+   *
+   * Se lanza en cuanto se abre la pagina, mientras se ve la pantalla de
+   * bienvenida: son 3,3 MB de .glb y esperar a que termine el saludo para
+   * empezar a pedirlos regala varios segundos de pantalla en blanco. Cuando
+   * `execute` llega, casi siempre esto ya esta hecho.
+   *
+   * Es idempotente: llamarlo dos veces devuelve la misma promesa.
+   */
+  prepare(initialModelId: string): Promise<PreparedScene> {
+    if (this.preparation !== null) return this.preparation;
+
+    this.preparation = this.loadScene(initialModelId).catch((error: unknown) => {
+      // Si falla, se olvida: asi el boton de reintentar puede volver a
+      // intentarlo en vez de heredar para siempre una promesa rechazada.
+      this.preparation = null;
+      throw error;
+    });
+    return this.preparation;
+  }
+
+  private async loadScene(initialModelId: string): Promise<PreparedScene> {
+    // Se intenta desbloquear el audio, pero NO se espera el resultado (ver
+    // el comentario en execute).
+    void this.audio.unlock().catch(() => {});
+
+    this.emit(this.session.preparing());
+
+    const catalog = await this.models.findAll();
+    if (catalog.length === 0) {
+      throw new EmptyCatalogError();
+    }
+
+    const requested = ModelId.of(initialModelId);
+    const initial = catalog.find((model) => model.id.equals(requested)) ?? catalog[0]!;
+
+    await this.scene.preload(catalog);
+    this.scene.setHighlightedModel(initial.id);
+    this.scene.setStabilization(this.session.stabilization);
+
+    return { catalog, initial };
+  }
+
   async execute(initialModelId: string): Promise<ArSession> {
-    if (!this.session.canStart) return this.session;
+    // `canStart` no vale como guarda: tras `prepare` la sesion ya esta en
+    // 'preparing'. Lo que hay que impedir es arrancar dos veces la camara.
+    if (this.session.hasStarted) return this.session;
 
     try {
-      // El desbloqueo del audio arranca AQUÍ, antes del primer `await`:
-      // hasta esta línea seguimos dentro del gesto que disparó el click, y
-      // eso es lo único que iOS acepta para poner en marcha un
-      // AudioContext. Estaba después del await de isSupported(), fuera ya
-      // del gesto. Lo que importa es dónde EMPIEZA, no dónde se espera:
-      // la promesa se recoge más abajo.
-      const unlocking = this.audio.unlock();
-
+      // NOTA sobre el audio, que se desbloquea en `loadScene` sin esperarlo:
+      // `AudioContext.resume()` sobre un contexto suspendido devuelve una
+      // promesa que no se resuelve NI se rechaza hasta que hay un gesto del
+      // usuario. Con el boton "Iniciar AR" siempre lo habia; ahora la
+      // experiencia arranca sola, y esperar esa promesa dejaba la sesion
+      // clavada en "preparando" sin llegar a pedir la camara. Quien
+      // desbloquea de verdad es el primer toque (ver `src/main.ts`).
       if (!(await this.tracking.isSupported())) {
         return this.emit(
           this.session.failed(
@@ -52,20 +109,7 @@ export class StartArExperience {
         );
       }
 
-      this.emit(this.session.preparing());
-      await unlocking;
-
-      const catalog = await this.models.findAll();
-      if (catalog.length === 0) {
-        return this.emit(this.session.failed('model-not-found', 'El catálogo está vacío'));
-      }
-
-      const requested = ModelId.of(initialModelId);
-      const initial = catalog.find((model) => model.id.equals(requested)) ?? catalog[0]!;
-
-      await this.scene.preload(catalog);
-      this.scene.setHighlightedModel(initial.id);
-      this.scene.setStabilization(this.session.stabilization);
+      const { initial } = await this.prepare(initialModelId);
 
       const placement = Placement.initial(initial.id, initial.defaultScale);
       this.scene.applyPlacement(placement);
@@ -106,6 +150,10 @@ export class StartArExperience {
   }
 
   private toFailure(error: unknown): ArSession {
+    if (error instanceof EmptyCatalogError) {
+      this.analytics.track('ar_session_failed', { code: 'model-not-found' });
+      return this.session.failed('model-not-found', 'El catálogo está vacío');
+    }
     if (error instanceof CameraPermissionDeniedError) {
       this.analytics.track('ar_session_failed', { code: 'camera-denied' });
       return this.session.failed(

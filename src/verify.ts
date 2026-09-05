@@ -35,6 +35,18 @@ import { NUQUI_CATALOG } from '@infrastructure/repositories/StaticModelRepositor
 const TARGET_ASPECT = 1280 / 880;
 const MAP_URL = '/targets/map.jpg';
 
+/**
+ * Cuánto tarda esta página en revelar los cuatro animales.
+ *
+ * Se puede fijar por URL —`/verify.html?reveal=99999`— para dejar los
+ * CONTORNOS punteados quietos en pantalla y comprobar con calma que cada
+ * uno encuadra a su animal. Sin esto solo se ven durante dos segundos y no
+ * hay forma de medirlos.
+ */
+const REVEAL_DELAY_MS = Number(
+  new URLSearchParams(window.location.search).get('reveal') ?? 2500,
+);
+
 const scene = new Scene();
 addLights(scene);
 scene.add(new AmbientLight(0xffffff, 0.35));
@@ -65,8 +77,22 @@ const ready = Promise.all(
 // desfase del vaivén siga correspondiendo al orden del catálogo.
 void ready.then((loaded) => {
   for (const [index, pin] of loaded) pins[index] = pin;
+  // En la app los animales salen escondidos tras su contorno y solo
+  // aparecen cuando la camara se acerca. Aqui no hay camara que acercar, y
+  // lo que se viene a verificar son las COORDENADAS, asi que se revelan los
+  // cuatro a mano. El contorno punteado se sigue viendo durante la
+  // animacion de entrada, que de paso deja comprobar que encuadra bien.
   // Se destaca uno para comprobar de un vistazo que el resaltado funciona.
   pins[0]?.highlight(true);
+
+  // Los cuatro se revelan tras una pausa, no al instante: los primeros
+  // segundos enseñan los CONTORNOS punteados —que es lo que ve el usuario
+  // antes de acercarse— y el resto de la sesión enseña los modelos, que es
+  // lo que esta página existe para verificar. De paso se ve la bocanada de
+  // humo, imposible de comprobar en el teléfono sin el mapa impreso.
+  window.setTimeout(() => {
+    for (const [, pin] of loaded) pin.setRevealed(true);
+  }, REVEAL_DELAY_MS);
 });
 
 const half = TARGET_ASPECT / 2;

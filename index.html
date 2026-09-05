@@ -6,7 +6,18 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1"
     />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#2a2c1c" />
+
+    <!-- La pantalla inicial es lo PRIMERO que se pinta, asi que se pide
+         antes que el modulo de la app. Solo el WebP: quien no lo soporte se
+         lleva el JPEG del <picture> y esta linea la ignora. -->
+    <link
+      rel="preload"
+      as="image"
+      href="/splash/inicio.webp"
+      type="image/webp"
+      fetchpriority="high"
+    />
     <title>Territorios Vivos AR · Nuquí, Chocó</title>
 
     <!-- Fuente solo para el rótulo de la guía. `display=swap` para que la
@@ -24,6 +35,22 @@
         --surface: rgba(18, 18, 20, 0.72);
         --border: rgba(255, 255, 255, 0.14);
         --accent: #e8442f;
+
+        /* Proporcion EXACTA de public/splash/inicio.webp (720x1600). Es lo
+           que permite colocar el boton sobre el que viene dibujado en la
+           foto; si cambia la imagen, `npm run optimize-splash` imprime el
+           numero nuevo. */
+        --splash-ar: 0.45;
+
+        /* Alto de viewport ESTABLE. En Safari de iPhone, `100vh` cuenta
+           tambien lo que hay debajo de la barra de direcciones, asi que un
+           diseno ajustado a `100vh` se queda con los logos tapados. `svh`
+           mide el viewport mas pequeno --el que hay con las barras
+           puestas-- y garantiza que se ve entero. */
+        --vh: 100vh;
+      }
+      @supports (height: 100svh) {
+        :root { --vh: 100svh; }
       }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
@@ -75,6 +102,25 @@
         object-fit: cover !important;
       }
 
+      /* El vídeo de la cámara es fondo, no un reproductor: fuera sus
+         mandos. WebKit los pinta encima —incluido un botón de play en
+         mitad de la pantalla— si cree que el vídeo es contenido que el
+         usuario podría querer controlar. El arreglo de verdad está en
+         MindArTrackingAdapter.silenceVideoChrome; esto es el cinturón
+         además de los tirantes, para los navegadores que los pintan igual. */
+      #ar-container video {
+        pointer-events: none !important;
+      }
+      #ar-container video::-webkit-media-controls,
+      #ar-container video::-webkit-media-controls-panel,
+      #ar-container video::-webkit-media-controls-start-playback-button,
+      #ar-container video::-webkit-media-controls-play-button,
+      #ar-container video::-webkit-media-controls-overlay-play-button {
+        display: none !important;
+        opacity: 0 !important;
+        -webkit-appearance: none !important;
+      }
+
       #ui {
         position: fixed;
         inset: 0;
@@ -121,12 +167,213 @@
       }
       button:active { transform: scale(0.94); }
 
-      #start {
+      /* Ya no hay boton de inicio: la camara se pide sola tras la
+         bienvenida. Este solo aparece si algo fallo, y es la unica forma de
+         reintentar sin recargar la pagina. */
+      #retry {
         font-size: 17px;
         font-weight: 600;
         padding: 17px 44px;
         background: var(--accent);
         border-color: transparent;
+      }
+
+      /* ------------------------------------------------------------------
+         PANTALLA INICIAL
+
+         El diseno de la bienvenida llega como una sola imagen, con el
+         titulo, el boton y los logos de los aliados ya dibujados dentro.
+         Eso manda en como se coloca:
+
+          - LLENA la pantalla. Es una foto a sangre: dejarle franjas al
+            lado la delataba como una imagen pegada en medio en vez de
+            leerse como la pantalla de la app.
+          - Pero no a cualquier precio. Los logos de TIC, Culturas y
+            CO-CREA van abajo del todo y recortarlos no es un detalle
+            estetico, asi que llenar solo se hace mientras el recorte se
+            quede en el follaje de arriba y en el agua de abajo. En cuanto
+            la pantalla es tan ancha que empezaria a comerse el titulo o
+            los logos --una tableta, un portatil, el movil tumbado-- se ve
+            entera y lo que sobra lo tapa la misma foto desenfocada.
+          - Encima del boton dibujado va un boton de VERDAD, transparente y
+            colocado en porcentajes de la imagen. Como el marco tiene la
+            proporcion exacta de la foto, esos porcentajes caen siempre
+            sobre el boton, mida lo que mida la pantalla.
+
+         El boton, ademas, devuelve el gesto de usuario que se habia
+         perdido: la camara y el audio arrancan desde un toque real, que es
+         lo que iOS pide para conceder el permiso y para dejar sonar nada.
+         ------------------------------------------------------------------ */
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 5;
+        overflow: hidden;
+        background: #2a2c1c;
+        transition: opacity 0.7s ease, visibility 0.7s;
+      }
+      #boot[data-visible="false"] { opacity: 0; visibility: hidden; }
+
+      /* Relleno de los margenes. `inset` negativo porque el desenfoque
+         aclara los bordes: se agranda y se recortan. */
+      #boot-fill {
+        position: absolute;
+        inset: -6%;
+      }
+      #boot-fill img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        filter: blur(26px) brightness(0.55);
+      }
+
+      /* El marco con la proporcion de la foto, centrado y lo mas grande que
+         quepa entero. Es el sistema de coordenadas del boton. */
+      #boot-art {
+        /*
+         * ALTO del marco, en una sola expresion, y de dentro hacia fuera:
+         *
+         *   max(--vh, 100vw / ar)   llenar la pantalla: el alto que hace
+         *                           falta para que la foto la cubra a lo
+         *                           ancho, o el de la pantalla si ya sobra.
+         *   min(eso, --vh * 1.22)   con un tope: nunca mas de un 22% de
+         *                           alto de mas.
+         *
+         * El tope es lo que protege el diseno. Todo lo que pasa de ese 22%
+         * se lo comeria el recorte, y a partir de ahi entrarian el titulo
+         * (empieza al 20,5% de la foto) y los logos (acaban al 89,8%).
+         * Cuando el tope entra en juego el marco se estrecha y aparecen
+         * franjas, pero CRECIENDO desde cero, no de golpe: en cuanto la
+         * pantalla es mas ancha que 0,549 (= 0,45 x 1,22) empiezan a
+         * asomar unos pocos pixeles. Ningun movil en vertical llega ahi;
+         * llegan las tabletas y el movil tumbado, que es justo donde la
+         * foto entera se ve mejor que recortada.
+         *
+         * Este calculo sustituye a una media query que hacia lo mismo a
+         * saltos. Fallaba: la proporcion que mide la media query en Safari
+         * de iPhone cuenta la barra de direcciones, asi que un iPhone
+         * "en vertical" daba 0,53 y saltaba a foto entera con franjas.
+         */
+        --art-h: min(
+          max(var(--vh), calc(100vw / var(--splash-ar))),
+          calc(var(--vh) * 1.22)
+        );
+
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        height: var(--art-h);
+        width: calc(var(--art-h) * var(--splash-ar));
+
+        /*
+         * El recorte NO se reparte a medias: cuatro quintas partes salen
+         * por arriba y una por abajo. Arriba solo hay follaje y sobra;
+         * abajo estan los logos de los aliados y no hay margen.
+         */
+        bottom: calc((var(--art-h) - var(--vh)) * -0.2);
+      }
+      #boot-art img {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* Medido sobre la imagen: el boton naranja va de 32,6% a 69,2% de
+         ancho y de 66,3% a 72,0% de alto. Aqui va un pelo mas grande por
+         todos lados, para que el dedo no tenga que ser preciso. */
+      #start {
+        position: absolute;
+        left: 31.6%;
+        top: 65.3%;
+        width: 38.6%;
+        height: 7.7%;
+        min-width: 0;
+        min-height: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        backdrop-filter: none;
+        touch-action: manipulation;
+      }
+      /* El boton va DIBUJADO en la foto, y una foto no invita a tocar
+         nada: no se ilumina, no se hunde, no hace nada. Lo que se anade
+         encima es lo que lo convierte en un elemento vivo:
+
+          - un halo que late despacio a su alrededor, que es lo que dice
+            "esto se pulsa" sin escribirlo,
+          - y un hundido con destello al tocarlo, porque el dibujo de
+            debajo no puede reaccionar por su cuenta.
+
+         Nada de esto tapa el boton dibujado: el halo crece por FUERA y el
+         destello es una veladura. */
+      #start {
+        cursor: pointer;
+        animation: start-halo 2.6s ease-in-out infinite;
+      }
+      @keyframes start-halo {
+        0%, 100% {
+          box-shadow:
+            0 0 0 0 rgba(255, 255, 255, 0.28),
+            0 6px 22px rgba(0, 0, 0, 0.35);
+        }
+        70% {
+          box-shadow:
+            0 0 0 14px rgba(255, 255, 255, 0),
+            0 6px 22px rgba(0, 0, 0, 0.35);
+        }
+      }
+      #start:active {
+        transform: scale(0.96);
+        background: rgba(255, 255, 255, 0.24);
+        /* Mientras se pulsa, el halo estorba: el dedo ya esta encima. */
+        animation: none;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #start { animation: none; box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35); }
+      }
+
+      /* ------------------------------------------------------------------
+         SEGUNDA INSTRUCCION
+
+         Hermana de la guia de encuadre, con una diferencia deliberada: NO
+         oscurece la pantalla. La guia puede permitirselo porque mientras se
+         busca el mapa no hay nada que mirar; esta aparece cuando el mapa ya
+         esta en cuadro, y atenuarlo estorbaria justo lo que el usuario
+         necesita ver para acercarse a un animal.
+         ------------------------------------------------------------------ */
+      #approach {
+        position: fixed;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 10px;
+        padding: calc(15vh + env(safe-area-inset-top)) 26px 0;
+        pointer-events: none;
+        text-align: center;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.45s ease, visibility 0.45s;
+      }
+      #approach[data-visible="true"] { opacity: 1; visibility: visible; }
+
+      #approach-title {
+        margin: 0;
+        font-family: "Fraunces", Georgia, "Times New Roman", serif;
+        font-weight: 600;
+        font-size: clamp(21px, 5.8vw, 31px);
+        line-height: 1.2;
+        text-shadow: 0 2px 22px rgba(0, 0, 0, 0.95);
+      }
+      #approach-sub {
+        margin: 0;
+        font-size: 13.5px;
+        color: rgba(255, 255, 255, 0.86);
+        text-shadow: 0 1px 14px rgba(0, 0, 0, 0.95);
       }
 
       /* ------------------------------------------------------------------
@@ -227,6 +474,72 @@
         border: 1px dashed var(--border);
       }
 
+      /* ------------------------------------------------------------------
+         PRIMER PLANO
+
+         Cuando el usuario se acerca a un animal, este se despega del mapa y
+         se planta delante de la cámara. Esta capa es lo que lo acompaña:
+         penumbra para que destaque, su nombre, su ficha y la X.
+
+         `pointer-events: none` en el bloque entero, salvo en la X: el dedo
+         tiene que seguir llegando al canvas para poder GIRAR el animal.
+         Una capa que capturase el arrastre mataría la mitad de la gracia.
+         ------------------------------------------------------------------ */
+      #focus {
+        position: fixed;
+        inset: 0;
+        z-index: 3;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 10px;
+        padding: 0 22px calc(30px + env(safe-area-inset-bottom));
+        pointer-events: none;
+        text-align: center;
+        background: radial-gradient(
+          ellipse at center 42%,
+          rgba(0, 0, 0, 0.12) 0%,
+          rgba(0, 0, 0, 0.62) 62%,
+          rgba(0, 0, 0, 0.86) 100%
+        );
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.5s ease, visibility 0.5s;
+      }
+      #focus[data-visible="true"] { opacity: 1; visibility: visible; }
+
+      #focus-name {
+        margin: 0;
+        font-family: "Fraunces", Georgia, "Times New Roman", serif;
+        font-weight: 600;
+        font-size: clamp(24px, 6.6vw, 34px);
+        line-height: 1.15;
+        text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
+      }
+      #focus-info {
+        margin: 0;
+        max-width: 34ch;
+        font-size: 14.5px;
+        line-height: 1.5;
+        color: rgba(255, 255, 255, 0.88);
+        text-shadow: 0 1px 14px rgba(0, 0, 0, 0.95);
+      }
+
+      #focus-close {
+        pointer-events: auto;
+        position: absolute;
+        top: calc(14px + env(safe-area-inset-top));
+        right: calc(14px + env(safe-area-inset-right));
+        width: 46px;
+        min-width: 46px;
+        height: 46px;
+        min-height: 46px;
+        padding: 0;
+        border-radius: 50%;
+        font-size: 17px;
+      }
+
       /* Único botón además de Iniciar: devuelve la guía. En una esquina
          para no competir con la escena. */
       #help {
@@ -243,6 +556,104 @@
         font-weight: 600;
       }
 
+      /* ------------------------------------------------------------------
+         MENÚ
+
+         La esquina de enfrente del «?»: el mismo botón redondo y
+         translúcido, con las tres rayas de siempre en lugar del signo. Se
+         despliega hacia abajo y se queda semitransparente a propósito —la
+         cámara tiene que seguir viéndose por detrás—: es un menú SOBRE la
+         experiencia, no una pantalla que la sustituya.
+
+         Las tres opciones son PROVISIONALES, un sitio donde ver la idea
+         tomando forma. Cada una lleva su `data-action`, que es el gancho
+         por el que entrarán cuando se decidan; hoy solo cierran el menú.
+         ------------------------------------------------------------------ */
+      #menu-button {
+        position: absolute;
+        z-index: 4;
+        top: calc(14px + env(safe-area-inset-top));
+        left: calc(14px + env(safe-area-inset-left));
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        width: 46px;
+        min-width: 46px;
+        height: 46px;
+        min-height: 46px;
+        padding: 0;
+        border-radius: 50%;
+      }
+      #menu-button span {
+        display: block;
+        width: 18px;
+        height: 2px;
+        border-radius: 2px;
+        background: #fff;
+        transition: transform 0.22s ease, opacity 0.18s ease;
+      }
+      /* Abierto, las rayas se cruzan en una X. Sin eso, la única forma de
+         cerrarlo sería tocar fuera, y tocar fuera no se ve. */
+      #menu-button[aria-expanded="true"] span:nth-child(1) {
+        transform: translateY(7px) rotate(45deg);
+      }
+      #menu-button[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+      #menu-button[aria-expanded="true"] span:nth-child(3) {
+        transform: translateY(-7px) rotate(-45deg);
+      }
+
+      #menu {
+        position: absolute;
+        z-index: 4;
+        top: calc(68px + env(safe-area-inset-top));
+        left: calc(14px + env(safe-area-inset-left));
+        display: flex;
+        flex-direction: column;
+        min-width: 216px;
+        max-width: calc(100vw - 28px);
+        padding: 6px;
+        border-radius: 16px;
+        background: rgba(18, 18, 20, 0.55);
+        backdrop-filter: blur(14px);
+        border: 1px solid var(--border);
+        /* Se despliega desde el botón, no desde su propio centro. */
+        transform-origin: top left;
+        transform: translateY(-6px) scale(0.97);
+        /* Con opacidad y no con [hidden], por lo mismo que la guía:
+           `display:none` corta la transición y el menú daría un salto. */
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+      }
+      #menu[data-visible="true"] {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+      }
+
+      #menu button {
+        width: 100%;
+        text-align: left;
+        font-size: 14.5px;
+        font-weight: 500;
+        min-width: 0;
+        min-height: 44px;
+        padding: 12px 14px;
+        border: 0;
+        border-radius: 11px;
+        background: transparent;
+        backdrop-filter: none;
+      }
+      #menu button + button { margin-top: 2px; }
+      /* Una opción ancha encogiéndose entera queda raro; se marca con un
+         fondo, que es como se marca una lista. */
+      #menu button:active {
+        transform: none;
+        background: rgba(255, 255, 255, 0.12);
+      }
+
       [hidden] { display: none !important; }
     </style>
   </head>
@@ -250,6 +661,28 @@
     <div id="ar-container"></div>
 
     <div id="app">
+      <!-- Pantalla inicial: se queda hasta que alguien pulsa Iniciar. -->
+      <div id="boot" data-visible="true" aria-hidden="false">
+        <picture id="boot-fill" aria-hidden="true">
+          <source srcset="/splash/inicio.webp" type="image/webp" />
+          <img src="/splash/inicio.jpg" alt="" decoding="async" />
+        </picture>
+
+        <div id="boot-art">
+          <picture>
+            <source srcset="/splash/inicio.webp" type="image/webp" />
+            <img
+              src="/splash/inicio.jpg"
+              alt="Territorios Vivos, relatos del Pacífico"
+              fetchpriority="high"
+            />
+          </picture>
+          <!-- Sin texto: el rótulo ya está dibujado en la foto. El nombre
+               accesible lo pone aria-label. -->
+          <button type="button" id="start" aria-label="Iniciar experiencia AR"></button>
+        </div>
+      </div>
+
       <!-- Guía de encuadre. El marco tiene la proporción real del mapa. -->
       <div id="guide" data-visible="false" aria-hidden="true">
         <div id="guide-frame">
@@ -263,11 +696,43 @@
         >
       </div>
 
+      <!-- Segunda instrucción: aparece con el mapa ya localizado. -->
+      <div id="approach" data-visible="false" aria-hidden="true">
+        <p id="approach-title">Acerca tu cámara a un animal</p>
+        <p id="approach-sub">Busca las siluetas punteadas sobre el mapa</p>
+      </div>
+
+      <!-- Primer plano de un animal descubierto. -->
+      <div id="focus" data-visible="false" aria-hidden="true">
+        <button type="button" id="focus-close" aria-label="Cerrar la ficha">✕</button>
+        <h2 id="focus-name"></h2>
+        <p id="focus-info"></p>
+      </div>
+
       <div id="ui">
+        <button
+          type="button"
+          id="menu-button"
+          aria-label="Abrir el menú"
+          aria-expanded="false"
+          aria-controls="menu"
+          hidden
+        >
+          <span></span><span></span><span></span>
+        </button>
+
+        <!-- Opciones provisionales: los nombres están puestos para ver la
+             idea, no para quedarse. -->
+        <nav id="menu" data-visible="false" aria-hidden="true">
+          <button type="button" data-action="share-story">Comparte tu historia</button>
+          <button type="button" data-action="social">Redes sociales</button>
+          <button type="button" data-action="soon">Próximamente</button>
+        </nav>
+
         <button type="button" id="help" aria-label="Volver a mostrar la guía" hidden>?</button>
 
         <p id="hint"></p>
-        <button type="button" id="start">Iniciar AR</button>
+        <button type="button" id="retry" hidden>Reintentar</button>
       </div>
     </div>
 
