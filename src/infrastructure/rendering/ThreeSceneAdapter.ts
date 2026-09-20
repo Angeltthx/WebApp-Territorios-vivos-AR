@@ -333,7 +333,7 @@ export class ThreeSceneAdapter implements ScenePort {
     // CUÁNTO MIDE UN ANCHO DE MAPA EN ESTE MUNDO.
     //
     // MindAR no trabaja en unidades de mapa: su `postMatrix` escala el
-    // contenido por el ancho de la imagen compilada EN PÍXELES (880 aquí),
+    // contenido por el ancho de la imagen compilada EN PÍXELES (1000 aquí),
     // así que una distancia cruda a un icono sale en miles. Los umbrales de
     // `Proximity` están en anchos de mapa —la única unidad que significa
     // algo para una regla del dominio—, así que hay que dividir. Sin esta

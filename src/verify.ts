@@ -32,7 +32,7 @@ import { IconLoader } from '@infrastructure/rendering/IconLoader';
 import { MarkerPin } from '@infrastructure/rendering/MarkerPin';
 import { NUQUI_CATALOG } from '@infrastructure/repositories/StaticModelRepository';
 
-const TARGET_ASPECT = 1280 / 880;
+const TARGET_ASPECT = 1432 / 1000;
 const MAP_URL = '/targets/map.jpg';
 
 /**

@@ -92,6 +92,7 @@ npm run dev
 | `VITE_HTTP=1 npm run dev` | Igual pero sin TLS. Solo para mirar cosas en el escritorio (`/verify.html`): sin HTTPS no hay cámara fuera de localhost |
 | `npm run build` | Sitio estático en `dist/` |
 | `npm run typecheck` | `tsc --noEmit` |
+| `npm run prepare-target` | Recorta la entrega de la diseñadora → `map.jpg` |
 | `npm run compile-target` | Recompila `map.jpg` → `map.mind` |
 
 Vite imprime dos direcciones. Usa la de tu red local (`https://192.168.x.x:5173`) **desde el teléfono**. Debe ser `https://` — la cámara no funciona sobre `http://`.
@@ -107,17 +108,28 @@ El marcador es el mapa de Nuquí, ya compilado en `public/targets/map.mind`. Par
 Para **recompilar el target** (porque cambió la imagen, o para usar otra):
 
 ```bash
+npm run prepare-target   # solo si la imagen es nueva
 npm run compile-target
 ```
 
-Eso lee `public/targets/map.jpg` y escribe `public/targets/map.mind`. Si cambias de imagen tienes además que:
+El primero toma la entrega de la diseñadora de la raíz del repo —una captura
+del visor de PDF, con márgenes blancos y la sombra gris del visor— y escribe
+`public/targets/map.jpg` recortado, con margen blanco parejo y al ancho que
+mejor detecta. El segundo lee ese `map.jpg` y escribe
+`public/targets/map.mind`. Si cambias de imagen tienes además que:
 
-1. Actualizar `TARGET_ASPECT` en `src/main.ts` (alto/ancho de la imagen nueva).
-2. Volver a medir los `spot` del catálogo — ver la sección siguiente.
+1. Actualizar `TARGET_ASPECT` en `src/main.ts` y `src/verify.ts` (alto/ancho de
+   la imagen nueva), la `aspect-ratio` del visor en `index.html` y los canvas de
+   `verify.html`.
+2. Volver a medir los `spot` del catálogo y volver a calcar los cuatro
+   `outlineShape` con `scripts/trace-outline.mjs` — ver la sección siguiente.
+3. Comparar anchos con `npm run bench-detection`, que solo sirve para comparar
+   `.mind` compilados de la MISMA imagen: fabrica sus fotogramas a partir de
+   `public/targets/map.jpg`.
 
 > El compilador oficial de MindAR (`OfflineCompiler`) importa el paquete nativo `canvas`, que aquí no se compila porque `.npmrc` fija `ignore-scripts=true`. `scripts/compile-target.mjs` esquiva eso: subclasea `CompilerBase` —que no depende de canvas— y le pasa el JPEG ya decodificado con jpeg-js. Sin navegador y sin dependencias nativas.
 
-> Funcionan mejor las imágenes con mucho detalle y contraste. Las planas, simétricas o con grandes zonas de color uniforme se rastrean mal. Este mapa da 3410 puntos de features en 11 escalas, que es mucho: se rastrea bien.
+> Funcionan mejor las imágenes con mucho detalle y contraste. Las planas, simétricas o con grandes zonas de color uniforme se rastrean mal. Este mapa da 4061 puntos de features en 11 escalas, que es mucho: se rastrea bien.
 
 ### Mover un icono, o añadir otro
 
@@ -262,8 +274,8 @@ Lo que **sí** está verificado:
 - **El `.mind` compilado es válido y el mapa se detecta.** No es solo que el archivo tenga la forma correcta: se cargó el `Controller` real de MindAR en el navegador, se le pasó un fotograma sintético con el mapa dentro y **encontró el marcador** (`match` devolvió pose). La matriz resultó ser prácticamente la identidad en rotación, con el centro del mapa sobre el eje óptico — exactamente lo que se le dio de entrada.
 - **Las coordenadas de los cuatro animales caen donde deben.** Comprobado en `/verify.html`, montando los `MarkerPin` reales sobre el mapa en el plano y el tamaño exactos del anchor, con cámara ortográfica (sin perspectiva que disimule un error).
 - **La dirección de +Z es la correcta**: en la vista en perspectiva de `/verify.html` los iconos flotan **hacia fuera** del papel, no hundidos en él.
-- **`targetAspect` (1280/880)** coincide con las dimensiones que el propio runtime de MindAR reporta al cargar el `.mind`: `[[880, 1280]]`.
-- El detalle del marcador: **3410 puntos de features repartidos en 11 escalas**, que es un target holgadamente rastreable.
+- **`targetAspect` (1432/1000)** coincide con las dimensiones que el propio runtime de MindAR reporta al cargar el `.mind`: `[[1000, 1432]]`.
+- El detalle del marcador: **4061 puntos de features repartidos en 11 escalas**, que es un target holgadamente rastreable.
 
 Lo que **no** está verificado, y solo se puede comprobar con el mapa impreso delante:
 

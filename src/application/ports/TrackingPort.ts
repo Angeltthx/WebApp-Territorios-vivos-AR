@@ -21,6 +21,19 @@ export interface TrackingPort {
   isSupported(): Promise<boolean>;
 
   /**
+   * Adelanta lo que el motor va a necesitar, ANTES del gesto que enciende
+   * la cámara.
+   *
+   * No pide permisos ni enciende nada: solo descarga o precalienta. Se
+   * llama mientras se mira la pantalla de bienvenida, que es tiempo que ya
+   * está pasando, para que al tocar "Iniciar" no haya que esperar a una
+   * descarga. Es best-effort por contrato: si falla, `start()` volverá a
+   * intentarlo por su cuenta, así que nadie espera esta llamada ni mira su
+   * resultado. Un motor que no necesite nada lo deja vacío.
+   */
+  prewarm(): void;
+
+  /**
    * Pide permiso de cámara y arranca el motor de visión.
    * @throws CameraPermissionDeniedError si el usuario rechaza la cámara.
    */

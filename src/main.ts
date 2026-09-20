@@ -13,7 +13,7 @@ import { ArView } from '@ui/ArView';
  * cambias el mapa, cambia también este número (y vuelve a medir los spots).
  */
 const TARGET_SRC = '/targets/map.mind';
-const TARGET_ASPECT = 1280 / 880;
+const TARGET_ASPECT = 1432 / 1000;
 
 /**
  * Umbrales de cercanía, ajustables por URL:

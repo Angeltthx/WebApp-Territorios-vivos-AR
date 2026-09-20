@@ -18,7 +18,10 @@ export interface MindArTuning {
  *  - filterBeta:  coeficiente de velocidad. SUBIR reduce el retardo. Def. 1000
  *  - warmupTolerance: frames consecutivos detectando antes de dar por
  *    encontrado el marcador. Def. 5. Bajarlo acelera la aparición pero
- *    aumenta los falsos positivos.
+ *    aumenta los falsos positivos. En 1 porque lo que tarda es ENCONTRAR
+ *    el mapa, no confirmarlo: cada frame de warmup se suma a una espera
+ *    que ya se nota, y una vez hay emparejamiento con inliers el
+ *    seguimiento del frame siguiente casi nunca lo desmiente.
  *  - missTolerance: frames consecutivos sin detectar antes de darlo por
  *    perdido. Def. 5. SUBIRLO evita parpadeos cuando el marcador se sale
  *    un instante del encuadre — la mejora más notoria en uso real.
@@ -30,7 +33,7 @@ export const DEFAULT_TUNING: MindArTuning = {
   maxTrack: 1,
   filterMinCF: 0.0005,
   filterBeta: 2000,
-  warmupTolerance: 3,
+  warmupTolerance: 1,
   missTolerance: 12,
 };
 
@@ -49,6 +52,9 @@ export class MindArRuntime {
   private lastFrameMs = 0;
   private looping = false;
   private anchorVisibleFlag = false;
+  /** El `.mind` ya descargado, como blob: URL. Ver `prefetchTarget`. */
+  private localTargetSrc: string | null = null;
+  private prefetching = false;
 
   constructor(
     private readonly container: HTMLElement,
@@ -56,12 +62,45 @@ export class MindArRuntime {
     private readonly tuning: MindArTuning = DEFAULT_TUNING,
   ) {}
 
+  /**
+   * Baja el `.mind` mientras se ve la bienvenida.
+   *
+   * MindAR pide el target DESPUÉS de conceder la cámara, dentro de
+   * `start()`: `_startVideo` primero, y solo entonces `_startAR` hace el
+   * `fetch`. Son casi 900 KB, así que en datos móviles esa descarga se
+   * interpone entera entre el "Permitir" y el primer intento de detección.
+   *
+   * Lo que se descarga aquí se queda en memoria como `blob:` URL y se le
+   * pasa a MindAR en su lugar. Se elige blob y no confiar en la caché del
+   * navegador porque Netlify sirve estos archivos con `must-revalidate`:
+   * la caché ahorra el cuerpo, pero no el viaje de ida y vuelta.
+   *
+   * Silencioso a propósito: si falla, `imageTargetSrc` sigue siendo la URL
+   * de siempre y MindAR la descargará él mismo como hasta ahora.
+   */
+  prefetchTarget(): void {
+    if (this.prefetching || this.localTargetSrc !== null) return;
+    this.prefetching = true;
+
+    void fetch(this.imageTargetSrc)
+      .then((response) => (response.ok ? response.blob() : null))
+      .then((blob) => {
+        // Si la sesión ya arrancó, MindAR se quedó con la URL original y
+        // cambiarla ahora no sirve de nada.
+        if (blob === null || this.instance !== null) return;
+        this.localTargetSrc = URL.createObjectURL(blob);
+      })
+      .catch(() => {
+        // Sin red o con un 404, `init()` usará la URL normal.
+      });
+  }
+
   init(): MindARThree {
     if (this.instance !== null) return this.instance;
 
     this.instance = new MindARThree({
       container: this.container,
-      imageTargetSrc: this.imageTargetSrc,
+      imageTargetSrc: this.localTargetSrc ?? this.imageTargetSrc,
       maxTrack: this.tuning.maxTrack,
       filterMinCF: this.tuning.filterMinCF,
       filterBeta: this.tuning.filterBeta,
