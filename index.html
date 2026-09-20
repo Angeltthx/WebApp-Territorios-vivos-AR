@@ -236,41 +236,85 @@
          *   max(--vh, 100vw / ar)   llenar la pantalla: el alto que hace
          *                           falta para que la foto la cubra a lo
          *                           ancho, o el de la pantalla si ya sobra.
-         *   min(eso, --vh * 1.22)   con un tope: nunca mas de un 22% de
+         *   min(eso, --vh * 1.42)   con un tope: nunca mas de un 42% de
          *                           alto de mas.
          *
-         * El tope es lo que protege el diseno. Todo lo que pasa de ese 22%
-         * se lo comeria el recorte, y a partir de ahi entrarian el titulo
-         * (empieza al 20,5% de la foto) y los logos (acaban al 89,8%).
-         * Cuando el tope entra en juego el marco se estrecha y aparecen
-         * franjas, pero CRECIENDO desde cero, no de golpe: en cuanto la
-         * pantalla es mas ancha que 0,549 (= 0,45 x 1,22) empiezan a
-         * asomar unos pocos pixeles. Ningun movil en vertical llega ahi;
-         * llegan las tabletas y el movil tumbado, que es justo donde la
-         * foto entera se ve mejor que recortada.
+         * EL TOPE SALE DE LA FOTO, no de un gusto. Lo unico intocable es la
+         * banda que va del titulo (empieza al 20,5%) al pie de los logos
+         * (acaba al 89,8%): sobra un 20,5% por arriba y un 10,2% por abajo,
+         * y el recorte se reparte en esa misma proporcion (67/33, ver
+         * abajo). Con ese reparto, un marco de 1,42 --vh recorta un 19,8%
+         * por arriba y un 9,8% por abajo: entra justo, sin tocar ni el
+         * titulo ni los logos. Si cambia la portada, estos tres numeros
+         * —20,5, 89,8 y el tope— se vuelven a medir juntos.
          *
-         * Este calculo sustituye a una media query que hacia lo mismo a
-         * saltos. Fallaba: la proporcion que mide la media query en Safari
-         * de iPhone cuenta la barra de direcciones, asi que un iPhone
-         * "en vertical" daba 0,53 y saltaba a foto entera con franjas.
+         * Antes el tope era 1,22 y llegaba demasiado pronto: bastaba una
+         * pantalla mas ancha que 0,549 (= 0,45 x 1,22) para que el marco se
+         * estrechara y asomaran las franjas borrosas. Se dijo que ningun
+         * movil en vertical llegaba ahi, y es falso: la altura que cuenta
+         * es la VISIBLE, y en un iPhone pequeno con la barra de direcciones
+         * y la de abajo puestas, 375x560 da 0,67. En ese telefono la
+         * portada salia con marco a los lados en vez de llenar la pantalla.
+         *
+         * Las tabletas y el movil tumbado (mas anchos que 0,665) siguen
+         * viendo la foto entera con franjas, que es como mejor se ve.
+         *
+         * Todo esto se calcula con min()/max() sobre longitudes y no con
+         * una media query a proposito: la proporcion que ve una media query
+         * en Safari de iPhone cuenta la barra de direcciones, asi que un
+         * telefono en vertical daba 0,53 y saltaba de golpe al otro modo.
          */
         --art-h: min(
           max(var(--vh), calc(100vw / var(--splash-ar))),
-          calc(var(--vh) * 1.22)
+          calc(var(--vh) * 1.42)
         );
+        --art-w: calc(var(--art-h) * var(--splash-ar));
 
         position: absolute;
         left: 50%;
         transform: translateX(-50%);
         height: var(--art-h);
-        width: calc(var(--art-h) * var(--splash-ar));
 
         /*
-         * El recorte NO se reparte a medias: cuatro quintas partes salen
-         * por arriba y una por abajo. Arriba solo hay follaje y sobra;
-         * abajo estan los logos de los aliados y no hay margen.
+         * ANCHO: el del marco, estirado lo justo para tragarse una franja
+         * que ya es casi nada.
+         *
+         * Con el tope de arriba, en los telefonos mas cuadrados queda una
+         * franja de dos o tres pixeles. Un 4% de mas en horizontal sobre
+         * una foto de manglar no lo ve nadie —y el boton, que va en
+         * porcentajes de este marco, se estira con ella y sigue cayendo
+         * sobre el boton dibujado—, mientras que un borde borroso se ve
+         * siempre.
+         *
+         * Pero el estiramiento tiene que DESAPARECER cuando la franja es
+         * grande de verdad: en una tableta la foto entera con franjas es lo
+         * que se quiere, y deformarla un 4% ahi seria estropearla por nada.
+         * De ahi los tres terminos: se estira lo que falte, como mucho un
+         * 4%, y ese permiso se va cerrando hasta cero segun la franja crece
+         * (a partir del 8% del ancho, y cerrado del todo en el 12%). Es
+         * continuo: no hay ningun tamano de pantalla en el que la portada
+         * de un salto.
          */
-        bottom: calc((var(--art-h) - var(--vh)) * -0.2);
+        --hueco: max(0px, calc(100vw - var(--art-w)));
+        width: calc(
+          var(--art-w) +
+            max(
+              0px,
+              min(
+                var(--hueco),
+                calc(var(--art-w) * 0.04),
+                calc(var(--art-w) * 0.12 - var(--hueco))
+              )
+            )
+        );
+
+        /*
+         * El recorte NO se reparte a medias: dos tercios salen por arriba y
+         * un tercio por abajo, que es la proporcion en la que sobra foto a
+         * cada lado (20,5% de follaje arriba, 10,2% de agua bajo los
+         * logos). Repartirlo asi es lo que permite subir el tope de arriba.
+         */
+        bottom: calc((var(--art-h) - var(--vh)) * -0.33);
       }
       #boot-art img {
         display: block;
@@ -380,7 +424,7 @@
          GUÍA DE ENCUADRE
 
          Lo primero que ve el usuario tras dar permiso de cámara. Un marco
-         con la proporción EXACTA del mapa (880x1280) y una instrucción:
+         con la proporción EXACTA del mapa (1000x1432) y una instrucción:
          sin esto, la pantalla es la imagen de la cámara y nada indica que
          haya que buscar un mapa impreso.
 
@@ -414,7 +458,7 @@
 
       #guide-frame {
         position: relative;
-        aspect-ratio: 880 / 1280;
+        aspect-ratio: 1000 / 1432;
         height: min(52vh, 112vw);
         max-width: 74vw;
         border: 2px dashed rgba(255, 255, 255, 0.5);

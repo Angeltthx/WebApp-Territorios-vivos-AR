@@ -39,30 +39,35 @@ const imagePath = resolve(repoRoot, 'public/targets/map.jpg');
  */
 const SUBJECTS = {
   whale: {
-    box: { u0: 0.03, v0: 0.07, u1: 0.44, v1: 0.315 },
-    // Azul, de navy a celeste, sobre un mar crema donde manda el rojo. El
-    // techo de brillo descarta el blanco de los remolinos del agua.
-    hit: (r, g, b) => b > r + 10 && b >= g && (r + g + b) / 3 < 238,
+    box: { u0: 0.1, v0: 0.018, u1: 0.48, v1: 0.22 },
+    // Sobre el mar la ballena tiene DOS tonos —el lomo azul marino y la
+    // panza casi blanca—, y ninguna regla de "es azul" los junta sin
+    // tragarse el mar. Lo que sí los junta es la distancia al color del
+    // agua: los remolinos se quedan a menos de 60 de rgb(4,124,141) y todo
+    // lo que es ballena se va mucho más lejos.
+    //
+    // El agua del mapa de 2026 es turquesa, no azul: quien copie esta regla
+    // para otro mapa tiene que volver a medir ese rgb, no heredarlo.
+    hit: (r, g, b) => (r - 4) ** 2 + (g - 124) ** 2 + (b - 141) ** 2 > 3600,
   },
   bird: {
-    box: { u0: 0.76, v0: 0.17, u1: 1, v1: 0.36 },
-    // Marrón y negro sobre hierba verde: en la hierba manda el verde, en la
-    // pava no. Entran también el pico rojizo y las patas.
-    hit: (r, g, b) => r >= g && (r + g + b) / 3 < 200,
+    box: { u0: 0.82, v0: 0.45, u1: 0.98, v1: 0.558 },
+    // Marrón oscuro y negro sobre selva verde. La hierba tiene el verde muy
+    // por encima del rojo; la pava no.
+    hit: (r, g, b) => (r + g + b) / 3 < 115 && r >= g - 5,
   },
   crab: {
-    box: { u0: 0.39, v0: 0.41, u1: 0.6, v1: 0.54 },
-    // Naranja saturado sobre arena crema: lo que separa a los dos es cuánto
-    // le gana el rojo al verde.
-    hit: (r, g, b) => r > g + 45 && b < g + 40,
+    box: { u0: 0.555, v0: 0.35, u1: 0.7, v1: 0.432 },
+    // Naranja sobre mar turquesa: el caso fácil del mapa. El recorte
+    // empieza en 0.555 para dejar fuera la mariposa, que es igual de
+    // naranja y está a un palmo.
+    hit: (r, g, b) => r > b + 30 && r > g + 40,
   },
   turtle: {
-    box: { u0: 0.24, v0: 0.56, u1: 0.53, v1: 0.71 },
-    // Verde OLIVA sobre mar crema, con la costa verde al lado. Lo que
-    // separa a la tortuga de la costa no es el brillo —se solapan— sino que
-    // en la tortuga el rojo llega al verde y en el verde-amarillo de la
-    // tierra no: (179,176,87) contra (195,214,136).
-    hit: (r, g, b) => g > b + 20 && r >= g - 8 && (r + g + b) / 3 < 215,
+    box: { u0: 0.2, v0: 0.49, u1: 0.45, v1: 0.578 },
+    // Verde oliva sobre mar turquesa. Lo que la separa es que en la tortuga
+    // el verde le gana al azul, y en el agua es al revés.
+    hit: (r, g, b) => g > b + 15 && r > b - 10 && (r + g + b) / 3 < 205,
   },
 };
 

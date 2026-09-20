@@ -5,3 +5,8 @@ dist/
 
 # Local Netlify folder
 .netlify
+
+# Entregas en PDF de la diseñadora: pesan decenas de MB y no las usa el
+# build. La imagen de la que SÍ sale el target (`Mapa para el fondo.jpeg`)
+# va versionada; el PDF se queda en local.
+*.pdf

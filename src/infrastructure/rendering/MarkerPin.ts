@@ -51,25 +51,54 @@ const CONCEAL_TIME_S = 0.3;
 /**
  * El contorno punteado que marca donde hay un animal esperando.
  *
- * Es la misma gramatica visual que el visor de "Apunta al mapa": linea
- * blanca discontinua. Alli encuadra el mapa entero; aqui encuadra a cada
- * animal, y su trabajo es decir "aqui hay algo, ven a buscarlo" sin tapar
- * el dibujo que hay debajo.
+ * Su trabajo es decir "aqui hay algo, ven a buscarlo" sin tapar el dibujo
+ * que hay debajo, y para eso tiene que GANARLE al dibujo, que es una
+ * ilustracion a todo color y llena de detalle.
+ *
+ * DORADO Y NO BLANCO. Empezo blanco, para hablar el mismo idioma que el
+ * visor de "Apunta al mapa", y en el telefono no lo veia nadie: el mapa ya
+ * esta lleno de blancos —los rotulos, las etiquetas de cada especie, la
+ * espuma de las olas, las nubes— asi que una linea blanca mas se lee como
+ * parte de la ilustracion. El dorado no aparece en el mapa, y los cuatro
+ * animales estan sobre fondos oscuros (mar turquesa tres de ellos, selva
+ * verde la pava), que es justo donde un calido destaca.
+ *
+ * El visor de la guia sigue siendo blanco a proposito: encuadra el mapa
+ * entero y no invita a acercarse a nada. Blanco = "encuadra aqui";
+ * dorado = "hay algo que descubrir".
  *
  * Se construye con planos sueltos en vez de con LineDashedMaterial porque
  * el grosor de linea de WebGL esta clavado a 1 pixel en la practica: en un
  * movil de alta densidad, una linea de 1 px es invisible.
  */
 const OUTLINE_DASHES = 68;
-const OUTLINE_THICKNESS = 0.004;
+const OUTLINE_COLOUR = 0xffc53d;
+const OUTLINE_THICKNESS = 0.0065;
+const OUTLINE_OPACITY = 0.92;
 /**
  * Separación entre un contorno CALCADO DEL DIBUJO y el borde del dibujo, en
  * anchos de mapa. Los calcados del modelo ya salen separados de fábrica
  * (IconSilhouette engorda la mancha antes de recorrerla).
  */
 const DRAWN_OUTLINE_OFFSET = 0.009;
-const OUTLINE_BREATH = 0.022;
-const OUTLINE_BREATH_SPEED = 2.2;
+/**
+ * El LATIDO del contorno: crece de golpe, vuelve, y descansa.
+ *
+ * Antes respiraba con un seno continuo de un 2%, y un movimiento lento y
+ * constante es justo el que el ojo deja de ver a los dos segundos. Un
+ * latido con silencio entre medias no: el silencio es lo que hace que el
+ * siguiente se note. Sube y baja en `RISE` y espera hasta completar
+ * `PERIOD`, y al crecer tambien se aclara —tamaño y brillo a la vez, para
+ * que se vea igual en un movil al sol.
+ *
+ * Cada pin lleva su desfase (`phase`), asi que los cuatro no laten a la
+ * vez: cuatro contornos sincronizados parecen un efecto de la pantalla;
+ * desacompasados parecen cuatro cosas vivas.
+ */
+const OUTLINE_PULSE_PERIOD_S = 2.4;
+const OUTLINE_PULSE_RISE_S = 0.62;
+const OUTLINE_PULSE_SCALE = 0.11;
+const OUTLINE_PULSE_GLOW = 0.08;
 
 /**
  * Convierte un punto de la imagen del marcador a coordenadas del anchor.
@@ -174,6 +203,8 @@ export class MarkerPin {
   private scale = 1;
   private spin = 0;
   private bob = 0;
+  /** 0 en reposo, 1 en la cima del latido. Lo calcula `advance`. */
+  private outlinePulse = 0;
   /** Giro propio del animal, del catálogo. Se suma al del usuario. */
   private readonly facing: number;
   /**
@@ -227,9 +258,9 @@ export class MarkerPin {
     // pava y la ballena con su cintura y su cola. Como se deduce del .glb,
     // cambiar un modelo redibuja su contorno solo.
     this.outlineMaterial = new MeshBasicMaterial({
-      color: 0xffffff,
+      color: OUTLINE_COLOUR,
       transparent: true,
-      opacity: 0.85,
+      opacity: OUTLINE_OPACITY,
       side: DoubleSide,
       depthWrite: false,
     });
@@ -323,10 +354,12 @@ export class MarkerPin {
     // Vaivén suave: da sensación de que el icono flota sobre el papel.
     this.bob = Math.sin(elapsed * BOB_SPEED + this.phase) * BOB_AMPLITUDE;
 
-    // El contorno respira, como el visor de la guia: un marco quieto sobre
-    // una ilustracion quieta no se distingue de la propia ilustracion.
-    const breath = 1 + Math.sin(elapsed * OUTLINE_BREATH_SPEED + this.phase) * OUTLINE_BREATH;
-    this.outline.scale.setScalar(breath);
+    // El contorno late: un contorno quieto sobre una ilustracion quieta no
+    // se distingue de la propia ilustracion.
+    const beat = (elapsed + this.phase) % OUTLINE_PULSE_PERIOD_S;
+    this.outlinePulse =
+      beat < OUTLINE_PULSE_RISE_S ? Math.sin((beat / OUTLINE_PULSE_RISE_S) * Math.PI) : 0;
+    this.outline.scale.setScalar(1 + OUTLINE_PULSE_SCALE * this.outlinePulse);
 
     this.sync();
   }
@@ -361,7 +394,9 @@ export class MarkerPin {
 
     // El contorno se apaga a medida que el animal ocupa su sitio.
     this.outline.visible = this.revealProgress < 0.999;
-    this.outlineMaterial.opacity = 0.85 * (1 - this.revealProgress);
+    this.outlineMaterial.opacity =
+      Math.min(1, OUTLINE_OPACITY + OUTLINE_PULSE_GLOW * this.outlinePulse) *
+      (1 - this.revealProgress);
 
     // Se vuela lo justo para no atravesar el papel, y nunca menos de
     // HOVER_HEIGHT: los iconos planos siguen flotando como antes.

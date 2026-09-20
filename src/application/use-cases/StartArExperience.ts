@@ -70,6 +70,10 @@ export class StartArExperience {
     // el comentario en execute).
     void this.audio.unlock().catch(() => {});
 
+    // Que el motor vaya bajando lo suyo mientras se lee la bienvenida. No
+    // se espera: es una mejora de tiempos, no un requisito para arrancar.
+    this.tracking.prewarm();
+
     this.emit(this.session.preparing());
 
     const catalog = await this.models.findAll();

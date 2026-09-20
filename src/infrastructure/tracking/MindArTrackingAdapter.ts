@@ -26,6 +26,10 @@ export class MindArTrackingAdapter implements TrackingPort {
     return hasCamera && hasWebGL && typeof WebAssembly === 'object';
   }
 
+  prewarm(): void {
+    this.runtime.prefetchTarget();
+  }
+
   async start(): Promise<void> {
     const mindar = this.runtime.init();
     const anchor = this.runtime.anchor;
@@ -40,8 +44,9 @@ export class MindArTrackingAdapter implements TrackingPort {
     };
 
     // El <video> se silencia ANTES de esperar a `start()`, y ese orden es
-    // el arreglo entero: ver `silenceVideoChrome`.
-    const starting = mindar.start();
+    // el arreglo entero: ver `silenceVideoChrome`. La cámara se pide con
+    // más resolución por la misma rendija: ver `withSharperCamera`.
+    const starting = this.withSharperCamera(() => mindar.start());
     const early = mindar.video as HTMLVideoElement | undefined;
     if (early !== undefined) this.silenceVideoChrome(early);
 
@@ -84,6 +89,54 @@ export class MindArTrackingAdapter implements TrackingPort {
 
   private dispatch(event: TrackingEvent): void {
     this.handlers.get(event)?.forEach((handler) => handler());
+  }
+
+  /**
+   * Pide la cámara con más resolución de la que MindAR pediría.
+   *
+   * MindAR llama a `getUserMedia` con `{facingMode:'environment'}` y nada
+   * más (three.js:109-125), y no expone ninguna forma de añadir nada. Sin
+   * pedir tamaño, Safari en iOS entrega **640x480**, y de ahí sale el
+   * `inputWidth` del detector, porque el Controller se construye con
+   * `video.videoWidth` (three.js:146-147). El mapa es una ilustración
+   * llena de detalle fino: a 640 px de ancho, el fotograma no conserva
+   * rasgos suficientes y el emparejamiento tarda varios intentos en salir.
+   *
+   * Medido con `npm run bench-detection` sobre este mismo `.mind`, subiendo
+   * solo el ancho del fotograma: 640 px → 7/12 fotogramas y 252 inliers;
+   * 960 px → 9/12 y 321; 1280 px → 10/12 y 399. Detectar a la primera es
+   * lo que se nota como "reconoce rápido", así que se pide 1280x720.
+   *
+   * Por qué un parche temporal a `getUserMedia` y no `applyConstraints`
+   * después: para cuando el stream existe, MindAR ya creó el Controller
+   * con el tamaño viejo, y cambiar la resolución entonces descuadra la
+   * proyección. Hay que llegar antes de la llamada, no después.
+   *
+   * El parche dura lo que dura el tramo SÍNCRONO de `mindar.start()`, que
+   * es justo donde `_startVideo` llama a `getUserMedia`; al volver se
+   * restaura el original pase lo que pase. `ideal` y no `exact` a
+   * propósito: una cámara que no pueda dar 720p entrega lo que tenga en
+   * vez de fallar.
+   */
+  private withSharperCamera<T>(run: () => T): T {
+    const media = navigator.mediaDevices;
+    const original = media?.getUserMedia;
+    if (media === undefined || original === undefined) return run();
+
+    media.getUserMedia = (constraints?: MediaStreamConstraints) => {
+      const video = constraints?.video;
+      const enriched: MediaStreamConstraints =
+        typeof video === 'object'
+          ? { ...constraints, video: { width: { ideal: 1280 }, height: { ideal: 720 }, ...video } }
+          : (constraints ?? {});
+      return original.call(media, enriched);
+    };
+
+    try {
+      return run();
+    } finally {
+      media.getUserMedia = original;
+    }
   }
 
   /**
