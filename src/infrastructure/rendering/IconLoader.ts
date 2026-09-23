@@ -11,7 +11,6 @@ import {
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { ArModel } from '@domain/entities/ArModel';
-import { createPrimitive } from './PrimitiveFactory';
 
 /**
  * De un ArModel a un Object3D listo para colgar de un MarkerPin.
@@ -60,6 +59,7 @@ export class IconLoader {
     // EXT_texture_webp, que también viene en `extensionsRequired`, sí lo
     // soporta three 0.160 de fábrica: no hay nada que configurar.
     this.draco.setDecoderPath('/draco/');
+    this.draco.setWorkerLimit(2);
     this.gltf.setDRACOLoader(this.draco);
   }
 
@@ -69,6 +69,7 @@ export class IconLoader {
     const targetSize = ICON_TARGET_SIZE * model.pose.size;
 
     if (model.source.kind === 'primitive') {
+      const { createPrimitive } = await import('./PrimitiveFactory');
       // Las figuras procedurales SÍ están dibujadas a mano con proporciones
       // pensadas entre sí, así que no se normalizan: solo se les aplica el
       // factor del catálogo, envuelto para que MarkerPin no lo pise.

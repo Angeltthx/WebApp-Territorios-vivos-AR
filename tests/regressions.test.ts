@@ -1,0 +1,197 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { StartArExperience } from '../src/application/use-cases/StartArExperience';
+import { PlayModelSound } from '../src/application/use-cases/PlayModelSound';
+import { ArSession } from '../src/domain/entities/ArSession';
+import { ArModel } from '../src/domain/entities/ArModel';
+import { ModelId } from '../src/domain/value-objects/ModelId';
+import { Placement } from '../src/domain/entities/Placement';
+import { ModelSource } from '../src/domain/value-objects/ModelSource';
+import { ThreeSceneAdapter } from '../src/infrastructure/rendering/ThreeSceneAdapter';
+import { MindArTrackingAdapter } from '../src/infrastructure/tracking/MindArTrackingAdapter';
+import { CameraPermissionDeniedError } from '../src/application/ports/TrackingPort';
+import { Scene, PerspectiveCamera, Raycaster, Vector2, Mesh } from 'three';
+
+const model = ArModel.fromSnapshot({
+  id: 'whale', name: 'Ballena', description: 'Ficha',
+  source: ModelSource.primitive('whale', 0x224466), spot: { u: 0.5, v: 0.5 },
+  outlineShape: [{ u: 0.4, v: 0.4 }, { u: 0.6, v: 0.4 }, { u: 0.5, v: 0.6 }],
+  sound: { waveform: 'sine', rootFrequencyHz: 90, overtoneRatios: [1], durationMs: 1800 },
+});
+const models = { findAll: async () => [model], findById: async () => model };
+const analytics = { track() {} };
+const deferred = () => {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => { resolve = done; });
+  return { promise, resolve };
+};
+
+function harness() {
+  const handlers = new Map<string, Set<() => void>>();
+  const calls = { starts: 0, stops: 0, loads: 0, unlocks: 0 };
+  const tracking = {
+    isSupported: async () => true, prewarm() {}, confirmAnchor() {},
+    start: async () => { calls.starts++; },
+    stop: async () => { calls.stops++; },
+    on(event: string, handler: () => void) {
+      const set = handlers.get(event) ?? new Set();
+      set.add(handler); handlers.set(event, set);
+      return () => { set.delete(handler); };
+    },
+  };
+  const scene = {
+    preload: async () => { calls.loads++; }, setHighlightedModel() {},
+    applyPlacement() {}, setStabilization() {}, setProximity() {},
+    applyDiscovery() {}, onNearbyModel() {}, pulse() {}, clear() {}, dispose() {},
+  };
+  const audio = { unlock: async () => { calls.unlocks++; }, play() {}, dispose() {} };
+  const app = new StartArExperience(tracking, scene, audio, models, analytics, () => {});
+  return { app, tracking, scene, audio, calls, handlers };
+}
+
+test('doble inicio comparte operación y desbloquea audio antes del primer await', async () => {
+  const h = harness();
+  const gate = deferred();
+  h.scene.preload = () => gate.promise;
+  const first = h.app.execute('whale');
+  assert.equal(h.calls.unlocks, 1);
+  const second = h.app.execute('whale');
+  assert.equal(first, second);
+  gate.resolve();
+  assert.equal((await first).status, 'searching');
+  assert.equal(h.calls.starts, 1);
+});
+
+test('fallo de cámara limpia eventos; reintentar registra una sola suscripción', async () => {
+  const h = harness();
+  h.tracking.start = async () => { throw new Error('cámara'); };
+  assert.equal((await h.app.execute('whale')).status, 'error');
+  assert.equal(h.handlers.get('anchor-found')?.size, 0);
+  assert.equal(h.calls.stops, 1);
+  h.tracking.start = async () => {};
+  assert.equal((await h.app.execute('whale')).status, 'searching');
+  assert.equal(h.handlers.get('anchor-found')?.size, 1);
+  assert.equal(h.calls.loads, 1);
+});
+
+test('parar durante precarga no enciende la cámara y permite nueva sesión', async () => {
+  const h = harness();
+  const gate = deferred();
+  const entered = deferred();
+  h.scene.preload = () => { entered.resolve(); return gate.promise; };
+  const starting = h.app.execute('whale');
+  await entered.promise;
+  const stopping = h.app.stop();
+  gate.resolve();
+  await Promise.all([starting, stopping]);
+  assert.equal(h.calls.starts, 0);
+  assert.equal(h.app.current.status, 'idle');
+  await h.app.execute('whale');
+  assert.equal(h.calls.starts, 1);
+});
+
+test('parar y volver a iniciar recarga una escena que ya fue liberada', async () => {
+  const h = harness();
+  await h.app.execute('whale');
+  await h.app.stop();
+  await h.app.execute('whale');
+  assert.equal(h.calls.loads, 2);
+  assert.equal(h.handlers.get('anchor-found')?.size, 1);
+});
+
+test('cancelar durante el arranque no devuelve una sesión interactiva al llamador', async () => {
+  const h = harness();
+  const entered = deferred();
+  const gate = deferred();
+  h.tracking.start = async () => { entered.resolve(); await gate.promise; };
+  const starting = h.app.execute('whale');
+  await entered.promise;
+  const stopping = h.app.stop();
+  gate.resolve();
+  assert.equal((await starting).hasStarted, false);
+  await stopping;
+  assert.equal(h.app.current.status, 'idle');
+});
+
+test('adaptador conserva denegación de cámara, silencia antes de await y restaura getUserMedia', async () => {
+  const original = async () => { throw new DOMException('No', 'NotAllowedError'); };
+  const media = { getUserMedia: original };
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaDevices: media } });
+  Object.defineProperty(globalThis, 'MediaStream', { configurable: true, value: class {} });
+  const video = {
+    muted: false, srcObject: null,
+    setAttribute() {}, removeAttribute() {}, pause() {}, remove() {},
+  };
+  const mindar = {
+    video,
+    // Reproduce el reject() sin causa de MindAR 1.2.5.
+    start: () => media.getUserMedia().catch(() => Promise.reject()),
+  };
+  const runtime = {
+    init: () => mindar, mindar, anchor: {}, isInitialized: true,
+    setAnchorVisible() {}, stopLoop() {},
+  };
+  const tracking = new MindArTrackingAdapter(runtime as never);
+  const start = tracking.start();
+  assert.equal(video.muted, true);
+  assert.equal(media.getUserMedia, original);
+  await assert.rejects(start, CameraPermissionDeniedError);
+  await tracking.stop(); // Sin controlador ni stream también debe funcionar.
+});
+
+test('primer plano suena sin mapa; animal bloqueado o perdido sin ficha no suena', async () => {
+  const h = harness();
+  let count = 0;
+  h.audio.play = () => { count++; };
+  let state = ArSession.idle().searching(Placement.initial(model.id, model.defaultScale)).tracking();
+  const play = new PlayModelSound(h.audio, h.scene, models, analytics, () => state);
+  await play.execute('whale');
+  assert.equal(count, 0);
+  state = state.withDiscovery(state.discovery.unlock(model.id)).lost();
+  await play.execute('whale');
+  assert.equal(count, 1);
+  state = state.withDiscovery(state.discovery.focus(null));
+  await play.execute('whale');
+  assert.equal(count, 1);
+});
+
+test('pin real conserva ID en primer plano, permite raycast, pulsa y libera geometría', async () => {
+  // El humo necesita un canvas; esta prueba no requiere un contexto WebGL.
+  globalThis.document = { createElement: () => ({ getContext: () => null }) } as unknown as Document;
+  const scene = new Scene();
+  const camera = new PerspectiveCamera(45, 0.5, 0.001, 100);
+  let advance = (_delta: number) => {};
+  const runtime = {
+    prepare: async () => {},
+    init: () => ({ scene, renderer: {} }),
+    mindar: { scene, camera, renderer: {} },
+    onFrame: (fn: (delta: number) => void) => { advance = fn; return () => {}; },
+    anchorVisible: false,
+  };
+  const adapter = new ThreeSceneAdapter(runtime as never, 1.432);
+  await adapter.preload([model]);
+  adapter.applyDiscovery(ArSession.idle().discovery.unlock(model.id));
+  advance(0.016);
+  scene.updateMatrixWorld(true);
+  const icon = adapter.pickables?.get('whale');
+  assert.ok(icon);
+  assert.equal(icon.userData['modelId'], 'whale');
+  const ray = new Raycaster();
+  ray.setFromCamera(new Vector2(0, 0), camera);
+  assert.ok(ray.intersectObject(icon, true).length > 0);
+  const initialScale = icon.scale.x;
+  adapter.applyPlacement(Placement.initial(model.id, model.defaultScale).scaledBy(2));
+  advance(0);
+  assert.ok(Math.abs(icon.scale.x / initialScale - 2) < 0.0001);
+  const scale = icon.scale.x;
+  adapter.pulse(ModelId.of('whale'));
+  advance(0.1);
+  assert.ok(icon.scale.x > scale);
+  let disposed = false;
+  icon.traverse((object) => {
+    if (object instanceof Mesh) object.geometry.addEventListener('dispose', () => { disposed = true; });
+  });
+  adapter.clear();
+  assert.equal(disposed, true);
+  assert.equal(adapter.pickables, null);
+});

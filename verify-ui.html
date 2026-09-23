@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Verificación responsive · WebAR</title>
+    <style>
+      body { margin: 20px; background: #202020; color: white; font: 16px system-ui; }
+      #screens { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+      iframe { border: 1px solid #777; display: block; }
+      button { padding: 10px; margin: 0 8px 16px 0; }
+      #results { white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <h1>Verificación responsive (sin cámara)</h1>
+    <button id="splash">Portada</button>
+    <button id="guide">Guía</button>
+    <button id="focus">Ficha</button>
+    <pre id="results">Comprobando…</pre>
+    <div id="screens"></div>
+    <script type="module" src="/src/verify-ui.ts"></script>
+  </body>
+</html>

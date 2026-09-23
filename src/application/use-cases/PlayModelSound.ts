@@ -28,7 +28,9 @@ export class PlayModelSound {
 
   async execute(rawModelId: string): Promise<void> {
     const session = this.getSession();
-    if (!session.isInteractive) return;
+    const id = ModelId.of(rawModelId);
+    const focused = session.discovery.focused?.equals(id) === true;
+    if ((!session.isInteractive && !focused) || !session.discovery.isUnlocked(id)) return;
 
     const model = await this.models.findById(ModelId.of(rawModelId));
     if (model === null) return;

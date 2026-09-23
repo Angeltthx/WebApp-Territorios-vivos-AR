@@ -49,7 +49,6 @@ const STAGE_FILL = 0.42;
 const STAGE_IDLE_SPIN = 0.25;
 
 export class ThreeSceneAdapter implements ScenePort {
-  private readonly icons = new IconLoader();
   private readonly follower = new Group();
   private readonly overlay = new Group();
   private readonly stage = new Group();
@@ -73,6 +72,8 @@ export class ThreeSceneAdapter implements ScenePort {
   private stageIdle = 0;
   /** Giro que el usuario imprime con el dedo. */
   private spin = 0;
+  private scale = 1;
+  private stagePulse = 0;
   /**
    * Cuánto mide un ancho de mapa en unidades de mundo, del último fotograma
    * con marcador a la vista. Se guarda para que el primer plano siga
@@ -102,17 +103,30 @@ export class ThreeSceneAdapter implements ScenePort {
   ) {}
 
   async preload(models: readonly ArModel[]): Promise<void> {
-    this.mount();
-
-    const icons = await Promise.all(
-      models.map(async (model) => [model, await this.icons.load(model)] as const),
-    );
+    const loader = new IconLoader();
+    const [runtime, loaded] = await Promise.allSettled([
+      this.runtime.prepare(),
+      Promise.all(models.map(async (model) => [model, await loader.load(model)] as const))
+        .finally(() => loader.dispose()),
+    ]);
+    if (loaded.status === 'rejected') throw loaded.reason;
+    const icons = loaded.value;
 
     icons.forEach(([model, icon], index) => {
       const pin = new MarkerPin(model, icon, index, this.targetAspect);
       this.overlay.add(pin.group);
       this.pins.set(model.id.value, pin);
     });
+    if (runtime.status === 'rejected') {
+      this.clear();
+      throw runtime.reason;
+    }
+    try {
+      this.mount();
+    } catch (error) {
+      this.clear();
+      throw error;
+    }
   }
 
   setHighlightedModel(id: ModelId): void {
@@ -127,6 +141,7 @@ export class ThreeSceneAdapter implements ScenePort {
     this.overlay.position.set(offset.x, offset.y, offset.z);
 
     this.spin = rotationY;
+    this.scale = scale.value;
     for (const pin of this.pins.values()) pin.applyTransform(scale.value, rotationY);
   }
 
@@ -211,7 +226,10 @@ export class ThreeSceneAdapter implements ScenePort {
 
     const fov = (camera.fov * Math.PI) / 180;
     const visibleHeight = 2 * distance * Math.tan(fov / 2);
-    icon.scale.setScalar((visibleHeight * STAGE_FILL) / this.stagedNaturalSize);
+    this.stagePulse = Math.max(0, this.stagePulse - deltaSeconds);
+    const bump = 1 + 0.3 * Math.sin((this.stagePulse / 0.45) * Math.PI);
+    const availableSize = Math.min(visibleHeight * STAGE_FILL, visibleHeight * camera.aspect * 0.7);
+    icon.scale.setScalar((availableSize / this.stagedNaturalSize) * this.scale * bump);
 
     this.stageIdle += deltaSeconds * STAGE_IDLE_SPIN;
     icon.rotation.set(0, this.spin + this.stageIdle, 0);
@@ -222,10 +240,12 @@ export class ThreeSceneAdapter implements ScenePort {
   }
 
   pulse(id: ModelId): void {
+    if (this.focusedId === id.value) this.stagePulse = 0.45;
     this.pins.get(id.value)?.pulse();
   }
 
   clear(): void {
+    this.setFocus(null);
     for (const pin of this.pins.values()) {
       this.overlay.remove(pin.group);
       pin.dispose();
@@ -236,13 +256,13 @@ export class ThreeSceneAdapter implements ScenePort {
     this.focusedId = null;
     this.stagedIcon = null;
     this.stage.clear();
+    this.follower.visible = false;
   }
 
   dispose(): void {
     this.unsubscribeFrame?.();
     this.unsubscribeFrame = null;
     this.clear();
-    this.icons.dispose();
     if (this.runtime.isInitialized) {
       this.runtime.mindar.renderer.dispose();
     }
@@ -278,7 +298,6 @@ export class ThreeSceneAdapter implements ScenePort {
 
   private mount(): void {
     if (this.mounted) return;
-    this.mounted = true;
 
     const mindar = this.runtime.init();
     this.configureRendering();
@@ -294,6 +313,7 @@ export class ThreeSceneAdapter implements ScenePort {
     mindar.scene.add(this.stage);
 
     this.unsubscribeFrame = this.runtime.onFrame((delta) => this.onFrame(delta));
+    this.mounted = true;
   }
 
   private onFrame(deltaSeconds: number): void {
@@ -301,7 +321,9 @@ export class ThreeSceneAdapter implements ScenePort {
     this.followAnchor(deltaSeconds);
     this.evaluateProximity(deltaSeconds);
     this.updateStage(deltaSeconds);
-    for (const pin of this.pins.values()) pin.advance(deltaSeconds, this.elapsed);
+    if (this.follower.visible) {
+      for (const pin of this.pins.values()) pin.advance(deltaSeconds, this.elapsed);
+    }
   }
 
   /**

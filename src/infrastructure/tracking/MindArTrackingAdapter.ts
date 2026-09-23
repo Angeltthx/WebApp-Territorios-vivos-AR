@@ -8,6 +8,7 @@ import type { MindArRuntime } from '../mindar/MindArRuntime';
 
 export class MindArTrackingAdapter implements TrackingPort {
   private readonly handlers = new Map<TrackingEvent, Set<() => void>>();
+  private cameraError: unknown = null;
 
   constructor(private readonly runtime: MindArRuntime) {}
 
@@ -18,7 +19,9 @@ export class MindArTrackingAdapter implements TrackingPort {
     const hasWebGL = (() => {
       try {
         const canvas = document.createElement('canvas');
-        return (canvas.getContext('webgl2') ?? canvas.getContext('webgl')) !== null;
+        const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+        gl?.getExtension('WEBGL_lose_context')?.loseContext();
+        return gl !== null;
       } catch {
         return false;
       }
@@ -31,6 +34,7 @@ export class MindArTrackingAdapter implements TrackingPort {
   }
 
   async start(): Promise<void> {
+    this.cameraError = null;
     const mindar = this.runtime.init();
     const anchor = this.runtime.anchor;
 
@@ -53,8 +57,9 @@ export class MindArTrackingAdapter implements TrackingPort {
     try {
       await starting;
     } catch (error) {
-      if (this.isPermissionError(error)) throw new CameraPermissionDeniedError();
-      throw error;
+      const cause = this.cameraError ?? error;
+      if (this.isPermissionError(cause)) throw new CameraPermissionDeniedError();
+      throw cause;
     }
 
     // Otra vez con el stream ya puesto: barato, y deshace cualquier atributo
@@ -70,7 +75,19 @@ export class MindArTrackingAdapter implements TrackingPort {
     if (!this.runtime.isInitialized) return;
     this.runtime.setAnchorVisible(false);
     this.runtime.stopLoop();
-    this.runtime.mindar.stop();
+    const mindar = this.runtime.mindar;
+    // stop() de MindAR asume controlador Y stream: no existen si se denegó
+    // el permiso o falló el arranque. Limpieza válida también en ese caso.
+    mindar.controller?.stopProcessVideo();
+    const video = mindar.video as HTMLVideoElement | undefined;
+    const stream = video?.srcObject;
+    if (stream instanceof MediaStream) stream.getTracks().forEach((track) => track.stop());
+    if (video !== undefined) {
+      video.pause();
+      video.srcObject = null;
+      video.remove();
+    }
+    this.runtime.anchor.visible = false;
   }
 
   on(event: TrackingEvent, handler: () => void): Unsubscribe {
@@ -129,7 +146,11 @@ export class MindArTrackingAdapter implements TrackingPort {
         typeof video === 'object'
           ? { ...constraints, video: { width: { ideal: 1280 }, height: { ideal: 720 }, ...video } }
           : (constraints ?? {});
-      return original.call(media, enriched);
+      return original.call(media, enriched).catch((error: unknown) => {
+        // MindAR llama reject() sin argumento; conservamos la causa real.
+        this.cameraError = error;
+        throw error;
+      });
     };
 
     try {

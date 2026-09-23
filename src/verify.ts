@@ -71,7 +71,7 @@ const ready = Promise.all(
     scene.add(pin.group);
     return [index, pin] as const;
   }),
-);
+).finally(() => icons.dispose());
 
 // Los .glb llegan de forma asíncrona: se ordenan al final para que el
 // desfase del vaivén siga correspondiendo al orden del catálogo.

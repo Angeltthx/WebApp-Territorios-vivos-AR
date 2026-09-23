@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, transformWithEsbuild } from 'vite';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 import { fileURLToPath, URL } from 'node:url';
 
@@ -13,7 +13,23 @@ import { fileURLToPath, URL } from 'node:url';
 const useHttps = process.env['VITE_HTTP'] !== '1';
 
 export default defineConfig({
-  plugins: useHttps ? [basicSsl()] : [],
+  plugins: [
+    ...(useHttps ? [basicSsl()] : []),
+    {
+      name: 'compact-entry-html',
+      apply: 'build',
+      async transformIndexHtml(html) {
+        // Conservamos las explicaciones en el fuente, no en cada descarga.
+        let compact = html.replace(/<!--[\s\S]*?-->/g, '');
+        const styles = [...compact.matchAll(/<style>([\s\S]*?)<\/style>/g)];
+        for (const match of styles) {
+          const result = await transformWithEsbuild(match[1]!, 'inline.css', { loader: 'css', minify: true });
+          compact = compact.replace(match[0], `<style>${result.code.trim()}</style>`);
+        }
+        return compact;
+      },
+    },
+  ],
   server: { host: true, port: 5173 },
   resolve: {
     alias: {

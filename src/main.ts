@@ -105,7 +105,16 @@ view = new ArView(root, {
 
     // Si el arranque falló, MindAR nunca creó el canvas y enganchar los
     // gestos lanzaría una excepción. Solo se conectan si hay sesión viva.
-    if (!session.hasStarted || gesturesAttached) return;
+    if (!session.hasStarted) return;
+    // También repone el catálogo si la precarga inicial falló y se reintentó.
+    view.setCatalog((await startArExperience.prepare('whale')).catalog);
+
+    // La camara ya da imagen: se puede retirar la portada. Hasta aqui
+    // seguia puesta a proposito, con su cartel, para que el arranque no
+    // fuera una pantalla negra (ver el manejador del boton en ArView).
+    view.cameraReady();
+
+    if (gesturesAttached) return;
     gesturesAttached = true;
 
     interaction.attach({
@@ -125,4 +134,9 @@ window.addEventListener('pagehide', () => {
     gesturesAttached = false;
   }
   void startArExperience.stop();
+});
+
+// Al volver desde bfcache el JS sigue vivo, pero la cámara ya se liberó.
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) window.location.reload();
 });

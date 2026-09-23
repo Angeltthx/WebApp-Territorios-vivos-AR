@@ -45,6 +45,11 @@ export class PointerInteractionAdapter implements InteractionPort {
   private readonly onPointerDown = (event: PointerEvent) => this.handleDown(event);
   private readonly onPointerMove = (event: PointerEvent) => this.handleMove(event);
   private readonly onPointerUp = (event: PointerEvent) => this.handleUp(event);
+  private readonly onPointerCancel = () => {
+    this.active.clear();
+    this.moved = true;
+    this.pinchDistance = 0;
+  };
 
   constructor(
     private readonly runtime: MindArRuntime,
@@ -58,7 +63,8 @@ export class PointerInteractionAdapter implements InteractionPort {
     canvas.addEventListener('pointerdown', this.onPointerDown);
     canvas.addEventListener('pointermove', this.onPointerMove);
     canvas.addEventListener('pointerup', this.onPointerUp);
-    canvas.addEventListener('pointercancel', this.onPointerUp);
+    canvas.addEventListener('pointercancel', this.onPointerCancel);
+    canvas.addEventListener('lostpointercapture', this.onPointerCancel);
   }
 
   detach(): void {
@@ -66,12 +72,14 @@ export class PointerInteractionAdapter implements InteractionPort {
     canvas.removeEventListener('pointerdown', this.onPointerDown);
     canvas.removeEventListener('pointermove', this.onPointerMove);
     canvas.removeEventListener('pointerup', this.onPointerUp);
-    canvas.removeEventListener('pointercancel', this.onPointerUp);
+    canvas.removeEventListener('pointercancel', this.onPointerCancel);
+    canvas.removeEventListener('lostpointercapture', this.onPointerCancel);
     this.active.clear();
     this.handlers = null;
   }
 
   private handleDown(event: PointerEvent): void {
+    this.canvas.setPointerCapture(event.pointerId);
     this.active.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
     if (this.active.size === 1) {
@@ -84,6 +92,7 @@ export class PointerInteractionAdapter implements InteractionPort {
     }
 
     if (this.active.size === 2) {
+      this.moved = true;
       this.pinchDistance = this.currentPinchDistance();
     }
   }

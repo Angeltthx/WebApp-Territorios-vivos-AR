@@ -6,3 +6,15 @@
   for = "/*"
   [headers.values]
     Permissions-Policy = "camera=(self)"
+
+# Vite incluye un hash en cada nombre: se pueden reutilizar sin revalidar.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Los nombres de modelos y targets son estables; deben revalidarse al cambiar.
+[[headers]]
+  for = "/models/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

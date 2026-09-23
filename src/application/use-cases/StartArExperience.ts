@@ -29,6 +29,9 @@ export class StartArExperience {
   private subscriptions: Unsubscribe[] = [];
   /** La descarga de modelos en curso, para no lanzarla dos veces. */
   private preparation: Promise<PreparedScene> | null = null;
+  private starting: Promise<ArSession> | null = null;
+  private stopping: Promise<void> | null = null;
+  private generation = 0;
 
   constructor(
     private readonly tracking: TrackingPort,
@@ -66,10 +69,6 @@ export class StartArExperience {
   }
 
   private async loadScene(initialModelId: string): Promise<PreparedScene> {
-    // Se intenta desbloquear el audio, pero NO se espera el resultado (ver
-    // el comentario en execute).
-    void this.audio.unlock().catch(() => {});
-
     // Que el motor vaya bajando lo suyo mientras se lee la bienvenida. No
     // se espera: es una mejora de tiempos, no un requisito para arrancar.
     this.tracking.prewarm();
@@ -91,20 +90,27 @@ export class StartArExperience {
     return { catalog, initial };
   }
 
-  async execute(initialModelId: string): Promise<ArSession> {
+  execute(initialModelId: string): Promise<ArSession> {
+    // Empieza dentro del clic, incluso al reintentar o usar teclado en iOS.
+    void this.audio.unlock().catch(() => {});
+    if (this.stopping !== null) return this.stopping.then(() => this.execute(initialModelId));
+    if (this.starting !== null) return this.starting;
+    if (this.session.hasStarted) return Promise.resolve(this.session);
+    this.starting = this.start(initialModelId, this.generation).finally(() => {
+      this.starting = null;
+    });
+    return this.starting;
+  }
+
+  private async start(initialModelId: string, generation: number): Promise<ArSession> {
     // `canStart` no vale como guarda: tras `prepare` la sesion ya esta en
     // 'preparing'. Lo que hay que impedir es arrancar dos veces la camara.
     if (this.session.hasStarted) return this.session;
 
     try {
-      // NOTA sobre el audio, que se desbloquea en `loadScene` sin esperarlo:
-      // `AudioContext.resume()` sobre un contexto suspendido devuelve una
-      // promesa que no se resuelve NI se rechaza hasta que hay un gesto del
-      // usuario. Con el boton "Iniciar AR" siempre lo habia; ahora la
-      // experiencia arranca sola, y esperar esa promesa dejaba la sesion
-      // clavada en "preparando" sin llegar a pedir la camara. Quien
-      // desbloquea de verdad es el primer toque (ver `src/main.ts`).
-      if (!(await this.tracking.isSupported())) {
+      const supported = await this.tracking.isSupported();
+      if (generation !== this.generation) return ArSession.idle();
+      if (!supported) {
         return this.emit(
           this.session.failed(
             'unsupported-device',
@@ -114,6 +120,7 @@ export class StartArExperience {
       }
 
       const { initial } = await this.prepare(initialModelId);
+      if (generation !== this.generation) return ArSession.idle();
 
       const placement = Placement.initial(initial.id, initial.defaultScale);
       this.scene.applyPlacement(placement);
@@ -125,10 +132,14 @@ export class StartArExperience {
       );
 
       await this.tracking.start();
+      if (generation !== this.generation) return ArSession.idle();
       this.analytics.track('ar_session_started', { modelId: initial.id.value });
 
       return this.session;
     } catch (error) {
+      this.unsubscribe();
+      await this.tracking.stop().catch(() => {});
+      if (generation !== this.generation) return ArSession.idle();
       return this.emit(this.toFailure(error));
     }
   }
@@ -143,12 +154,26 @@ export class StartArExperience {
     this.emit(session);
   }
 
-  async stop(): Promise<void> {
-    if (!this.session.hasStarted) return;
+  stop(): Promise<void> {
+    if (this.stopping !== null) return this.stopping;
+    this.generation += 1;
+    this.stopping = this.finishStop().finally(() => { this.stopping = null; });
+    return this.stopping;
+  }
+
+  private unsubscribe(): void {
     this.subscriptions.forEach((unsubscribe) => unsubscribe());
     this.subscriptions = [];
-    await this.tracking.stop();
+  }
+
+  private async finishStop(): Promise<void> {
+    this.unsubscribe();
+    await this.starting;
+    await this.preparation?.catch(() => {});
+    this.unsubscribe();
+    await this.tracking.stop().catch(() => {});
     this.scene.clear();
+    this.preparation = null;
     this.audio.dispose();
     this.emit(ArSession.idle());
   }
@@ -162,7 +187,7 @@ export class StartArExperience {
       this.analytics.track('ar_session_failed', { code: 'camera-denied' });
       return this.session.failed(
         'camera-denied',
-        'Sin acceso a la cámara. Actívalo en los ajustes del navegador y recarga la página.',
+        'Sin acceso a la cámara. Actívalo en los ajustes del navegador y pulsa Reintentar.',
       );
     }
     const message = error instanceof Error ? error.message : 'Error desconocido';

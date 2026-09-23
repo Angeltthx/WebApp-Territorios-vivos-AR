@@ -1,12 +1,13 @@
 import {
   Box3,
+  BufferAttribute,
+  BufferGeometry,
   CircleGeometry,
   DoubleSide,
   Group,
   Mesh,
   MeshBasicMaterial,
   Object3D,
-  PlaneGeometry,
   Texture,
 } from 'three';
 import type { ArModel } from '@domain/entities/ArModel';
@@ -230,6 +231,8 @@ export class MarkerPin {
     // Cada icono lleva su id encima: así el raycast sabe a qué animal le
     // acertó sin depender del orden de la escena.
     this.group.userData['modelId'] = model.id.value;
+    // El icono conserva su identidad cuando se presta al primer plano.
+    icon.userData['modelId'] = model.id.value;
 
     // Zona de toque generosa e invisible: acertarle a un icono pequeño con
     // el dedo, a pulso y con el teléfono en la mano, es difícil. Se usa
@@ -487,11 +490,26 @@ function outlineLoopOf(
 }
 
 /**
- * Rellena `target` con los trazos discontinuos que siguen el contorno.
+ * Cuelga de `target` los trazos discontinuos que siguen el contorno, EN UNA
+ * SOLA MALLA.
  *
  * Cada trazo se orienta segun la direccion que llevan sus vecinos, no la
  * suya propia: usar el angulo del punto los dejaria todos apuntando al
  * centro, como los radios de una rueda, en vez de seguir el borde.
+ *
+ * UNA MALLA Y NO 68. Antes cada trazo era un `Mesh` con su propio
+ * `PlaneGeometry`: 68 por animal, 272 en los cuatro, y cada uno es una
+ * llamada de dibujo que la CPU tiene que preparar y enviar SESENTA VECES
+ * POR SEGUNDO. En un iPhone reciente no se nota; en un Samsung de gama
+ * baja, donde la CPU ya va justa con la deteccion de MindAR, ese trabajo
+ * compite con el rastreo y es parte de por que los animales se quedaban
+ * quietos y reaccionaban tarde al mover el telefono.
+ *
+ * Los trazos nunca se mueven por separado —el latido escala el grupo
+ * entero—, asi que no hay ninguna razon para que sean objetos distintos:
+ * se cosen aqui, ya girados y colocados, en un unico buffer de vertices.
+ * Cuatro llamadas de dibujo en vez de 272, y el resultado en pantalla es
+ * exactamente el mismo.
  */
 function buildDashedSilhouette(
   target: Group,
@@ -499,18 +517,44 @@ function buildDashedSilhouette(
   material: MeshBasicMaterial,
 ): void {
   const n = loop.length;
+  const positions = new Float32Array(n * 6 * 3);
+  const half = OUTLINE_THICKNESS / 2;
+  let at = 0;
+
+  const put = (x: number, y: number): void => {
+    positions[at] = x;
+    positions[at + 1] = y;
+    positions[at + 2] = 0;
+    at += 3;
+  };
 
   for (let i = 0; i < n; i += 1) {
     const point = loop[i]!;
     const next = loop[(i + 1) % n]!;
     const previous = loop[(i - 1 + n) % n]!;
 
-    const length = Math.hypot(next.x - point.x, next.y - point.y) * 0.62;
-    const dash = new Mesh(new PlaneGeometry(Math.max(length, 0.004), OUTLINE_THICKNESS), material);
-    dash.position.set(point.x, point.y, 0);
-    dash.rotation.z = Math.atan2(next.y - previous.y, next.x - previous.x);
-    target.add(dash);
+    const length = Math.max(Math.hypot(next.x - point.x, next.y - point.y) * 0.62, 0.004);
+    const angle = Math.atan2(next.y - previous.y, next.x - previous.x);
+
+    // Ejes del trazo: `a` lo recorre a lo largo, `b` lo engorda.
+    const ax = (Math.cos(angle) * length) / 2;
+    const ay = (Math.sin(angle) * length) / 2;
+    const bx = -Math.sin(angle) * half;
+    const by = Math.cos(angle) * half;
+
+    // Dos triangulos por trazo, en el mismo orden que daba PlaneGeometry.
+    put(point.x - ax + bx, point.y - ay + by);
+    put(point.x - ax - bx, point.y - ay - by);
+    put(point.x + ax + bx, point.y + ay + by);
+
+    put(point.x - ax - bx, point.y - ay - by);
+    put(point.x + ax - bx, point.y + ay - by);
+    put(point.x + ax + bx, point.y + ay + by);
   }
+
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new BufferAttribute(positions, 3));
+  target.add(new Mesh(geometry, material));
 }
 
 function clamp01(value: number): number {

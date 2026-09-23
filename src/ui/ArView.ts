@@ -78,6 +78,10 @@ export class ArView {
   private readonly guide: HTMLElement;
   private readonly approach: HTMLElement;
   private readonly boot: HTMLElement;
+  private readonly bootStatus: HTMLElement;
+  private readonly bootStatusText: HTMLElement;
+  /** Los .glb ya estan en memoria. Cambia el cartel de la espera. */
+  private modelsReady = false;
   private readonly focus: HTMLElement;
   private readonly focusName: HTMLElement;
   private readonly focusInfo: HTMLElement;
@@ -113,6 +117,8 @@ export class ArView {
     this.guide = this.require(root, '#guide');
     this.approach = this.require(root, '#approach');
     this.boot = this.require(root, '#boot');
+    this.bootStatus = this.require(root, '#boot-status');
+    this.bootStatusText = this.require(root, '#boot-status-text');
     this.focus = this.require(root, '#focus');
     this.focusName = this.require(root, '#focus-name');
     this.focusInfo = this.require(root, '#focus-info');
@@ -157,10 +163,25 @@ export class ArView {
     });
 
     // Iniciar: el único gesto de la experiencia, y el que dispara la
-    // cámara. La pantalla se retira antes de llamar a `onStart` para que el
-    // permiso del sistema salte sobre la cámara, no sobre la bienvenida.
+    // cámara.
+    //
+    // La portada NO se retira aquí, y ese cambio es el arreglo de los
+    // "siete segundos en negro": el permiso, el calentamiento de MindAR y
+    // lo que falte por bajar pasan DESPUÉS de este toque, y retirarla
+    // dejaba todo ese rato una pantalla negra que se lee como un cuelgue.
+    // Se queda puesta, con su cartel de en qué paso va, y se va sola
+    // cuando la cámara ya está dando imagen (`cameraReady`).
+    //
+    // Antes se retiraba antes de tiempo para que el permiso del sistema
+    // saliera sobre la cámara y no sobre la bienvenida. No hacía falta:
+    // el permiso sale igual, y sobre la portada se entiende mejor de qué
+    // va lo que se está concediendo.
     this.startButton.addEventListener('click', () => {
-      this.hideBoot();
+      this.boot.dataset['starting'] = 'true';
+      this.bootStatus.hidden = false;
+      this.bootStatusText.textContent = this.modelsReady
+        ? 'Encendiendo la cámara…'
+        : 'Cargando los animales…';
       callbacks.onStart();
     });
 
@@ -173,6 +194,25 @@ export class ArView {
   /** Se llama una vez, cuando el catálogo termina de cargar. */
   setCatalog(catalog: readonly ArModel[]): void {
     this.catalog = catalog;
+    this.modelsReady = true;
+    // Si ya se pulsó Iniciar, el cartel pasa al paso siguiente. Eso le
+    // dice a quien espera que la barra avanza, y a quien depura DÓNDE se
+    // está yendo el tiempo: el mensaje que se queda puesto es el culpable.
+    if (this.bootStatus.hidden) return;
+    this.bootStatusText.textContent = 'Encendiendo la cámara…';
+  }
+
+  /**
+   * La cámara ya está dando imagen: se puede retirar la portada.
+   *
+   * Lo llama `main.ts` cuando `execute` termina, que es el primer momento
+   * en que hay algo que enseñar detrás. Si algo falló, no llega hasta aquí
+   * — de eso se encarga `render`, que retira la portada al ver el error
+   * para que el mensaje no se quede debajo.
+   */
+  cameraReady(): void {
+    this.hideBoot();
+    if (this.lastSession !== null) this.render(this.lastSession);
   }
 
   render(session: ArSession): void {
@@ -253,6 +293,7 @@ export class ArView {
   // --------------------------------------------------------------- privado
 
   private syncGuide(session: ArSession): void {
+    if (this.bootVisible) return;
     // Con un animal en primer plano no hay nada que encuadrar.
     if (this.focusVisible) {
       this.hideGuide();
@@ -339,7 +380,11 @@ export class ArView {
     this.clearGuideTimer();
     this.guide.dataset['visible'] = 'true';
     this.guide.setAttribute('aria-hidden', 'false');
-    this.guideTimer = window.setTimeout(() => this.hideGuide(), durationMs);
+    this.guideTimer = window.setTimeout(() => {
+      this.hideGuide();
+      this.repaintTransientHints();
+    }, durationMs);
+    this.repaintTransientHints();
   }
 
   private hideGuide(): void {
@@ -351,6 +396,10 @@ export class ArView {
   private hideBoot(): void {
     this.boot.dataset['visible'] = 'false';
     this.boot.setAttribute('aria-hidden', 'true');
+    this.bootStatus.hidden = true;
+    // Por si se vuelve con "Reintentar": el botón tiene que poder tocarse
+    // otra vez y el halo tiene que volver a invitar.
+    delete this.boot.dataset['starting'];
   }
 
   private get guideVisible(): boolean {

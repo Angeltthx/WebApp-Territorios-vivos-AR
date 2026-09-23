@@ -1,4 +1,4 @@
-import { MindARThree, type MindARAnchor } from 'mind-ar/dist/mindar-image-three.prod.js';
+import type { MindARThree, MindARAnchor } from 'mind-ar/dist/mindar-image-three.prod.js';
 
 export type FrameCallback = (deltaSeconds: number) => void;
 
@@ -54,7 +54,8 @@ export class MindArRuntime {
   private anchorVisibleFlag = false;
   /** El `.mind` ya descargado, como blob: URL. Ver `prefetchTarget`. */
   private localTargetSrc: string | null = null;
-  private prefetching = false;
+  private preparation: Promise<void> | null = null;
+  private constructorRef: typeof MindARThree | null = null;
 
   constructor(
     private readonly container: HTMLElement,
@@ -75,30 +76,49 @@ export class MindArRuntime {
    * navegador porque Netlify sirve estos archivos con `must-revalidate`:
    * la caché ahorra el cuerpo, pero no el viaje de ida y vuelta.
    *
-   * Silencioso a propósito: si falla, `imageTargetSrc` sigue siendo la URL
-   * de siempre y MindAR la descargará él mismo como hasta ahora.
+   * Silencioso durante la portada. Si falla, prepare permite reintentarlo;
+   * nunca entregamos una URL fallida al arranque interno de MindAR, cuya
+   * promesa puede quedarse pendiente si falla addImageTargets.
    */
   prefetchTarget(): void {
-    if (this.prefetching || this.localTargetSrc !== null) return;
-    this.prefetching = true;
+    void this.prepare().catch(() => {});
+  }
 
-    void fetch(this.imageTargetSrc)
-      .then((response) => (response.ok ? response.blob() : null))
-      .then((blob) => {
-        // Si la sesión ya arrancó, MindAR se quedó con la URL original y
-        // cambiarla ahora no sirve de nada.
-        if (blob === null || this.instance !== null) return;
-        this.localTargetSrc = URL.createObjectURL(blob);
-      })
-      .catch(() => {
-        // Sin red o con un 404, `init()` usará la URL normal.
-      });
+  /** Motor y target en paralelo; nunca se crea MindAR antes de tener ambos. */
+  prepare(): Promise<void> {
+    if (this.preparation !== null) return this.preparation;
+    this.preparation = Promise.all([
+      import('mind-ar/dist/mindar-image-three.prod.js').then(({ MindARThree }) => {
+        this.constructorRef = MindARThree;
+      }),
+      this.downloadTarget(),
+    ]).then(() => {}).catch((error: unknown) => {
+      this.preparation = null;
+      throw error;
+    });
+    return this.preparation;
+  }
+
+  private async downloadTarget(): Promise<void> {
+    if (this.localTargetSrc !== null) return;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 30000);
+    try {
+      const response = await fetch(this.imageTargetSrc, { signal: controller.signal });
+      if (!response.ok) throw new Error(`No se pudo cargar el mapa (${response.status}). Reintenta.`);
+      this.localTargetSrc = URL.createObjectURL(await response.blob());
+    } finally {
+      window.clearTimeout(timeout);
+    }
   }
 
   init(): MindARThree {
     if (this.instance !== null) return this.instance;
 
-    this.instance = new MindARThree({
+    if (this.constructorRef === null || this.localTargetSrc === null) {
+      throw new Error('El motor y el mapa deben prepararse antes de iniciar');
+    }
+    this.instance = new this.constructorRef({
       container: this.container,
       imageTargetSrc: this.localTargetSrc ?? this.imageTargetSrc,
       maxTrack: this.tuning.maxTrack,
@@ -132,6 +152,8 @@ export class MindArRuntime {
 
     renderer.setAnimationLoop(() => {
       const now = performance.now();
+      // Pantallas de 90/120/144 Hz no necesitan duplicar el trabajo de AR.
+      if (now - this.lastFrameMs < 1000 / 60 - 1) return;
       const delta = Math.min((now - this.lastFrameMs) / 1000, 0.1);
       this.lastFrameMs = now;
 
@@ -185,7 +207,15 @@ export class MindArRuntime {
    */
   private configureRenderer(): void {
     const renderer = this.mindar.renderer;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Limita el trabajo de fragmentos también en tablets y pantallas retina.
+    // No cambia la resolución del detector ni la proyección de la cámara.
+    const pixelRatio = () => Math.max(0.75, Math.min(
+      window.devicePixelRatio || 1,
+      1.5,
+      Math.sqrt(1500000 / Math.max(1, this.container.clientWidth * this.container.clientHeight)),
+    ));
+    renderer.setPixelRatio(pixelRatio());
+    window.addEventListener('resize', () => renderer.setPixelRatio(pixelRatio()));
 
     // MindAR mete SIEMPRE un CSS3DRenderer en el contenedor, se use o no
     // (three.js:42-43), y lo añade DESPUÉS del canvas WebGL. Su div queda
