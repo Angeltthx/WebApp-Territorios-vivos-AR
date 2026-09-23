@@ -8,6 +8,7 @@ import {
 import type { AnimationSequence } from '@domain/value-objects/AnimationSequence';
 
 interface SequencedAction {
+  readonly name: string;
   readonly action: AnimationAction;
   readonly loops: number;
 }
@@ -19,6 +20,8 @@ export class IconAnimator {
   private current = 0;
   private completedLoops = 0;
   private running = false;
+  /** Entrada o toque: el clip actual termina tras una sola vuelta. */
+  private oneShot = false;
 
   constructor(
     private readonly root: Object3D,
@@ -40,7 +43,7 @@ export class IconAnimator {
       }
       const action = this.mixer!.clipAction(clip);
       action.setLoop(LoopRepeat, Infinity);
-      return [{ action, loops: step.loops }];
+      return [{ name: step.name, action, loops: step.loops }];
     });
 
     this.mixer.addEventListener('loop', this.onLoop);
@@ -50,9 +53,15 @@ export class IconAnimator {
   start(): void {
     if (this.running || this.actions.length === 0) return;
     this.running = true;
-    this.current = 0;
-    this.completedLoops = 0;
-    this.actions[0]!.action.reset().play();
+    this.play(this.indexOf(this.sequence?.entranceClip), this.sequence?.entranceClip !== null);
+  }
+
+  /** Reinicia inmediatamente el gesto expresivo configurado para el toque. */
+  react(): void {
+    if (this.actions.length === 0) return;
+    const wasRunning = this.running;
+    this.running = true;
+    this.play(this.indexOf(this.sequence?.tapClip), true, wasRunning);
   }
 
   update(deltaSeconds: number): void {
@@ -72,12 +81,30 @@ export class IconAnimator {
     if (!this.running || active === undefined || event.action !== active.action) return;
 
     this.completedLoops += 1;
-    if (this.completedLoops < active.loops || this.actions.length < 2) return;
+    const loops = this.oneShot ? 1 : active.loops;
+    if (this.completedLoops < loops || this.actions.length < 2) return;
 
-    this.completedLoops = 0;
-    this.current = (this.current + 1) % this.actions.length;
-    const next = this.actions[this.current]!;
-    next.action.reset().play();
-    active.action.crossFadeTo(next.action, this.sequence?.crossFadeSeconds ?? 0, false);
+    this.oneShot = false;
+    this.play((this.current + 1) % this.actions.length, false, true);
   };
+
+  private indexOf(name: string | null | undefined): number {
+    if (name === null || name === undefined) return 0;
+    const index = this.actions.findIndex((entry) => entry.name === name);
+    return index < 0 ? 0 : index;
+  }
+
+  private play(index: number, oneShot: boolean, crossFade = false): void {
+    const previous = crossFade ? this.actions[this.current] : undefined;
+    const next = this.actions[index]!;
+
+    this.current = index;
+    this.completedLoops = 0;
+    this.oneShot = oneShot;
+    next.action.stopFading().reset().setEffectiveWeight(1).play();
+
+    if (previous !== undefined && previous.action !== next.action) {
+      previous.action.crossFadeTo(next.action, this.sequence?.crossFadeSeconds ?? 0, false);
+    }
+  }
 }

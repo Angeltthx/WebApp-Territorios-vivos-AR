@@ -82,9 +82,9 @@ export class StaticModelRepository implements ModelRepository {
  *
  * En el mapa de 2026 los dibujos encogieron —la ballena sigue midiendo 0,30
  * de ancho de mapa, pero la tortuga bajó a 0,18, la pava a 0,12 y el
- * cangrejo a 0,09—, así que cada `iconSize` se escaló por esa misma
- * proporción. Es un punto de partida verificado en /verify.html; el ajuste
- * fino solo se puede hacer con el mapa impreso delante.
+ * cangrejo a 0,09—. Los tamaños conservan esa jerarquía, pero se ampliaron
+ * juntos después de probarlos en teléfono para que ninguno parezca un detalle
+ * diminuto. El ajuste fino solo se puede hacer con el mapa impreso delante.
  *
  * Si un .glb faltara, ese animal cae a un disco gris y los otros tres siguen
  * funcionando. Para volver a los iconos procedurales de PrimitiveFactory —que
@@ -104,13 +104,15 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         { name: 'Swin', loops: 2 },
         { name: 'Jump', loops: 1 },
       ],
+      entranceClip: 'Jump',
+      tapClip: 'Jump',
     },
     spot: { u: 0.304, v: 0.1268 },
     // Lo más grande que cabe de frente sin hundirse en el papel: mirando a
     // la cámara la ballena se extiende HACIA FUERA, no a lo ancho, así que
     // el límite lo pone su fondo, no su silueta. Dibujo: 0.304 x 0.157.
     view: 'front',
-    iconSize: 3.2,
+    iconSize: 3.4,
     facing: 0,
     // La primera que se calcó, y la que dejó claro que había que calcarlas
     // todas: en el mapa está buceando, con la cola alzada y la aleta
@@ -159,12 +161,14 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         { name: 'Idle', loops: 1 },
         { name: 'Sing', loops: 1 },
       ],
+      entranceClip: 'Sing',
+      tapClip: 'Sing',
     },
     spot: { u: 0.9075, v: 0.5098 },
-    // Dibujo: 0.121 x 0.098. En el mapa nuevo la pava es la mitad de
-    // grande que en el viejo, y su icono bajó de 1.8 a 1.0 con ella.
+    // Dibujo: 0.121 x 0.098. Se mantiene menor que la ballena, pero con
+    // presencia suficiente para que la animación Sing se lea en teléfono.
     view: 'front',
-    iconSize: 1,
+    iconSize: 1.3,
     facing: 0,
     // Dibujada de perfil, de pie sobre la hierba y mirando a la IZQUIERDA
     // del mapa. Contorno calcado del dibujo: el marrón de la pava contra el
@@ -204,12 +208,14 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         { name: 'Idle', loops: 6 },
         { name: 'Walk', loops: 4 },
       ],
+      entranceClip: 'Walk',
+      tapClip: 'Walk',
     },
     spot: { u: 0.618, v: 0.4022 },
     // Ya se veía de frente; 'front' es exactamente la misma orientación
     // que tenía con 'side' + 90°, escrita de forma directa.
     view: 'front',
-    iconSize: 0.62,
+    iconSize: 0.9,
     facing: 0,
     // Dibujado en planta, como se ve un cangrejo en la arena, con los ojos
     // y las pinzas hacia ARRIBA del mapa. Visto desde arriba el modelo mira
@@ -252,12 +258,14 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         { name: 'Swin', loops: 4 },
         { name: 'Idle', loops: 6 },
       ],
+      entranceClip: 'Swin',
+      tapClip: 'Swin',
     },
     spot: { u: 0.3375, v: 0.5335 },
     // De frente es una silueta baja y ancha —una tortuga lo es—, así que
     // se agranda por encima de su dibujo para que no quede como una raya.
     view: 'front',
-    iconSize: 1.4,
+    iconSize: 1.65,
     facing: 0,
     // Dibujada nadando, vista desde arriba y con la cabeza hacia la
     // IZQUIERDA del mapa; desde arriba el modelo mira hacia abajo.

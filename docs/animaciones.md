@@ -18,10 +18,25 @@ visible y evita calcular esqueletos que no se pueden ver.
 
 ## Interacción y sonido
 
-El toque conserva el sonido sintetizado y el pulso visual. En primer plano se
-añade un disco transparente orientado a la cámara, ligeramente mayor que el
-modelo, para que el raycast sea fiable con un dedo y el teléfono en movimiento.
-El toque también reclama de nuevo la sesión `playback` de Safari antes de sonar.
+Cada animal tiene un clip expresivo para la entrada y el toque: `Jump` en la
+ballena, `Sing` en la pava, `Walk` en el cangrejo y `Swin` en la tortuga. Al
+descubrirlo ese clip se reproduce una vez antes del ciclo normal; cada toque lo
+reinicia, además de reproducir el sonido y el pulso visual.
+
+En primer plano se añade un disco transparente orientado a la cámara,
+ligeramente mayor que el modelo, para que el raycast sea fiable con un dedo y el
+teléfono en movimiento. El toque también reclama de nuevo la sesión `playback`
+de Safari antes de sonar. La escala se calcula con el ancho X/Z proyectado en
+cada giro: así una ballena de frente no queda pequeña ni crece de golpe al
+mostrar el costado.
+
+## Distancia de descubrimiento
+
+El punto de partida sube de `1.25/1.6/0.62` a `1.75/2.15/0.72` para
+`revealDistance`, `hideDistance` y `aimRadius`. La cámara puede conservar más
+mapa dentro del encuadre al descubrir un animal y la diferencia entre revelar y
+ocultar mantiene la histéresis. La calibración final sigue dependiendo del
+tamaño impreso y de la cámara física.
 
 ## Peso
 

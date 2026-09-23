@@ -32,7 +32,7 @@ const PULSE_AMPLITUDE = 0.3;
  * señalando, que es justo lo contrario de lo que debe hacer una chincheta:
  * a esta escala la ilustración de debajo se sigue viendo.
  */
-const ICON_SCALE = 0.58;
+const ICON_SCALE = 0.72;
 
 /** Altura MÍNIMA a la que flota el icono sobre el papel, en anchos de mapa. */
 const HOVER_HEIGHT = 0.11;
@@ -292,6 +292,7 @@ export class MarkerPin {
 
   pulse(): void {
     this.pulseRemaining = PULSE_DURATION_S;
+    this.animator.react();
   }
 
   /**

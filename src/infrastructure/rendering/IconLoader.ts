@@ -35,9 +35,8 @@ import type { ArModel } from '@domain/entities/ArModel';
  * procedurales se ven del mismo tamaño y se pueden mezclar en el catálogo
  * sin que nada dé un salto.
  *
- * MarkerPin luego aplica su propio ICON_SCALE (0.58), así que en pantalla
- * un icono acaba ocupando ~0.12 — dentro del halo, que mide 0.20 de
- * diámetro, sin tapar al animal dibujado debajo.
+ * MarkerPin luego aplica su propio ICON_SCALE (0.72). El catálogo conserva
+ * la jerarquía entre especies y el ajuste final se verifica sobre el mapa.
  */
 export const ICON_TARGET_SIZE = 0.21;
 

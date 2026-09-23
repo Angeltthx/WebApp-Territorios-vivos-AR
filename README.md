@@ -14,9 +14,10 @@ que hay imagen disponible.
 Al detectar el mapa aparecen contornos dorados pulsantes. Acercarse y apuntar
 a un animal lo desbloquea para el resto de la sesión, dispara humo y abre su
 ficha con el modelo en primer plano. La X cierra la ficha sin perder el progreso.
-Cada animal empieza su secuencia de animación al ser descubierto. Tocar uno
-revelado reproduce su sonido sintetizado; arrastrar lo gira y pellizcar cambia
-su escala. El primer plano permanece animado al perder el mapa.
+Cada animal entra con un gesto expresivo al ser descubierto y después continúa
+su secuencia. Tocar uno revelado reinicia ese gesto y reproduce su sonido
+sintetizado; arrastrar lo gira y pellizcar cambia su escala. El primer plano
+mantiene un tamaño visual estable al girar y permanece animado al perder el mapa.
 
 «?» muestra la guía durante cinco segundos. El menú contiene tres opciones
 provisionales que todavía no tienen destino. Reintentar aparece al fallar.
@@ -29,7 +30,7 @@ Node.js 18 o posterior. Instalar con `npm install`.
 | --- | --- |
 | `npm run dev` | Vite con HTTPS, accesible desde la red local |
 | `npm run typecheck` | TypeScript estricto |
-| `npm test` | Nueve pruebas de regresión sin cámara |
+| `npm test` | Once pruebas de regresión sin cámara |
 | `npm run build` | Sitio estático en dist/ |
 | `npm run preview` | Servir el build |
 | `npm run prepare-target` | Entrega de la diseñadora → map.jpg |
@@ -138,7 +139,7 @@ de pantalla no es una restricción del motor. No se garantiza funcionamiento en
 todo hardware o navegador.
 
 La proximidad necesita calibrarse con el mapa impreso y la cámara real.
-Se ajusta por URL (`?reveal=1.25&hide=1.6&aim=0.62`) y con los registros
+Se ajusta por URL (`?reveal=1.75&hide=2.15&aim=0.72`) y con los registros
 [Proximity] de consola. Acercarse demasiado puede sacar del encuadre la parte
 del mapa que necesita MindAR para rastrear.
 

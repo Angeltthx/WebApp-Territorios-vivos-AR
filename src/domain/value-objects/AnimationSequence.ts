@@ -6,6 +6,10 @@ export interface AnimationStepSnapshot {
 export interface AnimationSequenceSnapshot {
   readonly steps: readonly AnimationStepSnapshot[];
   readonly crossFadeSeconds?: number;
+  /** Clip expresivo que se reproduce una vez al descubrir el animal. */
+  readonly entranceClip?: string;
+  /** Clip expresivo que se reinicia al tocar el animal. */
+  readonly tapClip?: string;
 }
 
 export interface AnimationStep {
@@ -18,6 +22,8 @@ export class AnimationSequence {
   private constructor(
     readonly steps: readonly AnimationStep[],
     readonly crossFadeSeconds: number,
+    readonly entranceClip: string | null,
+    readonly tapClip: string | null,
   ) {
     Object.freeze(this.steps);
     Object.freeze(this);
@@ -42,6 +48,21 @@ export class AnimationSequence {
       throw new RangeError(`Transición de animación inválida: ${crossFadeSeconds}`);
     }
 
-    return new AnimationSequence(steps, crossFadeSeconds);
+    const clipNames = new Set(steps.map((step) => step.name));
+    const configuredClip = (value: string | undefined, label: string): string | null => {
+      if (value === undefined) return null;
+      const name = value.trim();
+      if (!clipNames.has(name)) {
+        throw new RangeError(`${label} "${name}" no forma parte de la secuencia`);
+      }
+      return name;
+    };
+
+    return new AnimationSequence(
+      steps,
+      crossFadeSeconds,
+      configuredClip(snapshot.entranceClip, 'El clip de entrada'),
+      configuredClip(snapshot.tapClip, 'El clip de toque'),
+    );
   }
 }

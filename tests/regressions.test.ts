@@ -8,6 +8,7 @@ import { ModelId } from '../src/domain/value-objects/ModelId';
 import { Placement } from '../src/domain/entities/Placement';
 import { ModelSource } from '../src/domain/value-objects/ModelSource';
 import { AnimationSequence } from '../src/domain/value-objects/AnimationSequence';
+import { Proximity } from '../src/domain/value-objects/Proximity';
 import { ThreeSceneAdapter } from '../src/infrastructure/rendering/ThreeSceneAdapter';
 import { IconAnimator } from '../src/infrastructure/rendering/IconAnimator';
 import { MindArTrackingAdapter } from '../src/infrastructure/tracking/MindArTrackingAdapter';
@@ -192,6 +193,45 @@ test('animador respeta los bucles antes de pasar al siguiente clip', () => {
   animator.update(0.01);
   assert.ok(root.position.x > 9);
   animator.dispose();
+});
+
+test('aparición y toque reinician el gesto expresivo antes de volver al ciclo', () => {
+  const root = new Object3D();
+  const idle = new AnimationClip('Idle', 0.1, [
+    new NumberKeyframeTrack('.position[x]', [0, 0.1], [0, 1]),
+  ]);
+  const action = new AnimationClip('Action', 0.1, [
+    new NumberKeyframeTrack('.position[x]', [0, 0.1], [10, 11]),
+  ]);
+  const animator = new IconAnimator(root, [idle, action], AnimationSequence.of({
+    steps: [
+      { name: 'Idle', loops: 2 },
+      { name: 'Action', loops: 1 },
+    ],
+    entranceClip: 'Action',
+    tapClip: 'Action',
+    crossFadeSeconds: 0,
+  }));
+
+  animator.start();
+  animator.update(0.01);
+  assert.ok(root.position.x > 9);
+  animator.update(0.11);
+  animator.update(0.01);
+  assert.ok(root.position.x < 2);
+  animator.react();
+  animator.update(0.01);
+  assert.ok(root.position.x > 9);
+  animator.dispose();
+});
+
+test('proximidad permite descubrir antes y conserva histéresis', () => {
+  const proximity = Proximity.default();
+  assert.equal(proximity.decide(1.7, 0.7, false), true);
+  assert.equal(proximity.decide(1.8, 0.7, false), false);
+  assert.equal(proximity.decide(2, 0.7, true), true);
+  assert.equal(proximity.decide(2.2, 0.7, true), false);
+  assert.equal(proximity.decide(1, 0.73, false), false);
 });
 
 test('pin real conserva ID en primer plano, permite raycast, pulsa y libera geometría', async () => {

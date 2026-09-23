@@ -47,8 +47,8 @@ import { MarkerPin } from './MarkerPin';
  * dibuje por delante de él: el mapa suele estar a más de un ancho.
  */
 const STAGE_DISTANCE = 0.5;
-/** Cuánto del alto de la pantalla ocupa el animal en primer plano. */
-const STAGE_FILL = 0.42;
+/** Cuánto del alto de la pantalla puede ocupar el animal en primer plano. */
+const STAGE_FILL = 0.5;
 /** Giro lento de cortesía, para que se vea que es un objeto y no una foto. */
 const STAGE_IDLE_SPIN = 0.25;
 
@@ -74,10 +74,10 @@ export class ThreeSceneAdapter implements ScenePort {
   private nearbyId: string | null = null;
   private nearbyListener: ((modelId: string | null) => void) | null = null;
 
-  /** El animal en primer plano: su id, su icono prestado y su tamaño natural. */
+  /** El animal en primer plano: su id, su icono prestado y sus medidas naturales. */
   private focusedId: string | null = null;
   private stagedIcon: Object3D | null = null;
-  private stagedNaturalSize = 1;
+  private readonly stagedNaturalSize = new ThreeVector3(1, 1, 1);
   private stageIdle = 0;
   /** Giro que el usuario imprime con el dedo. */
   private spin = 0;
@@ -211,8 +211,12 @@ export class ThreeSceneAdapter implements ScenePort {
         icon.scale.setScalar(1);
         icon.rotation.set(0, 0, 0);
         icon.updateMatrixWorld(true);
-        const size = new Box3().setFromObject(icon).getSize(this.tmpWorld);
-        this.stagedNaturalSize = Math.max(size.x, size.y, size.z) || 1;
+        new Box3().setFromObject(icon).getSize(this.stagedNaturalSize);
+        this.stagedNaturalSize.set(
+          this.stagedNaturalSize.x || 1,
+          this.stagedNaturalSize.y || 1,
+          this.stagedNaturalSize.z || 1,
+        );
 
         this.stage.add(icon);
         this.stagedIcon = icon;
@@ -245,14 +249,28 @@ export class ThreeSceneAdapter implements ScenePort {
     const visibleHeight = 2 * distance * Math.tan(fov / 2);
     this.stagePulse = Math.max(0, this.stagePulse - deltaSeconds);
     const bump = 1 + 0.3 * Math.sin((this.stagePulse / 0.45) * Math.PI);
-    const availableSize = Math.min(visibleHeight * STAGE_FILL, visibleHeight * camera.aspect * 0.7);
-    icon.scale.setScalar((availableSize / this.stagedNaturalSize) * this.scale * bump);
-    // El círculo tiene radio 1: queda algo mayor que el animal para que sea
-    // fácil acertarle con un dedo y el teléfono en movimiento.
-    this.stageHit.scale.setScalar(availableSize * this.scale * 0.65);
 
     this.stageIdle += deltaSeconds * STAGE_IDLE_SPIN;
-    icon.rotation.set(0, this.spin + this.stageIdle, 0);
+    const yaw = this.spin + this.stageIdle;
+    icon.rotation.set(0, yaw, 0);
+
+    // Ajusta por la silueta que realmente ve la cámara. Usar la dimensión 3D
+    // máxima hacía que la ballena fuera diminuta de frente (su largo apunta a
+    // la cámara) y enorme al girarla. La proyección X/Z mantiene el volumen
+    // visual estable durante todo el giro.
+    const projectedWidth =
+      Math.abs(Math.cos(yaw)) * this.stagedNaturalSize.x +
+      Math.abs(Math.sin(yaw)) * this.stagedNaturalSize.z;
+    const availableHeight = visibleHeight * STAGE_FILL;
+    const availableWidth = visibleHeight * camera.aspect * 0.76;
+    const fittedScale = Math.min(
+      availableHeight / this.stagedNaturalSize.y,
+      availableWidth / projectedWidth,
+    );
+    icon.scale.setScalar(fittedScale * this.scale * bump);
+    // El círculo tiene radio 1: queda algo mayor que el animal para que sea
+    // fácil acertarle con un dedo y el teléfono en movimiento.
+    this.stageHit.scale.setScalar(Math.min(availableWidth, availableHeight) * this.scale * 0.65);
   }
 
   onNearbyModel(listener: (modelId: string | null) => void): void {
