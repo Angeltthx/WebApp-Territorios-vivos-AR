@@ -98,7 +98,13 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     description:
       'Cada año nada más de 8.000 km desde la Antártida hasta estas aguas ' +
       'cálidas para tener a sus crías. Los machos cantan durante horas.',
-    source: ModelSource.gltf('/models/Ballena_PBR.glb'),
+    source: ModelSource.gltf('/models/Ballena_Ani.glb'),
+    animation: {
+      steps: [
+        { name: 'Swin', loops: 2 },
+        { name: 'Jump', loops: 1 },
+      ],
+    },
     spot: { u: 0.304, v: 0.1268 },
     // Lo más grande que cabe de frente sin hundirse en el papel: mirando a
     // la cámara la ballena se extiende HACIA FUERA, no a lo ancho, así que
@@ -147,7 +153,13 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     description:
       'Vive en las copas del bosque húmedo y come frutos. Al volar esparce ' +
       'las semillas, así que va sembrando la selva sin darse cuenta.',
-    source: ModelSource.gltf('/models/Pava_PBR.glb'),
+    source: ModelSource.gltf('/models/Pava_Ani.glb'),
+    animation: {
+      steps: [
+        { name: 'Idle', loops: 1 },
+        { name: 'Sing', loops: 1 },
+      ],
+    },
     spot: { u: 0.9075, v: 0.5098 },
     // Dibujo: 0.121 x 0.098. En el mapa nuevo la pava es la mitad de
     // grande que en el viejo, y su icono bajó de 1.8 a 1.0 con ella.
@@ -186,7 +198,13 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     description:
       'Vive entre el manglar y la playa. Excava madrigueras en la arena y ' +
       'limpia la costa comiendo lo que deja el mar.',
-    source: ModelSource.gltf('/models/Cangrejo_PBR.glb'),
+    source: ModelSource.gltf('/models/Cangrejo_Ani.glb'),
+    animation: {
+      steps: [
+        { name: 'Idle', loops: 6 },
+        { name: 'Walk', loops: 4 },
+      ],
+    },
     spot: { u: 0.618, v: 0.4022 },
     // Ya se veía de frente; 'front' es exactamente la misma orientación
     // que tenía con 'side' + 90°, escrita de forma directa.
@@ -228,7 +246,13 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     description:
       'Vuelve a poner sus huevos en la misma playa donde nació, después de ' +
       'pasar años en mar abierto. Nuquí es una de esas playas.',
-    source: ModelSource.gltf('/models/Tortuga_PBR.glb'),
+    source: ModelSource.gltf('/models/Tortuga_Ani.glb'),
+    animation: {
+      steps: [
+        { name: 'Swin', loops: 4 },
+        { name: 'Idle', loops: 6 },
+      ],
+    },
     spot: { u: 0.3375, v: 0.5335 },
     // De frente es una silueta baja y ancha —una tortuga lo es—, así que
     // se agranda por encima de su dibujo para que no quede como una raya.

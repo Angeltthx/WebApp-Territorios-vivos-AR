@@ -31,7 +31,7 @@ import { readdirSync, mkdirSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import { draco, dedup, prune, textureCompress } from '@gltf-transform/functions';
+import { draco, dedup, prune, resample, textureCompress } from '@gltf-transform/functions';
 import draco3d from 'draco3dgltf';
 import sharp from 'sharp';
 
@@ -94,6 +94,9 @@ for (const name of files) {
     ...QUALITY.map(({ slots, quality, resize }) =>
       textureCompress({ encoder: sharp, targetFormat: 'webp', slots, quality, resize }),
     ),
+    // Blender suele exportar una clave por fotograma. Se eliminan las que
+    // son idénticas a la interpolación de sus vecinas sin alterar el gesto.
+    resample(),
     // Texturas y accessors repetidos entre materiales, y nodos/datos que no
     // referencia nadie. En estos archivos apenas hay, pero es gratis.
     dedup(),

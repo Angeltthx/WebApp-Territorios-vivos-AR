@@ -1,5 +1,6 @@
 import {
   Box3,
+  AnimationClip,
   CircleGeometry,
   DoubleSide,
   Group,
@@ -40,6 +41,11 @@ import type { ArModel } from '@domain/entities/ArModel';
  */
 export const ICON_TARGET_SIZE = 0.21;
 
+export interface LoadedIcon {
+  readonly object: Object3D;
+  readonly animations: readonly AnimationClip[];
+}
+
 /**
  * Carga la geometría de los modelos del catálogo.
  *
@@ -63,7 +69,7 @@ export class IconLoader {
     this.gltf.setDRACOLoader(this.draco);
   }
 
-  async load(model: ArModel): Promise<Object3D> {
+  async load(model: ArModel): Promise<LoadedIcon> {
     // Cada animal ocupa lo suyo: una ballena no puede salir del tamaño de un
     // cangrejo. El factor vive en el catálogo (IconPose.size).
     const targetSize = ICON_TARGET_SIZE * model.pose.size;
@@ -73,17 +79,20 @@ export class IconLoader {
       // Las figuras procedurales SÍ están dibujadas a mano con proporciones
       // pensadas entre sí, así que no se normalizan: solo se les aplica el
       // factor del catálogo, envuelto para que MarkerPin no lo pise.
-      return wrapScaled(createPrimitive(model.source.shape, model.source.colorHex), model.pose.size);
+      return {
+        object: wrapScaled(createPrimitive(model.source.shape, model.source.colorHex), model.pose.size),
+        animations: [],
+      };
     }
 
     try {
       const gltf = await this.gltf.loadAsync(model.source.url);
-      return fitToIconSize(gltf.scene, targetSize);
+      return { object: fitToIconSize(gltf.scene, targetSize), animations: gltf.animations };
     } catch (error) {
       // Respaldo deliberado: si un .glb falta o falla, el resto del
       // catálogo sigue funcionando en vez de tumbar toda la sesión.
       console.warn(`[IconLoader] No se pudo cargar ${model.source.url}`, error);
-      return buildMissingMarker();
+      return { object: buildMissingMarker(), animations: [] };
     }
   }
 

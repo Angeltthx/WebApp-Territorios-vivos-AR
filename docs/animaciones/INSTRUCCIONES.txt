@@ -1,0 +1,18 @@
+Hola Ángel, buenas noches!
+Así como quedamos, te dejo por acá la información necesaria para que implementes los .glb con animación.
+
+1. Puedes ver en acción a los 4 personajes en el sitio que compartí en el grupo: https://jorgecorrea.co/visor_3D/
+
+2. En este Drive, están los nuevos .glb ya con la animación integrada: https://drive.google.com/drive/folders/19CcTqdpz75ys1EkDPXRfhbIvbBoMz9vF?usp=drive_link
+
+3. En three.js debes llamar la animación de cada personaje. Cada personaje tiene 2 animaciones. El nombre exacto de las dos animaciones de cada personaje lo encontrarás en el sitio web que compartí en el grupo, en la parte superior derecha.
+
+4. En el sitio web que compartí, hice una propuesta de "Bucles" o "loops" para cada animación. Es decir que le dije a three.js que repitiera ciertas veces una animación antes de pasar a la siguiente. Te pongo imagen adjunta de como se ve ese código.
+
+5. También creé un triangulo de iluminación para los personajes para que la ambientación se vea mas artística y bien iluminada. Te comparto también pantallazo adjunto de como configuré esas luces en three.js
+¿Crees que es posible que se haga un triangulo de iluminación independiente para cada personaje?
+
+Tambien te comparto el archivo main.js que estoy usando en el sitio.
+
+Todas las dudas que tengas, las resolvemos mañana!
+Gracias Ángel que tengas buena noche.

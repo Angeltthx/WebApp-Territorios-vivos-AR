@@ -27,6 +27,9 @@ export class WebAudioAdapter implements AudioPort {
   }
 
   play(profile: SoundProfile): void {
+    // El toque es otro gesto válido en iOS y recupera la categoría playback
+    // si Safari la perdió al volver desde segundo plano.
+    this.claimPlaybackSession();
     const context = this.ensureContext();
     if (context === null) return;
 

@@ -14,8 +14,9 @@ que hay imagen disponible.
 Al detectar el mapa aparecen contornos dorados pulsantes. Acercarse y apuntar
 a un animal lo desbloquea para el resto de la sesión, dispara humo y abre su
 ficha con el modelo en primer plano. La X cierra la ficha sin perder el progreso.
-Tocar un animal revelado reproduce su sonido sintetizado; arrastrar lo gira y
-pellizcar cambia su escala. El primer plano permanece al perder el mapa.
+Cada animal empieza su secuencia de animación al ser descubierto. Tocar uno
+revelado reproduce su sonido sintetizado; arrastrar lo gira y pellizcar cambia
+su escala. El primer plano permanece animado al perder el mapa.
 
 «?» muestra la guía durante cinco segundos. El menú contiene tres opciones
 provisionales que todavía no tienen destino. Reintentar aparece al fallar.
@@ -28,7 +29,7 @@ Node.js 18 o posterior. Instalar con `npm install`.
 | --- | --- |
 | `npm run dev` | Vite con HTTPS, accesible desde la red local |
 | `npm run typecheck` | TypeScript estricto |
-| `npm test` | Ocho pruebas de regresión sin cámara |
+| `npm test` | Nueve pruebas de regresión sin cámara |
 | `npm run build` | Sitio estático en dist/ |
 | `npm run preview` | Servir el build |
 | `npm run prepare-target` | Entrega de la diseñadora → map.jpg |
@@ -81,7 +82,8 @@ perder el marcador. Se mueve el mismo icono entre ambos; no se duplican texturas
 ## Assets y coordenadas
 
 El catálogo está en src/infrastructure/repositories/StaticModelRepository.ts.
-Cada animal declara modelo, ficha, sonido, coordenadas, orientación y contorno.
+Cada animal declara modelo, ficha, sonido, secuencia de clips, coordenadas,
+orientación y contorno.
 
 El ancho del mapa mide una unidad; el alto es 1432/1000. Las coordenadas del catálogo
 parten de la esquina superior izquierda. MarkerPin realiza la conversión:
@@ -97,11 +99,10 @@ IconLoader normaliza y centra los GLB. Un archivo ausente o ilegible se sustituy
 por un disco gris y se registra el error en consola. PrimitiveFactory mantiene
 las alternativas procedurales, disponibles con ModelSource.primitive(...).
 
-Los originales viven en models-src/ y la salida optimizada en public/models/.
-No recomprimir la salida: la textura usa compresión con pérdida.
-Los decodificadores Draco se sirven localmente desde public/draco/.
-El catálogo publicado actual usa modelos estáticos; la entrega _Ani queda para
-la siguiente rama.
+Los originales animados viven en models-src/ y la salida optimizada en
+public/models/. No recomprimir la salida: la textura usa compresión con pérdida.
+El proceso conserva los clips, elimina claves redundantes, reduce texturas y
+aplica Draco. Los decodificadores se sirven localmente desde public/draco/.
 
 Cambiar el mapa exige tratar como una unidad:
 
@@ -126,7 +127,8 @@ El benchmark mide aciertos e inliers sintéticos; no demuestra rendimiento de c�
 real. El target actual conserva la línea base de 7/12 escenarios y 252 inliers
 a 640 px. Esta rama no cambia el target ni los parámetros del detector.
 
-Consultar [cambios y mediciones de optimización](docs/optimizacion.md).
+Consultar [cambios y mediciones de optimización](docs/optimizacion.md) y la
+[integración de animaciones](docs/animaciones.md).
 
 ## Comprobaciones en dispositivo
 

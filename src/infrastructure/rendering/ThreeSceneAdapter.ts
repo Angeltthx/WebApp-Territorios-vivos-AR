@@ -1,9 +1,13 @@
 import {
   ACESFilmicToneMapping,
   Box3,
+  CircleGeometry,
   DirectionalLight,
+  DoubleSide,
   Group,
   HemisphereLight,
+  Mesh,
+  MeshBasicMaterial,
   Object3D,
   Quaternion,
   Vector3 as ThreeVector3,
@@ -52,6 +56,11 @@ export class ThreeSceneAdapter implements ScenePort {
   private readonly follower = new Group();
   private readonly overlay = new Group();
   private readonly stage = new Group();
+  /** Superficie invisible y generosa para que el primer plano sea fácil de tocar. */
+  private readonly stageHit = new Mesh(
+    new CircleGeometry(1, 24),
+    new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
+  );
   private readonly pins = new Map<string, MarkerPin>();
 
   private stabilization: Stabilization = Stabilization.default();
@@ -100,7 +109,11 @@ export class ThreeSceneAdapter implements ScenePort {
   constructor(
     private readonly runtime: MindArRuntime,
     private readonly targetAspect: number,
-  ) {}
+  ) {
+    this.stageHit.visible = false;
+    this.stageHit.position.z = 0.02;
+    this.stage.add(this.stageHit);
+  }
 
   async preload(models: readonly ArModel[]): Promise<void> {
     const loader = new IconLoader();
@@ -185,6 +198,8 @@ export class ThreeSceneAdapter implements ScenePort {
 
     this.focusedId = id;
     this.stageIdle = 0;
+    this.stageHit.visible = false;
+    delete this.stage.userData['modelId'];
 
     if (id !== null) {
       const pin = this.pins.get(id);
@@ -201,6 +216,8 @@ export class ThreeSceneAdapter implements ScenePort {
 
         this.stage.add(icon);
         this.stagedIcon = icon;
+        this.stage.userData['modelId'] = id;
+        this.stageHit.visible = true;
       }
     }
 
@@ -230,6 +247,9 @@ export class ThreeSceneAdapter implements ScenePort {
     const bump = 1 + 0.3 * Math.sin((this.stagePulse / 0.45) * Math.PI);
     const availableSize = Math.min(visibleHeight * STAGE_FILL, visibleHeight * camera.aspect * 0.7);
     icon.scale.setScalar((availableSize / this.stagedNaturalSize) * this.scale * bump);
+    // El círculo tiene radio 1: queda algo mayor que el animal para que sea
+    // fácil acertarle con un dedo y el teléfono en movimiento.
+    this.stageHit.scale.setScalar(availableSize * this.scale * 0.65);
 
     this.stageIdle += deltaSeconds * STAGE_IDLE_SPIN;
     icon.rotation.set(0, this.spin + this.stageIdle, 0);
@@ -255,7 +275,6 @@ export class ThreeSceneAdapter implements ScenePort {
     this.nearbyId = null;
     this.focusedId = null;
     this.stagedIcon = null;
-    this.stage.clear();
     this.follower.visible = false;
   }
 
@@ -263,6 +282,8 @@ export class ThreeSceneAdapter implements ScenePort {
     this.unsubscribeFrame?.();
     this.unsubscribeFrame = null;
     this.clear();
+    this.stageHit.geometry.dispose();
+    this.stageHit.material.dispose();
     if (this.runtime.isInitialized) {
       this.runtime.mindar.renderer.dispose();
     }
@@ -279,7 +300,7 @@ export class ThreeSceneAdapter implements ScenePort {
     // El animal en primer plano es tocable siempre, esté el mapa a la vista
     // o no: es lo único que se está mirando.
     if (this.focusedId !== null && this.stagedIcon !== null) {
-      map.set(this.focusedId, this.stagedIcon);
+      map.set(this.focusedId, this.stage);
       return map;
     }
 
@@ -321,8 +342,10 @@ export class ThreeSceneAdapter implements ScenePort {
     this.followAnchor(deltaSeconds);
     this.evaluateProximity(deltaSeconds);
     this.updateStage(deltaSeconds);
-    if (this.follower.visible) {
-      for (const pin of this.pins.values()) pin.advance(deltaSeconds, this.elapsed);
+    for (const pin of this.pins.values()) {
+      // Con el mapa fuera de cuadro solo se anima el animal que permanece en
+      // primer plano. Los demás quedan pausados para ahorrar CPU y batería.
+      if (this.follower.visible || pin.isFocused) pin.advance(deltaSeconds, this.elapsed);
     }
   }
 

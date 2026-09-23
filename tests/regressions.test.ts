@@ -7,10 +7,21 @@ import { ArModel } from '../src/domain/entities/ArModel';
 import { ModelId } from '../src/domain/value-objects/ModelId';
 import { Placement } from '../src/domain/entities/Placement';
 import { ModelSource } from '../src/domain/value-objects/ModelSource';
+import { AnimationSequence } from '../src/domain/value-objects/AnimationSequence';
 import { ThreeSceneAdapter } from '../src/infrastructure/rendering/ThreeSceneAdapter';
+import { IconAnimator } from '../src/infrastructure/rendering/IconAnimator';
 import { MindArTrackingAdapter } from '../src/infrastructure/tracking/MindArTrackingAdapter';
 import { CameraPermissionDeniedError } from '../src/application/ports/TrackingPort';
-import { Scene, PerspectiveCamera, Raycaster, Vector2, Mesh } from 'three';
+import {
+  AnimationClip,
+  Mesh,
+  NumberKeyframeTrack,
+  Object3D,
+  PerspectiveCamera,
+  Raycaster,
+  Scene,
+  Vector2,
+} from 'three';
 
 const model = ArModel.fromSnapshot({
   id: 'whale', name: 'Ballena', description: 'Ficha',
@@ -150,9 +161,37 @@ test('primer plano suena sin mapa; animal bloqueado o perdido sin ficha no suena
   state = state.withDiscovery(state.discovery.unlock(model.id)).lost();
   await play.execute('whale');
   assert.equal(count, 1);
+  await play.execute('whale');
+  assert.equal(count, 2); // cada toque vuelve a sonar aunque ya esté enfocado
   state = state.withDiscovery(state.discovery.focus(null));
   await play.execute('whale');
-  assert.equal(count, 1);
+  assert.equal(count, 2);
+});
+
+test('animador respeta los bucles antes de pasar al siguiente clip', () => {
+  const root = new Object3D();
+  const idle = new AnimationClip('Idle', 0.1, [
+    new NumberKeyframeTrack('.position[x]', [0, 0.1], [0, 1]),
+  ]);
+  const action = new AnimationClip('Action', 0.1, [
+    new NumberKeyframeTrack('.position[x]', [0, 0.1], [10, 11]),
+  ]);
+  const sequence = AnimationSequence.of({
+    steps: [
+      { name: 'Idle', loops: 2 },
+      { name: 'Action', loops: 1 },
+    ],
+    crossFadeSeconds: 0,
+  });
+  const animator = new IconAnimator(root, [idle, action], sequence);
+
+  animator.start();
+  animator.update(0.11);
+  assert.ok(root.position.x < 2);
+  animator.update(0.11);
+  animator.update(0.01);
+  assert.ok(root.position.x > 9);
+  animator.dispose();
 });
 
 test('pin real conserva ID en primer plano, permite raycast, pulsa y libera geometría', async () => {
@@ -173,12 +212,14 @@ test('pin real conserva ID en primer plano, permite raycast, pulsa y libera geom
   adapter.applyDiscovery(ArSession.idle().discovery.unlock(model.id));
   advance(0.016);
   scene.updateMatrixWorld(true);
-  const icon = adapter.pickables?.get('whale');
+  const pickable = adapter.pickables?.get('whale');
+  assert.ok(pickable);
+  assert.equal(pickable.userData['modelId'], 'whale');
+  const icon = pickable.children.find((child) => child.userData['modelId'] === 'whale');
   assert.ok(icon);
-  assert.equal(icon.userData['modelId'], 'whale');
   const ray = new Raycaster();
   ray.setFromCamera(new Vector2(0, 0), camera);
-  assert.ok(ray.intersectObject(icon, true).length > 0);
+  assert.ok(ray.intersectObject(pickable, true).length > 0);
   const initialScale = icon.scale.x;
   adapter.applyPlacement(Placement.initial(model.id, model.defaultScale).scaledBy(2));
   advance(0);

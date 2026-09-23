@@ -4,6 +4,10 @@ import { ModelId } from '../value-objects/ModelId';
 import { ModelSource } from '../value-objects/ModelSource';
 import { Scale } from '../value-objects/Scale';
 import { SoundProfile, type SoundSnapshot } from '../value-objects/SoundProfile';
+import {
+  AnimationSequence,
+  type AnimationSequenceSnapshot,
+} from '../value-objects/AnimationSequence';
 
 export interface ArModelSnapshot {
   readonly id: string;
@@ -12,6 +16,8 @@ export interface ArModelSnapshot {
   readonly description: string;
   readonly source: ModelSource;
   readonly sound: SoundSnapshot;
+  /** Clips del GLB y cuántas vueltas da cada uno antes de pasar al siguiente. */
+  readonly animation?: AnimationSequenceSnapshot;
   /** Dónde vive este modelo sobre la imagen del marcador (u, v en 0–1). */
   readonly spot: { readonly u: number; readonly v: number };
   /**
@@ -51,6 +57,7 @@ export class ArModel {
     readonly description: string,
     readonly source: ModelSource,
     readonly sound: SoundProfile,
+    readonly animation: AnimationSequence | null,
     readonly spot: MarkerSpot,
     /** Vacío si el contorno se deduce del modelo. */
     readonly outlineShape: readonly MarkerSpot[],
@@ -72,6 +79,7 @@ export class ArModel {
       snapshot.description.trim(),
       snapshot.source,
       SoundProfile.of(snapshot.sound),
+      snapshot.animation === undefined ? null : AnimationSequence.of(snapshot.animation),
       MarkerSpot.of(snapshot.spot.u, snapshot.spot.v),
       (snapshot.outlineShape ?? []).map((point) => MarkerSpot.of(point.u, point.v)),
       IconPose.of(

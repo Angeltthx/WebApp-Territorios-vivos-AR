@@ -20,6 +20,8 @@ import {
   type SilhouettePoint,
 } from './IconSilhouette';
 import { SmokePuff } from './SmokePuff';
+import type { LoadedIcon } from './IconLoader';
+import { IconAnimator } from './IconAnimator';
 
 const PULSE_DURATION_S = 0.45;
 const PULSE_AMPLITUDE = 0.3;
@@ -184,6 +186,8 @@ export class MarkerPin {
   private readonly outline = new Group();
   private readonly outlineMaterial: MeshBasicMaterial;
   private readonly smoke = new SmokePuff();
+  private readonly icon: Object3D;
+  private readonly animator: IconAnimator;
   /** Desfase del vaivén, para que los iconos no floten todos al unísono. */
   private readonly phase: number;
 
@@ -220,10 +224,12 @@ export class MarkerPin {
 
   constructor(
     model: ArModel,
-    private readonly icon: Object3D,
+    loaded: LoadedIcon,
     index: number,
     targetAspect: number,
   ) {
+    this.icon = loaded.object;
+    this.animator = new IconAnimator(this.icon, loaded.animations, model.animation);
     this.phase = index * 1.7;
 
     const { x, y } = anchorPositionOf(model.spot, targetAspect);
@@ -232,7 +238,7 @@ export class MarkerPin {
     // acertó sin depender del orden de la escena.
     this.group.userData['modelId'] = model.id.value;
     // El icono conserva su identidad cuando se presta al primer plano.
-    icon.userData['modelId'] = model.id.value;
+    this.icon.userData['modelId'] = model.id.value;
 
     // Zona de toque generosa e invisible: acertarle a un icono pequeño con
     // el dedo, a pulso y con el teléfono en la mano, es difícil. Se usa
@@ -250,10 +256,10 @@ export class MarkerPin {
     applyView(this.lift, model.pose.view);
     this.facing = model.pose.facing;
     this.lift.position.z = HOVER_HEIGHT;
-    this.lift.add(icon);
+    this.lift.add(this.icon);
     this.group.add(this.lift);
 
-    this.halfDepth = measureHalfDepth(this.group, this.lift, icon);
+    this.halfDepth = measureHalfDepth(this.group, this.lift, this.icon);
 
     // El contorno NO es un circulo: se CALCA del modelo. IconSilhouette lo
     // aplasta contra el papel desde la cara que diga el catalogo y recorre
@@ -269,7 +275,7 @@ export class MarkerPin {
     });
     buildDashedSilhouette(
       this.outline,
-      outlineLoopOf(model, icon, targetAspect),
+      outlineLoopOf(model, this.icon, targetAspect),
       this.outlineMaterial,
     );
     this.outline.position.z = 0.002;
@@ -299,7 +305,10 @@ export class MarkerPin {
   setRevealed(revealed: boolean): void {
     if (this.revealed === revealed) return;
     this.revealed = revealed;
-    if (revealed) this.smoke.burst();
+    if (revealed) {
+      this.smoke.burst();
+      this.animator.start();
+    }
   }
 
   get isRevealed(): boolean {
@@ -341,6 +350,7 @@ export class MarkerPin {
   }
 
   advance(deltaSeconds: number, elapsed: number): void {
+    this.animator.update(deltaSeconds);
     // Aparecer cuesta mas que desaparecer: la entrada tiene que dar tiempo
     // a mirarla, la salida solo tiene que no dar un tiron.
     const step = deltaSeconds / (this.revealed ? REVEAL_TIME_S : CONCEAL_TIME_S);
@@ -368,6 +378,7 @@ export class MarkerPin {
   }
 
   dispose(): void {
+    this.animator.dispose();
     this.smoke.dispose();
     this.group.traverse((object) => {
       if (!(object instanceof Mesh)) return;
