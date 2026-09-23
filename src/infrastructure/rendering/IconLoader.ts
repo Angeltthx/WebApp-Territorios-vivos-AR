@@ -1,4 +1,5 @@
 import {
+  AnimationMixer,
   Box3,
   AnimationClip,
   CircleGeometry,
@@ -86,7 +87,15 @@ export class IconLoader {
 
     try {
       const gltf = await this.gltf.loadAsync(model.source.url);
-      return { object: fitToIconSize(gltf.scene, targetSize), animations: gltf.animations };
+      // La ballena en reposo tiene una caja mucho menor que al nadar: medir
+      // solo el primer fotograma la agranda y desplaza fuera del mapa.
+      const measuredClips = model.id.value === 'whale'
+        ? gltf.animations.filter((clip) => model.animation?.steps.some((step) => step.name === clip.name))
+        : [];
+      return {
+        object: fitToIconSize(gltf.scene, targetSize, measuredClips),
+        animations: gltf.animations,
+      };
     } catch (error) {
       // Respaldo deliberado: si un .glb falta o falla, el resto del
       // catálogo sigue funcionando en vez de tumbar toda la sesión.
@@ -124,8 +133,26 @@ export class IconLoader {
  * MarkerPin ejecuta en cada frame borraría la normalización y el modelo
  * volvería a su tamaño original.
  */
-export function fitToIconSize(object: Object3D, targetSize = ICON_TARGET_SIZE): Object3D {
+export function fitToIconSize(
+  object: Object3D,
+  targetSize = ICON_TARGET_SIZE,
+  clips: readonly AnimationClip[] = [],
+): Object3D {
   const box = new Box3().setFromObject(object);
+  if (clips.length > 0) {
+    const mixer = new AnimationMixer(object);
+    for (const clip of clips) {
+      const action = mixer.clipAction(clip).reset().play();
+      const step = clip.duration / 8;
+      for (let sample = 0; sample <= 8; sample++) {
+        mixer.update(sample === 0 ? 0 : step);
+        object.updateMatrixWorld(true);
+        box.union(new Box3().setFromObject(object, true));
+      }
+      action.stop();
+    }
+    mixer.uncacheRoot(object);
+  }
 
   // Un modelo sin geometría legible da una caja vacía (min > max). Devolver
   // el objeto tal cual es mejor que dividir por cero o por Infinity.

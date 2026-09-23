@@ -55,7 +55,12 @@ scene.add(new AmbientLight(0xffffff, 0.35));
 // unidad de ancho, en el plano XY.
 const texture = new TextureLoader().load(MAP_URL);
 texture.colorSpace = SRGBColorSpace;
-scene.add(new Mesh(new PlaneGeometry(1, TARGET_ASPECT), new MeshBasicMaterial({ map: texture })));
+// La app usa vídeo de cámara como fondo, sin una malla que tape las partes
+// del animal situadas detrás del papel. La vista de prueba debe hacer igual.
+scene.add(new Mesh(
+  new PlaneGeometry(1, TARGET_ASPECT),
+  new MeshBasicMaterial({ map: texture, depthWrite: false }),
+));
 
 // Se usa el MISMO IconLoader que la app: si un .glb no carga, o carga con
 // mala escala o mal pivote, aquí se ve exactamente igual que en el teléfono.

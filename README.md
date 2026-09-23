@@ -30,7 +30,7 @@ Node.js 18 o posterior. Instalar con `npm install`.
 | --- | --- |
 | `npm run dev` | Vite con HTTPS, accesible desde la red local |
 | `npm run typecheck` | TypeScript estricto |
-| `npm test` | Once pruebas de regresión sin cámara |
+| `npm test` | Doce pruebas de regresión sin cámara |
 | `npm run build` | Sitio estático en dist/ |
 | `npm run preview` | Servir el build |
 | `npm run prepare-target` | Entrega de la diseñadora → map.jpg |

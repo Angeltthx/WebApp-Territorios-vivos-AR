@@ -11,17 +11,24 @@ import { AnimationSequence } from '../src/domain/value-objects/AnimationSequence
 import { Proximity } from '../src/domain/value-objects/Proximity';
 import { ThreeSceneAdapter } from '../src/infrastructure/rendering/ThreeSceneAdapter';
 import { IconAnimator } from '../src/infrastructure/rendering/IconAnimator';
+import { fitToIconSize } from '../src/infrastructure/rendering/IconLoader';
 import { MindArTrackingAdapter } from '../src/infrastructure/tracking/MindArTrackingAdapter';
 import { CameraPermissionDeniedError } from '../src/application/ports/TrackingPort';
 import {
   AnimationClip,
+  AnimationMixer,
+  Box3,
+  BoxGeometry,
+  Group,
   Mesh,
+  MeshBasicMaterial,
   NumberKeyframeTrack,
   Object3D,
   PerspectiveCamera,
   Raycaster,
   Scene,
   Vector2,
+  Vector3,
 } from 'three';
 
 const model = ArModel.fromSnapshot({
@@ -232,6 +239,22 @@ test('proximidad permite descubrir antes y conserva histéresis', () => {
   assert.equal(proximity.decide(2, 0.7, true), true);
   assert.equal(proximity.decide(2.2, 0.7, true), false);
   assert.equal(proximity.decide(1, 0.73, false), false);
+});
+
+test('un modelo animado se dimensiona incluyendo el recorrido del clip', () => {
+  const root = new Group();
+  const body = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial());
+  body.name = 'Body';
+  root.add(body);
+  const clip = new AnimationClip('Move', 1, [
+    new NumberKeyframeTrack('Body.position[y]', [0, 0.5, 1], [0, 4, 0]),
+  ]);
+  const fitted = fitToIconSize(root, 1, [clip]);
+  const mixer = new AnimationMixer(fitted);
+  mixer.clipAction(clip).play();
+  mixer.update(0.5);
+  const animatedHeight = new Box3().setFromObject(fitted, true).getSize(new Vector3()).y;
+  assert.ok(animatedHeight <= 1.01, `El modelo animado mide ${animatedHeight}`);
 });
 
 test('pin real conserva ID en primer plano, permite raycast, pulsa y libera geometría', async () => {

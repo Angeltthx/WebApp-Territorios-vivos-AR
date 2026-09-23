@@ -71,20 +71,19 @@ export class StaticModelRepository implements ModelRepository {
  * pivote descentrado): IconLoader los recentra y los encaja a ICON_TARGET_SIZE
  * al cargarlos, así que aquí no hay que tocar `defaultScale` por modelo.
  *
- * Los cuatro van en `view: 'front'`: erguidos sobre el mapa y mirando a
- * quien sostiene el teléfono. Arrastrando el dedo se giran hacia los lados,
- * así que quien quiera ver a un animal de perfil lo gira.
+ * Pava, cangrejo y tortuga van de frente. La ballena va de perfil: su cuerpo
+ * largo apuntando a la cámara crecía demasiado en perspectiva y salía del
+ * borde superior. Arrastrando el dedo se pueden girar en su propio sitio.
  *
- * `iconSize` es por animal porque de frente cada uno enseña una silueta
- * distinta: la pava se ve entera, la tortuga es baja y ancha, y la ballena
- * se ve escorzada porque su longitud apunta a la cámara. Los números están
- * medidos en pantalla, no calculados sobre el tamaño del archivo.
+ * `iconSize` es por animal porque cada uno enseña una silueta distinta. Los
+ * números se comprueban sobre el mapa en pantalla, no solo con las medidas
+ * tridimensionales del archivo.
  *
  * En el mapa de 2026 los dibujos encogieron —la ballena sigue midiendo 0,30
  * de ancho de mapa, pero la tortuga bajó a 0,18, la pava a 0,12 y el
- * cangrejo a 0,09—. Los tamaños conservan esa jerarquía, pero se ampliaron
- * juntos después de probarlos en teléfono para que ninguno parezca un detalle
- * diminuto. El ajuste fino solo se puede hacer con el mapa impreso delante.
+ * cangrejo a 0,09—. Los tamaños conservan esa jerarquía visual sin permitir
+ * que el pulso o el giro desborden la imagen. El ajuste fino aún necesita el
+ * mapa impreso delante.
  *
  * Si un .glb faltara, ese animal cae a un disco gris y los otros tres siguen
  * funcionando. Para volver a los iconos procedurales de PrimitiveFactory —que
@@ -101,18 +100,18 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     source: ModelSource.gltf('/models/Ballena_Ani.glb'),
     animation: {
       steps: [
-        { name: 'Swin', loops: 2 },
-        { name: 'Jump', loops: 1 },
+        { name: 'Swin', loops: 1 },
       ],
-      entranceClip: 'Jump',
-      tapClip: 'Jump',
+      entranceClip: 'Swin',
+      tapClip: 'Swin',
     },
-    spot: { u: 0.304, v: 0.1268 },
-    // Lo más grande que cabe de frente sin hundirse en el papel: mirando a
-    // la cámara la ballena se extiende HACIA FUERA, no a lo ancho, así que
-    // el límite lo pone su fondo, no su silueta. Dibujo: 0.304 x 0.157.
-    view: 'front',
-    iconSize: 3.4,
+    // El punto queda dentro del dibujo de la ballena; un poco más abajo que
+    // su centro para que la silueta 3D no rebase el borde en perspectiva.
+    spot: { u: 0.304, v: 0.19 },
+    // Dibujo: 0.304 x 0.157. El salto del GLB se sale de la imagen; la
+    // secuencia en esta vista usa el nado para permanecer sobre el dibujo.
+    view: 'side',
+    iconSize: 2.1,
     facing: 0,
     // La primera que se calcó, y la que dejó claro que había que calcarlas
     // todas: en el mapa está buceando, con la cola alzada y la aleta
@@ -168,7 +167,7 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     // Dibujo: 0.121 x 0.098. Se mantiene menor que la ballena, pero con
     // presencia suficiente para que la animación Sing se lea en teléfono.
     view: 'front',
-    iconSize: 1.3,
+    iconSize: 1.45,
     facing: 0,
     // Dibujada de perfil, de pie sobre la hierba y mirando a la IZQUIERDA
     // del mapa. Contorno calcado del dibujo: el marrón de la pava contra el
@@ -215,7 +214,7 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     // Ya se veía de frente; 'front' es exactamente la misma orientación
     // que tenía con 'side' + 90°, escrita de forma directa.
     view: 'front',
-    iconSize: 0.9,
+    iconSize: 1.05,
     facing: 0,
     // Dibujado en planta, como se ve un cangrejo en la arena, con los ojos
     // y las pinzas hacia ARRIBA del mapa. Visto desde arriba el modelo mira
@@ -265,7 +264,7 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     // De frente es una silueta baja y ancha —una tortuga lo es—, así que
     // se agranda por encima de su dibujo para que no quede como una raya.
     view: 'front',
-    iconSize: 1.65,
+    iconSize: 1.5,
     facing: 0,
     // Dibujada nadando, vista desde arriba y con la cabeza hacia la
     // IZQUIERDA del mapa; desde arriba el modelo mira hacia abajo.

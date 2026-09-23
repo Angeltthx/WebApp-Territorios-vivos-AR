@@ -7,7 +7,7 @@ con una transición de 0,35 s y los bucles definidos por el diseñador:
 
 | Animal | Secuencia |
 | --- | --- |
-| Ballena | `Swin` ×2 → `Jump` ×1 |
+| Ballena | `Swin` continuo |
 | Cangrejo | `Idle` ×6 → `Walk` ×4 |
 | Pava | `Idle` ×1 → `Sing` ×1 |
 | Tortuga | `Swin` ×4 → `Idle` ×6 |
@@ -18,17 +18,20 @@ visible y evita calcular esqueletos que no se pueden ver.
 
 ## Interacción y sonido
 
-Cada animal tiene un clip expresivo para la entrada y el toque: `Jump` en la
-ballena, `Sing` en la pava, `Walk` en el cangrejo y `Swin` en la tortuga. Al
+Cada animal tiene un clip para la entrada y el toque: `Swin` en la ballena,
+`Sing` en la pava, `Walk` en el cangrejo y `Swin` en la tortuga. Al
 descubrirlo ese clip se reproduce una vez antes del ciclo normal; cada toque lo
 reinicia, además de reproducir el sonido y el pulso visual.
 
 En primer plano se añade un disco transparente orientado a la cámara,
 ligeramente mayor que el modelo, para que el raycast sea fiable con un dedo y el
 teléfono en movimiento. El toque también reclama de nuevo la sesión `playback`
-de Safari antes de sonar. La escala se calcula con el ancho X/Z proyectado en
-cada giro: así una ballena de frente no queda pequeña ni crece de golpe al
-mostrar el costado.
+de Safari antes de sonar. La ballena se muestra de perfil sobre el mapa, con
+la escala y el centro medidos durante su animación real. `Jump` permanece en el
+GLB, pero su recorrido sale de la imagen y no se reproduce en esta experiencia.
+Cada pin limita su escala según el espacio disponible hasta los bordes, incluso
+durante el pulso y el giro. El primer plano también considera la profundidad
+del modelo para mantener un tamaño moderado.
 
 ## Distancia de descubrimiento
 

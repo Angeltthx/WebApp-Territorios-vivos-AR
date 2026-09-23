@@ -33,9 +33,15 @@ const PULSE_AMPLITUDE = 0.3;
  * a esta escala la ilustración de debajo se sigue viendo.
  */
 const ICON_SCALE = 0.72;
+/** Espacio libre entre cualquier icono y el borde de la imagen. */
+const MAP_EDGE_MARGIN = 0.018;
+/** Holgura para poses de animación que sobresalen de la caja en reposo. */
+const ANIMATION_EXTENT_MARGIN = 1.25;
 
 /** Altura MÍNIMA a la que flota el icono sobre el papel, en anchos de mapa. */
 const HOVER_HEIGHT = 0.11;
+/** La ballena vive junto al borde superior: flotar alto la saca del mapa en perspectiva. */
+const WHALE_HOVER_LIMIT = 0.02;
 /** Holgura entre lo más bajo del icono y el papel, cuando hay que subirlo. */
 const CLEARANCE = 0.02;
 const BOB_AMPLITUDE = 0.016;
@@ -215,12 +221,15 @@ export class MarkerPin {
   /**
    * Medio fondo del icono a escala 1, medido tras orientarlo.
    *
-   * Mirando a la cámara, un animal largo —la ballena— se extiende HACIA
-   * FUERA del papel, no a lo ancho. Con una altura de vuelo fija, la mitad
-   * trasera se hundiría bajo el mapa y se vería cortada por él. Con esto se
-   * sabe cuánto hay que levantarlo para que no pase.
+   * Un modelo largo puede extenderse hacia fuera del papel. Se mide su fondo
+   * para elevarlo solo lo necesario. La ballena tiene un límite especial
+   * porque está junto al borde superior y la vista AR no dibuja un plano
+   * que oculte la parte posterior del modelo.
    */
   private readonly halfDepth: number;
+  /** Límite de escala para que ni el giro ni el pulso saquen el icono del mapa. */
+  private readonly maxMapScale: number;
+  private readonly hoverLimit: number;
 
   constructor(
     model: ArModel,
@@ -231,6 +240,7 @@ export class MarkerPin {
     this.icon = loaded.object;
     this.animator = new IconAnimator(this.icon, loaded.animations, model.animation);
     this.phase = index * 1.7;
+    this.hoverLimit = model.id.value === 'whale' ? WHALE_HOVER_LIMIT : Infinity;
 
     const { x, y } = anchorPositionOf(model.spot, targetAspect);
     this.group.position.set(x, y, 0);
@@ -259,7 +269,17 @@ export class MarkerPin {
     this.lift.add(this.icon);
     this.group.add(this.lift);
 
-    this.halfDepth = measureHalfDepth(this.group, this.lift, this.icon);
+    const bounds = measureIconBounds(this.group, this.lift, this.icon);
+    this.halfDepth = bounds.halfDepth;
+    const horizontalRoom = Math.max(0, Math.min(model.spot.u, 1 - model.spot.u) - MAP_EDGE_MARGIN);
+    const verticalRoom = Math.max(
+      0,
+      Math.min(model.spot.v, 1 - model.spot.v) * targetAspect - MAP_EDGE_MARGIN,
+    );
+    this.maxMapScale = Math.min(
+      horizontalRoom / Math.max(bounds.horizontalRadius * ANIMATION_EXTENT_MARGIN, 0.001),
+      verticalRoom / Math.max(bounds.verticalRadius * ANIMATION_EXTENT_MARGIN, 0.001),
+    );
 
     // El contorno NO es un circulo: se CALCA del modelo. IconSilhouette lo
     // aplasta contra el papel desde la cara que diga el catalogo y recorre
@@ -402,7 +422,7 @@ export class MarkerPin {
     // La materializacion se aplica a la escala del icono: sale creciendo
     // desde el papel, con un pelin de rebote al final.
     const materialised = easeOutBack(this.revealProgress);
-    const applied = size * ICON_SCALE * materialised;
+    const applied = Math.min(size * ICON_SCALE * materialised, this.maxMapScale);
 
     this.lift.visible = this.revealProgress > 0.001 && !this.focused;
     if (!this.focused) this.icon.scale.setScalar(Math.max(applied, 0.0001));
@@ -413,10 +433,13 @@ export class MarkerPin {
       Math.min(1, OUTLINE_OPACITY + OUTLINE_PULSE_GLOW * this.outlinePulse) *
       (1 - this.revealProgress);
 
-    // Se vuela lo justo para no atravesar el papel, y nunca menos de
-    // HOVER_HEIGHT: los iconos planos siguen flotando como antes.
-    const hover = Math.max(HOVER_HEIGHT, this.halfDepth * applied + CLEARANCE);
-    this.lift.position.z = hover + this.bob;
+    // Los iconos flotan lo justo para quedar delante del papel. La ballena
+    // permanece casi en el plano para no salir por arriba en perspectiva.
+    const hover = Math.min(
+      Math.max(HOVER_HEIGHT, this.halfDepth * applied + CLEARANCE),
+      this.hoverLimit,
+    );
+    this.lift.position.z = hover + (this.hoverLimit === Infinity ? this.bob : 0);
     // Giro propio del animal (catálogo) MÁS el del usuario, sobre el mismo
     // eje: el Y local del icono, que `applyView` ya dejó donde toca.
     if (!this.focused) this.icon.rotation.y = this.facing + this.spin;
@@ -440,7 +463,11 @@ export class MarkerPin {
  * `applyView` el que decide qué eje del modelo acaba apuntando a la cámara,
  * y por tanto cuál es el que puede hundirse.
  */
-function measureHalfDepth(group: Group, lift: Group, icon: Object3D): number {
+function measureIconBounds(
+  group: Group,
+  lift: Group,
+  icon: Object3D,
+): { halfDepth: number; horizontalRadius: number; verticalRadius: number } {
   const scale = icon.scale.clone();
   const z = lift.position.z;
 
@@ -463,8 +490,15 @@ function measureHalfDepth(group: Group, lift: Group, icon: Object3D): number {
   lift.position.z = z;
   group.updateMatrixWorld(true);
 
-  if (box.isEmpty()) return 0;
-  return Math.max(Math.abs(box.min.z), Math.abs(box.max.z));
+  if (box.isEmpty()) return { halfDepth: 0, horizontalRadius: 0, verticalRadius: 0 };
+  const halfX = Math.max(Math.abs(box.min.x), Math.abs(box.max.x));
+  const halfY = Math.max(Math.abs(box.min.y), Math.abs(box.max.y));
+  const halfZ = Math.max(Math.abs(box.min.z), Math.abs(box.max.z));
+  return {
+    halfDepth: halfZ,
+    horizontalRadius: Math.hypot(halfX, halfZ),
+    verticalRadius: halfY,
+  };
 }
 
 /**

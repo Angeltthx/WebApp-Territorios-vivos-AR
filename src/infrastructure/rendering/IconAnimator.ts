@@ -82,7 +82,13 @@ export class IconAnimator {
 
     this.completedLoops += 1;
     const loops = this.oneShot ? 1 : active.loops;
-    if (this.completedLoops < loops || this.actions.length < 2) return;
+    if (this.completedLoops < loops) return;
+
+    if (this.actions.length < 2) {
+      this.completedLoops = 0;
+      this.oneShot = false;
+      return;
+    }
 
     this.oneShot = false;
     this.play((this.current + 1) % this.actions.length, false, true);

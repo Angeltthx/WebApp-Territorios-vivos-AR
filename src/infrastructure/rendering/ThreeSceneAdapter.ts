@@ -48,7 +48,7 @@ import { MarkerPin } from './MarkerPin';
  */
 const STAGE_DISTANCE = 0.5;
 /** Cuánto del alto de la pantalla puede ocupar el animal en primer plano. */
-const STAGE_FILL = 0.5;
+const STAGE_FILL = 0.42;
 /** Giro lento de cortesía, para que se vea que es un objeto y no una foto. */
 const STAGE_IDLE_SPIN = 0.25;
 
@@ -265,7 +265,7 @@ export class ThreeSceneAdapter implements ScenePort {
     const availableWidth = visibleHeight * camera.aspect * 0.76;
     const fittedScale = Math.min(
       availableHeight / this.stagedNaturalSize.y,
-      availableWidth / projectedWidth,
+      availableWidth / Math.max(projectedWidth, this.stagedNaturalSize.z * 0.6),
     );
     icon.scale.setScalar(fittedScale * this.scale * bump);
     // El círculo tiene radio 1: queda algo mayor que el animal para que sea
