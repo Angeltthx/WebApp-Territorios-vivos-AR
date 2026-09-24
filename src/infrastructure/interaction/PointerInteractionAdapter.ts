@@ -1,4 +1,4 @@
-import { Object3D, Raycaster, Vector2 } from 'three';
+import { Object3D, Raycaster, SkinnedMesh, Vector2 } from 'three';
 import type { InteractionHandlers, InteractionPort } from '@application/ports/InteractionPort';
 import type { MindArRuntime } from '../mindar/MindArRuntime';
 
@@ -145,6 +145,7 @@ export class PointerInteractionAdapter implements InteractionPort {
     this.pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
     this.raycaster.setFromCamera(this.pointer, this.runtime.mindar.camera);
+    for (const target of targets.values()) refreshSkinnedBounds(target);
     const hits = this.raycaster.intersectObjects([...targets.values()], true);
 
     // intersectObjects devuelve ordenado por distancia, así que el primero
@@ -172,6 +173,27 @@ export class PointerInteractionAdapter implements InteractionPort {
   private get canvas(): HTMLCanvasElement {
     return this.runtime.mindar.renderer.domElement;
   }
+}
+
+/**
+ * Recalcula la caja y la esfera de cada malla animada en la postura de
+ * AHORA, antes de lanzar el rayo.
+ *
+ * Three las calcula una sola vez —en la postura de ese momento— y las usa
+ * como filtro previo en cada toque. Los animales se mueven con sus clips,
+ * así que el cuerpo acababa fuera de esa caja vieja y el toque se
+ * descartaba antes de mirar el cuerpo. El primer toque siempre funcionaba
+ * (era el que las calculaba, para los cuatro a la vez), y a partir de ahí
+ * tocar otro animal fallaba. El humo invisible, enorme, lo tapaba; al
+ * dejar de ser tocable salió a la luz. Recalcular cuesta recorrer los
+ * vértices, y solo se hace al levantar el dedo.
+ */
+function refreshSkinnedBounds(root: Object3D): void {
+  root.traverse((object) => {
+    if (!(object instanceof SkinnedMesh)) return;
+    object.computeBoundingSphere();
+    object.computeBoundingBox();
+  });
 }
 
 /** Visible de verdad: ella y todos sus padres. */

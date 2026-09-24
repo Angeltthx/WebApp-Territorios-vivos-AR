@@ -45,7 +45,12 @@ import {
   PerspectiveCamera,
   PlaneGeometry,
   Quaternion,
+  Bone,
+  Float32BufferAttribute,
   Raycaster,
+  Skeleton,
+  SkinnedMesh,
+  Uint16BufferAttribute,
   Scene,
   Vector2,
   Vector3,
@@ -983,4 +988,42 @@ test('tocar un punto de texto junto a un animal abre el texto; lo invisible no s
   animal.add(body);
   animal.updateMatrixWorld(true);
   assert.deepEqual(targetAt(50, 50), { kind: 'model', id: 'crab' });
+});
+
+test('tras tocar un animal, otro animal que se ha movido con su clip se sigue pudiendo tocar', () => {
+  const camera = new PerspectiveCamera(45, 1, 0.01, 100);
+  camera.position.set(0, 0, 5);
+  camera.updateMatrixWorld(true);
+  const canvas = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }) };
+  const pickables = new Map<string, Object3D>();
+  const runtime = { mindar: { camera, renderer: { domElement: canvas } } };
+  const adapter = new PointerInteractionAdapter(runtime as never, { pickables });
+  const targetAt = (x: number, y: number) =>
+    (adapter as unknown as { targetAt(x: number, y: number): { kind: string; id: string } | null }).targetAt(x, y);
+
+  // Un animal animado: una caja pegada entera a un hueso.
+  const geometry = new BoxGeometry(0.3, 0.3, 0.3);
+  const count = geometry.getAttribute('position').count;
+  geometry.setAttribute('skinIndex', new Uint16BufferAttribute(new Array(count * 4).fill(0), 4));
+  geometry.setAttribute('skinWeight', new Float32BufferAttribute(new Array(count).fill([1, 0, 0, 0]).flat(), 4));
+  const bone = new Bone();
+  const body = new SkinnedMesh(geometry, new MeshBasicMaterial());
+  body.add(bone);
+  const animal = new Group();
+  animal.userData['modelId'] = 'turtle';
+  animal.add(body);
+  animal.updateMatrixWorld(true);
+  const skeleton = new Skeleton([bone]);
+  body.bind(skeleton);
+  skeleton.update();
+  pickables.set('turtle', animal);
+
+  // El primer toque le da, y de paso deja calculada su caja.
+  assert.deepEqual(targetAt(50, 50), { kind: 'model', id: 'turtle' });
+  // Su clip lo lleva a otro sitio; el cuerpo que se ve ya no está donde estaba.
+  bone.position.x = 1;
+  animal.updateMatrixWorld(true);
+  skeleton.update();
+  const x = (new Vector3(1, 0, 0).project(camera).x + 1) * 50;
+  assert.deepEqual(targetAt(x, 50), { kind: 'model', id: 'turtle' }, 'el toque se descarta por una caja vieja');
 });
