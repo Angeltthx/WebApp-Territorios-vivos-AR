@@ -61,7 +61,16 @@ const BOB_SPEED = 1.7;
 const EMPHASIS_SCALE = 0.2;
 const EMPHASIS_SPEED = 6;
 
-const TAP_RADIUS = 0.12;
+/**
+ * La zona de toque del animal es su propia huella —lo que ocupa de ancho y
+ * de alto sobre el mapa— con este margen, NO un círculo fijo. Era un disco
+ * de 0.12 anchos de mapa para todos, y con la pava o el cangrejo (0.10 y
+ * 0.16 de ancho) ese disco se comía los puntos de los textos de al lado:
+ * tocar un punto cerca de un animal tocaba el animal. El modelo en sí
+ * también es tocable (el raycast lo alcanza), así que esto solo cubre su
+ * base sobre el papel.
+ */
+const TAP_FOOTPRINT_MARGIN = 1.05;
 
 /** Lo que tarda un animal en materializarse, y en volver a esconderse. */
 const REVEAL_TIME_S = 0.55;
@@ -246,6 +255,9 @@ export class MarkerPin {
    * oculte la parte del modelo que quede por detrás del papel.
    */
   private readonly halfDepth: number;
+  private readonly hit: Mesh<CircleGeometry, MeshBasicMaterial>;
+  /** Medio ancho y medio alto del icono a escala 1, sobre el papel. */
+  private readonly footprint: { readonly x: number; readonly y: number };
   /** Límite de escala para que ni el giro ni el pulso saquen el icono del mapa. */
   private readonly maxMapScale: number;
   private readonly idleTilt: number;
@@ -277,16 +289,19 @@ export class MarkerPin {
     // El icono conserva su identidad cuando se presta al primer plano.
     this.icon.userData['modelId'] = model.id.value;
 
-    // Zona de toque generosa e invisible: acertarle a un icono pequeño con
-    // el dedo, a pulso y con el teléfono en la mano, es difícil. Se usa
-    // `opacity: 0` en vez de `visible: false` porque el raycaster sí
-    // atraviesa lo invisible, pero no lo transparente.
-    const hit = new Mesh(
-      new CircleGeometry(TAP_RADIUS, 24),
+    // Zona de toque invisible, del tamaño del animal (ver
+    // TAP_FOOTPRINT_MARGIN): elipse de radio 1 que `sync` escala a su
+    // huella. Se usa `opacity: 0` en vez de `visible: false` porque el
+    // raycaster sí atraviesa lo invisible, pero no lo transparente.
+    this.hit = new Mesh(
+      new CircleGeometry(1, 32),
       new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
     );
-    hit.position.z = 0.001;
-    this.group.add(hit);
+    this.hit.position.z = 0.001;
+    // Marca de "zona de cortesía": el raycast le da menos prioridad que a un
+    // punto de texto (ver PointerInteractionAdapter).
+    this.hit.userData['tapZone'] = true;
+    this.group.add(this.hit);
 
     // Los iconos se modelan con +Y arriba (lo natural en Three.js). Cómo se
     // tumba ese "arriba" sobre el mapa depende del animal: ver applyView.
@@ -300,6 +315,7 @@ export class MarkerPin {
 
     const bounds = measureIconBounds(this.group, this.lift, this.icon);
     this.halfDepth = bounds.halfDepth;
+    this.footprint = { x: bounds.horizontalRadius, y: bounds.verticalRadius };
     const horizontalRoom = Math.min(model.spot.u, 1 - model.spot.u) + MAP_EDGE_OVERHANG;
     const verticalRoom = Math.min(model.spot.v, 1 - model.spot.v) * targetAspect + MAP_EDGE_OVERHANG;
     this.maxMapScale = Math.min(
@@ -329,6 +345,17 @@ export class MarkerPin {
 
     this.group.add(this.smoke.group);
     if (this.splash !== null) this.group.add(this.splash.group);
+
+    // Los efectos no se tocan. El raycaster de three NO se salta lo
+    // invisible: el humo (que acaba midiendo ~0.16 anchos de mapa), el
+    // salpicón y el contorno ya apagado seguían ahí como zonas de toque
+    // invisibles alrededor del animal, y tocar un punto de texto cercano
+    // disparaba la animación del animal.
+    for (const effect of [this.outline, this.smoke.group, this.splash?.group]) {
+      effect?.traverse((object) => {
+        object.raycast = () => {};
+      });
+    }
 
     this.sync();
   }
@@ -520,6 +547,9 @@ export class MarkerPin {
     const applied = Math.min(size * ICON_SCALE * materialised, this.maxMapScale);
 
     this.lift.visible = this.revealProgress > 0.001 && !this.focused;
+    // La zona de toque sigue al tamaño con que se ve el animal.
+    const tapScale = Math.max(applied, 0.0001) * TAP_FOOTPRINT_MARGIN;
+    this.hit.scale.set(this.footprint.x * tapScale, this.footprint.y * tapScale, 1);
     if (!this.focused) this.icon.scale.setScalar(Math.max(applied, 0.0001));
 
     // El contorno se apaga a medida que el animal ocupa su sitio.

@@ -120,10 +120,11 @@ export class PointerInteractionAdapter implements InteractionPort {
     const elapsed = performance.now() - this.startedAt;
     if (elapsed > TAP_MAX_DURATION_MS) return;
 
-    const modelId = this.modelAt(event.clientX, event.clientY);
-    if (modelId === null) return;
+    const target = this.targetAt(event.clientX, event.clientY);
+    if (target === null) return;
 
-    this.handlers.onTapModel(modelId);
+    if (target.kind === 'text') this.handlers.onTapText(target.id);
+    else this.handlers.onTapModel(target.id);
   }
 
   /**
@@ -133,7 +134,7 @@ export class PointerInteractionAdapter implements InteractionPort {
    * cámara: con iconos que pueden solaparse en pantalla según el ángulo,
    * comprobarlos por separado daría el equivocado.
    */
-  private modelAt(clientX: number, clientY: number): string | null {
+  private targetAt(clientX: number, clientY: number): TapTarget | null {
     const targets = this.source.pickables;
     if (targets === null || targets.size === 0) return null;
 
@@ -147,12 +148,25 @@ export class PointerInteractionAdapter implements InteractionPort {
     const hits = this.raycaster.intersectObjects([...targets.values()], true);
 
     // intersectObjects devuelve ordenado por distancia, así que el primero
-    // que tenga un id asociado es el icono de delante.
+    // que tenga un id asociado es el icono de delante. Dos excepciones:
+    //  - Lo invisible no cuenta. El raycaster de three lo atraviesa igual
+    //    que lo visible, y un objeto oculto no puede ser lo que se tocó.
+    //  - La zona de cortesía de un animal (su huella sobre el papel) cede
+    //    ante un texto: el animal flota por encima del mapa, así que su
+    //    zona siempre queda delante del texto y tocar un punto de texto al
+    //    lado de un animal lo animaba a él. El cuerpo del animal sí gana.
+    let courtesy: TapTarget | null = null;
     for (const hit of hits) {
-      const id = findModelId(hit.object);
-      if (id !== null) return id;
+      if (!isShown(hit.object)) continue;
+      const target = findTarget(hit.object);
+      if (target === null) continue;
+      if (hit.object.userData['tapZone'] === true) {
+        courtesy ??= target;
+        continue;
+      }
+      return target;
     }
-    return null;
+    return courtesy;
   }
 
   private get canvas(): HTMLCanvasElement {
@@ -160,15 +174,38 @@ export class PointerInteractionAdapter implements InteractionPort {
   }
 }
 
+/** Visible de verdad: ella y todos sus padres. */
+function isShown(object: Object3D): boolean {
+  let current: Object3D | null = object;
+  while (current !== null) {
+    if (!current.visible) return false;
+    current = current.parent;
+  }
+  return true;
+}
+
 /**
  * El rayo acierta a una malla suelta (una aleta, la zona de toque…), no al
  * grupo del icono. Subimos por el árbol hasta encontrar quién lleva el id.
  */
-function findModelId(object: Object3D): string | null {
+interface TapTarget {
+  readonly kind: 'model' | 'text';
+  readonly id: string;
+}
+
+/**
+ * Sube desde la malla tocada hasta encontrar a quién pertenece: un animal
+ * (`userData.modelId`, en su MarkerPin) o un texto del mapa
+ * (`userData.textId`, en su MapTextHotspot). Si un animal y un texto se
+ * solapan, gana el que esté delante, que es el primero de `hits`.
+ */
+function findTarget(object: Object3D): TapTarget | null {
   let current: Object3D | null = object;
   while (current !== null) {
-    const id: unknown = current.userData['modelId'];
-    if (typeof id === 'string') return id;
+    const modelId: unknown = current.userData['modelId'];
+    if (typeof modelId === 'string') return { kind: 'model', id: modelId };
+    const textId: unknown = current.userData['textId'];
+    if (typeof textId === 'string') return { kind: 'text', id: textId };
     current = current.parent;
   }
   return null;

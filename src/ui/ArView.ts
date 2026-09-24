@@ -1,3 +1,5 @@
+import { RecurringNudge } from './RecurringNudge';
+import type { MapText, MapTextBlock } from '@domain/value-objects/MapText';
 import type { ArModel } from '@domain/entities/ArModel';
 import type { ArSession, SessionStatus } from '@domain/entities/ArSession';
 
@@ -87,6 +89,14 @@ export class ArView {
   private readonly focusSpecies: HTMLElement;
   private readonly focusInfo: HTMLElement;
   private readonly focusClose: HTMLButtonElement;
+  private readonly reading: HTMLElement;
+  private readonly readingCard: HTMLElement;
+  private readonly explore: HTMLElement;
+  /** El ciclo de la invitación: sale, se aparta a los 15 s, vuelve tras 35 s sin uso. */
+  private readonly exploreNudge: RecurringNudge;
+  private mapTexts: readonly MapText[] = [];
+  /** Cuenta los 7 s sin encontrar ningún animal (ver syncApproach). */
+  private stuckTimer: number | null = null;
 
   /**
    * El catálogo, para poder escribir el nombre y la ficha del animal
@@ -127,6 +137,22 @@ export class ArView {
     this.focusClose = this.require<HTMLButtonElement>(root, '#focus-close');
 
     this.focusClose.addEventListener('click', callbacks.onCloseFocus);
+
+    this.reading = this.require(root, '#reading');
+    this.readingCard = this.require(root, '#reading-card');
+    this.explore = this.require(root, '#explore');
+    this.exploreNudge = new RecurringNudge(
+      () => this.setExploreVisible(true),
+      () => this.setExploreVisible(false),
+      EXPLORE_VISIBLE_MS,
+      EXPLORE_IDLE_MS,
+    );
+    this.require<HTMLButtonElement>(root, '#reading-close').addEventListener('click', callbacks.onCloseFocus);
+    // Tocar fuera de la tarjeta también la cierra: es un texto, no hay nada
+    // que girar detrás, y es el gesto que cualquiera prueba primero.
+    this.reading.addEventListener('click', (event) => {
+      if (event.target === this.reading) callbacks.onCloseFocus();
+    });
 
     // El «?» no es una intención de dominio: nada fuera de esta vista
     // necesita enterarse, así que no sale como callback.
@@ -193,6 +219,11 @@ export class ArView {
     callbacks.onPrepare();
   }
 
+  /** Los textos del mapa que se pueden abrir en grande. */
+  setMapTexts(texts: readonly MapText[]): void {
+    this.mapTexts = texts;
+  }
+
   /** Se llama una vez, cuando el catálogo termina de cargar. */
   setCatalog(catalog: readonly ArModel[]): void {
     this.catalog = catalog;
@@ -230,6 +261,8 @@ export class ArView {
     this.retryButton.hidden = session.status !== 'error';
 
     this.syncFocus(session);
+    this.syncReading(session);
+    this.syncUnlock(session);
     this.syncGuide(session);
 
     // Con una ficha abierta, el «?» sobra y además chocaría con la X: los
@@ -267,7 +300,9 @@ export class ArView {
       this.guideVisible ||
       this.approachVisible ||
       this.focusVisible ||
-      this.menuVisible;
+      this.menuVisible ||
+      // La invitación a tocar los puntos vive en el mismo sitio que la píldora.
+      this.explore.dataset['visible'] === 'true';
   }
 
   /**
@@ -346,6 +381,23 @@ export class ArView {
       !this.menuVisible;
     this.approach.dataset['visible'] = show ? 'true' : 'false';
     this.approach.setAttribute('aria-hidden', show ? 'false' : 'true');
+
+    // Si el mapa ya está en cuadro y en 7 s no ha encontrado ningún animal,
+    // se le enseña el gesto —acercar el teléfono—. El reloj
+    // corre mientras haga falta la instrucción, aunque se tape un momento
+    // (menú, «?»); al encontrar el primero se apaga para siempre.
+    if (!session.needsApproachHint) {
+      if (this.stuckTimer !== null) window.clearTimeout(this.stuckTimer);
+      this.stuckTimer = null;
+      this.approach.dataset['stuck'] = 'false';
+      return;
+    }
+    if (this.stuckTimer === null && this.approach.dataset['stuck'] !== 'true') {
+      this.stuckTimer = window.setTimeout(() => {
+        this.stuckTimer = null;
+        if (this.lastSession?.needsApproachHint === true) this.approach.dataset['stuck'] = 'true';
+      }, STUCK_HINT_MS);
+    }
   }
 
   private toggleMenu(): void {
@@ -424,8 +476,79 @@ export class ArView {
     return this.boot.dataset['visible'] === 'true';
   }
 
+  /**
+   * Hay algo abierto a pantalla completa: la ficha de un animal O un texto
+   * del mapa. Todo lo que se aparta ante una ficha se aparta igual ante un
+   * texto (el «?», el menú, los carteles).
+   */
   private get focusVisible(): boolean {
-    return this.focus.dataset['visible'] === 'true';
+    return this.focus.dataset['visible'] === 'true' || this.reading.dataset['visible'] === 'true';
+  }
+
+  /**
+   * El texto del mapa que se está leyendo, compuesto con el aspecto que
+   * tiene en el papel. Solo se reescribe al CAMBIAR de texto, y siempre
+   * con textContent: el catálogo nunca se interpreta como HTML.
+   */
+  private syncReading(session: ArSession): void {
+    const id = session.discovery.reading;
+    if (id !== null && this.reading.dataset['textId'] !== id) {
+      this.reading.dataset['textId'] = id;
+      const text = this.mapTexts.find((candidate) => candidate.id === id);
+      // Un solo rótulo (un pueblo, el océano, una especie) va centrado; los
+      // párrafos y las listas se leen mejor alineados a la izquierda.
+      const lone = text !== undefined && text.blocks.length === 1 && text.blocks[0]!.kind !== 'paragraph'
+        && text.blocks[0]!.kind !== 'directory' && text.blocks[0]!.kind !== 'pin';
+      this.readingCard.dataset['centered'] = lone ? 'true' : 'false';
+      const blocks = (text?.blocks ?? []).map(renderBlock);
+      if (text?.illustration) {
+        // El dibujo del mapa, recortado sin fondo, encima de su texto.
+        const image = document.createElement('img');
+        image.className = 'rt-illustration';
+        image.src = text.illustration;
+        image.alt = '';
+        image.decoding = 'async';
+        blocks.unshift(image);
+      }
+      this.readingCard.replaceChildren(...blocks);
+      this.readingCard.scrollTop = 0;
+      this.reading.setAttribute('aria-label', text?.label ?? 'Texto del mapa');
+    }
+    if (id === null) delete this.reading.dataset['textId'];
+    const show = id !== null;
+    this.reading.dataset['visible'] = show ? 'true' : 'false';
+    this.reading.setAttribute('aria-hidden', show ? 'false' : 'true');
+  }
+
+  /**
+   * Al encontrar al último animal, los textos del mapa se encienden. Se
+   * avisa una vez, cuando se cierra su ficha —con la ficha abierta el aviso
+   * quedaría debajo— y de paso se piden las tipografías de lectura.
+   */
+  /**
+   * La invitación «¿Quieres conocer más del Chocó?», con todos los
+   * animales encontrados. No es un botón: los puntos ya están en el mapa y
+   * esto solo cuenta que se pueden tocar.
+   *
+   * Sale al quedar el mapa libre (cerrada la ficha del último animal), se
+   * va sola a los 15 s o en cuanto se abre algo —tocar un punto es
+   * justamente lo que pide—, y si pasa un rato sin que se abra nada vuelve
+   * a salir: quien no la vio o no la entendió tiene otra oportunidad.
+   */
+  private syncUnlock(session: ArSession): void {
+    const discovery = session.discovery;
+    const unlocked = this.mapTexts.length > 0 && discovery.hasFoundAll(this.catalog.length);
+    if (unlocked) loadReadingFonts();
+    // Tiene sentido con el mapa libre: nada abierto. Abrir un texto —lo que
+    // la invitación pide— la aparta al instante.
+    this.exploreNudge.update(unlocked && !discovery.isBusy);
+  }
+
+  private setExploreVisible(visible: boolean): void {
+    this.explore.dataset['visible'] = visible ? 'true' : 'false';
+    this.explore.setAttribute('aria-hidden', visible ? 'false' : 'true');
+    // Comparte sitio con la píldora de abajo: que se aparten entre sí.
+    if (this.lastSession !== null) this.syncTransientHints(this.lastSession);
   }
 
   private clearGuideTimer(): void {
@@ -442,4 +565,65 @@ export class ArView {
     }
     return element;
   }
+}
+
+/** Lo que dura en pantalla la invitación a tocar los puntos. */
+const EXPLORE_VISIBLE_MS = 15_000;
+/** Sin abrir nada durante esto, la invitación vuelve a salir. */
+const EXPLORE_IDLE_MS = 35_000;
+/** Sin encontrar ningún animal durante esto, aparece la indicación de acercarse. */
+const STUCK_HINT_MS = 7_000;
+
+/** Un bloque de texto del mapa, con el aspecto que tiene impreso. */
+function renderBlock(block: MapTextBlock): HTMLElement {
+  const element = (tag: string, className: string, text?: string): HTMLElement => {
+    const node = document.createElement(tag);
+    node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  switch (block.kind) {
+    case 'paragraph':
+      return element('p', 'rt-paragraph', block.text);
+    case 'pin': {
+      const pin = element('p', 'rt-pin');
+      pin.append(element('span', '', block.text));
+      return pin;
+    }
+    case 'place':
+      return element('p', 'rt-place', block.text);
+    case 'sea':
+      return element('p', 'rt-sea', block.text);
+    case 'link':
+      return element('p', 'rt-link', block.text);
+    case 'species': {
+      const species = element('p', 'rt-species');
+      species.append(element('span', '', block.name), element('span', '', block.scientific));
+      return species;
+    }
+    case 'directory': {
+      const list = element('ul', 'rt-directory');
+      for (const entry of block.entries) {
+        const item = element('li', '', `${entry.name} `);
+        item.append(element('span', 'rt-handle', entry.handle));
+        list.append(item);
+      }
+      return list;
+    }
+  }
+}
+
+/**
+ * Pide las tipografías de lectura, una sola vez. No van en el <head>: la
+ * portada se pinta sin fuentes externas y estas solo hacen falta al final
+ * de la experiencia. Si no llegan (sin red), quedan Georgia y compañía.
+ */
+function loadReadingFonts(): void {
+  if (document.getElementById('reading-fonts') !== null) return;
+  const link = document.createElement('link');
+  link.id = 'reading-fonts';
+  link.rel = 'stylesheet';
+  link.href =
+    'https://fonts.googleapis.com/css2?family=Arvo:wght@700&family=Merriweather:wght@400&family=Oswald:wght@500&display=swap';
+  document.head.append(link);
 }

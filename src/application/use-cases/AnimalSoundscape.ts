@@ -1,5 +1,6 @@
 import type { ArModel } from '@domain/entities/ArModel';
 import type { ArSession } from '@domain/entities/ArSession';
+import type { MapText } from '@domain/value-objects/MapText';
 import { pickDifferent } from '@domain/value-objects/Soundscape';
 import type { AudioPort } from '../ports/AudioPort';
 
@@ -55,6 +56,18 @@ export class AnimalSoundscape {
     this.scheduleCall(model, FIRST_CALL_MS);
   }
 
+  /**
+   * Un texto del mapa abierto para leer: solo su ambiente, sin voces. Un
+   * texto se lee; una llamada de animal cada pocos segundos distraería.
+   */
+  textOpened(text: MapText): void {
+    this.focusClosed();
+    if (text.ambience === null) return;
+    this.focusedId = `text:${text.id}`;
+    this.audio.startAmbience(text.ambience);
+  }
+
+  /** Cierra lo que haya abierto —animal o texto— y apaga su sonido. */
   focusClosed(): void {
     if (this.timer !== null) this.timers.clear(this.timer);
     this.timer = null;

@@ -49,7 +49,8 @@ export class DiscoverNearbyModel {
     const session = this.getSession();
     const id = ModelId.of(rawModelId);
     const focused = session.discovery.focused;
-    if (focused !== null && !focused.equals(id)) return;
+    // Bloqueado: otro animal en primer plano, o un texto abierto para leer.
+    if (session.discovery.reading !== null || (focused !== null && !focused.equals(id))) return;
 
     const already = session.discovery.isUnlocked(id);
     const discovery = session.discovery.unlock(id);
@@ -69,8 +70,11 @@ export class DiscoverNearbyModel {
     });
   }
 
-  /** Tras cerrar un primer plano: si la cámara ya está junto a OTRO animal, ahora sí cuenta. */
-  resume(closed: ModelId): void {
-    if (this.nearby !== null && this.nearby !== closed.value) this.execute(this.nearby);
+  /**
+   * Tras cerrar un primer plano o un texto: si la cámara ya está junto a
+   * OTRO animal, ahora sí cuenta. `closed` es null si lo cerrado era un texto.
+   */
+  resume(closed: ModelId | null): void {
+    if (this.nearby !== null && this.nearby !== closed?.value) this.execute(this.nearby);
   }
 }

@@ -190,5 +190,38 @@
         "gain": 1
       }
     ]
+  },
+  "coast": {
+    "ambience": [
+      {
+        "src": "ocean-waves",
+        "start": 120.0,
+        "dur": 30.0,
+        "gain": 0.6
+      },
+      {
+        "src": "jungle-choco",
+        "start": 25.0,
+        "dur": 30.0,
+        "gain": 1
+      }
+    ]
+  },
+  "frogs": {
+    "ambience": [
+      {
+        "src": "jungle-choco",
+        "start": 30.0,
+        "dur": 30.0,
+        "gain": 0.6
+      },
+      {
+        "src": "frog-oophaga",
+        "start": 0,
+        "dur": 30.0,
+        "gain": 1,
+        "loop": true
+      }
+    ]
   }
 }
