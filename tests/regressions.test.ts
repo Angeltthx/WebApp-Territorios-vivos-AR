@@ -11,7 +11,9 @@ import { AnimationSequence } from '../src/domain/value-objects/AnimationSequence
 import { Proximity } from '../src/domain/value-objects/Proximity';
 import { ThreeSceneAdapter } from '../src/infrastructure/rendering/ThreeSceneAdapter';
 import { IconAnimator } from '../src/infrastructure/rendering/IconAnimator';
-import { fitToIconSize } from '../src/infrastructure/rendering/IconLoader';
+import { MarkerPin } from '../src/infrastructure/rendering/MarkerPin';
+import { fitToIconSize, tameBreach } from '../src/infrastructure/rendering/IconLoader';
+import { TapChoreography } from '../src/infrastructure/rendering/TapChoreography';
 import { MindArTrackingAdapter } from '../src/infrastructure/tracking/MindArTrackingAdapter';
 import { CameraPermissionDeniedError } from '../src/application/ports/TrackingPort';
 import {
@@ -29,6 +31,7 @@ import {
   Scene,
   Vector2,
   Vector3,
+  VectorKeyframeTrack,
 } from 'three';
 
 const model = ArModel.fromSnapshot({
@@ -230,6 +233,134 @@ test('aparición y toque reinician el gesto expresivo antes de volver al ciclo',
   animator.update(0.01);
   assert.ok(root.position.x > 9);
   animator.dispose();
+});
+
+test('el salto de la ballena solo se ejecuta al tocar, a su velocidad, y luego vuelve al nado', () => {
+  const root = new Object3D();
+  const swim = new AnimationClip('Swin', 0.1, [new NumberKeyframeTrack('.position[x]', [0, 0.1], [0, 1])]);
+  const jump = new AnimationClip('Jump', 1, [new NumberKeyframeTrack('.position[x]', [0, 1], [10, 11])]);
+  const animator = new IconAnimator(root, [swim, jump], AnimationSequence.of({
+    steps: [{ name: 'Swin', loops: 1 }], entranceClip: 'Swin', tapClip: 'Jump', tapSpeed: 2,
+    crossFadeSeconds: 0,
+  }));
+  animator.start();
+  animator.update(0.32);
+  assert.equal(animator.isReacting, false);
+  assert.ok(root.position.x < 2);
+  animator.react();
+  animator.update(0.25);
+  assert.equal(animator.isReacting, true);
+  // A doble velocidad, 0.25 s de reloj son 0.5 s de clip.
+  assert.ok(Math.abs((animator.tapClipTime ?? 0) - 0.5) < 1e-6);
+  assert.ok(root.position.x > 9);
+  animator.update(0.3);
+  animator.update(0.02);
+  assert.equal(animator.isReacting, false);
+  assert.ok(root.position.x < 2);
+  animator.dispose();
+});
+
+test('el toque repite su clip las vueltas pedidas y el bucle vuelve a velocidad normal', () => {
+  const root = new Object3D();
+  const idle = new AnimationClip('Idle', 1, [new NumberKeyframeTrack('.position[x]', [0, 1], [0, 1])]);
+  const walk = new AnimationClip('Walk', 0.1, [new NumberKeyframeTrack('.position[x]', [0, 0.1], [10, 11])]);
+  const animator = new IconAnimator(root, [idle, walk], AnimationSequence.of({
+    steps: [{ name: 'Idle', loops: 3 }, { name: 'Walk', loops: 1 }],
+    tapClip: 'Walk', tapSpeed: 2, tapLoops: 3, crossFadeSeconds: 0,
+  }));
+  animator.start();
+  animator.update(0.5);
+  animator.react();
+  // Tres vueltas de 0.1 s de clip a doble velocidad: 0.15 s de reloj.
+  animator.update(0.1);
+  assert.equal(animator.isReacting, true);
+  animator.update(0.06);
+  assert.equal(animator.isReacting, false);
+  // Vuelve al paso ambiental que estaba sonando (Idle), no al siguiente.
+  // Un fotograma más: el cambio se decide a mitad de `update`.
+  animator.update(0.01);
+  assert.ok(root.position.x < 2);
+  animator.dispose();
+});
+
+test('la secuencia rechaza gestos de toque imposibles', () => {
+  const base = { steps: [{ name: 'Idle', loops: 1 }] };
+  assert.throws(() => AnimationSequence.of({ ...base, tapSpeed: 0 }));
+  assert.throws(() => AnimationSequence.of({ ...base, tapLoops: 1.5 }));
+  assert.throws(() => AnimationSequence.of({ ...base, tapMove: 'fly' as never }));
+  assert.throws(() => AnimationSequence.of({ ...base, entranceClip: 'Jump' }));
+  const ok = AnimationSequence.of({ ...base, tapClip: 'Jump', tapMove: 'breach' });
+  assert.equal(ok.tapClip, 'Jump');
+  assert.equal(ok.tapSpeed, 1);
+});
+
+test('el salto domado conserva el giro, acorta la trayectoria y marca el choque', () => {
+  const times = [0, 1, 2, 3, 4];
+  const original = new AnimationClip('Jump', 4, [
+    // Sube 20, avanza 20, choca (cae un cuarto) en t=3 y vuelve.
+    new VectorKeyframeTrack('RIg_BallenaHips.position', times, [
+      0, 2, 0, 0, 12, 10, 0, 22, 20, 0, 15, 20, 0, 2, 0,
+    ]),
+    new NumberKeyframeTrack('RIg_BallenaHips.rotation[z]', [0, 4], [0, 6]),
+  ]);
+  const { clip, impactSeconds } = tameBreach(original);
+  assert.equal(impactSeconds, 3);
+  const values = Array.from(clip.tracks[0]!.values);
+  // La cima se conserva a una fracción de su altura…
+  assert.ok(values[7]! > 2 && values[7]! < 22 * 0.5);
+  // …el avance casi desaparece…
+  assert.ok(values[8]! < 20 * 0.2);
+  // …y en el choque la cadera está de vuelta en el agua.
+  assert.ok(Math.abs(values[10]! - 2) < 1e-6);
+  assert.deepEqual(Array.from(clip.tracks[1]!.values), [0, 6]);
+  // El original no se toca: IconLoader lo comparte con la caché de GLTFLoader.
+  assert.deepEqual(Array.from(original.tracks[0]!.values).slice(6, 9), [0, 22, 20]);
+});
+
+test('la tortuga se sumerge, salpica al entrar y vuelve exactamente a su sitio', () => {
+  const dive = new TapChoreography('dive');
+  dive.start();
+  const splashes: number[] = [];
+  let deepest = 1;
+  for (let t = 0; t < 3.2; t += 1 / 60) {
+    const splash = dive.advance(1 / 60);
+    if (splash !== null) splashes.push(splash);
+    deepest = Math.min(deepest, dive.pose.depth);
+  }
+  assert.equal(splashes.length, 2);
+  assert.ok(deepest < 0.7);
+  assert.deepEqual({ ...dive.pose }, { rise: 0, sway: 0, yaw: 0, pitch: 0, roll: 0, depth: 1 });
+  // Sin movimiento definido ('none') no hay nada que avanzar ni salpicar.
+  const none = new TapChoreography('none');
+  none.start();
+  assert.equal(none.advance(1), null);
+});
+
+test('la ballena salpica en el fotograma del choque de su clip, no antes', () => {
+  globalThis.document = { createElement: () => ({ getContext: () => null }) } as unknown as Document;
+  const whale = ArModel.fromSnapshot({
+    id: 'whale', name: 'Ballena', description: 'Ficha',
+    source: ModelSource.primitive('whale', 0x224466), spot: { u: 0.5, v: 0.5 },
+    view: 'side', iconSize: 1,
+    animation: { steps: [{ name: 'Swin', loops: 1 }], tapClip: 'Jump', tapMove: 'breach', crossFadeSeconds: 0 },
+    outlineShape: [{ u: 0.4, v: 0.4 }, { u: 0.6, v: 0.4 }, { u: 0.5, v: 0.6 }],
+    sound: { waveform: 'sine', rootFrequencyHz: 90, overtoneRatios: [1], durationMs: 1800 },
+  });
+  const icon = new Group();
+  icon.add(new Mesh(new BoxGeometry(0.1, 0.1, 0.1), new MeshBasicMaterial()));
+  const swim = new AnimationClip('Swin', 1, [new NumberKeyframeTrack('.position[x]', [0, 1], [0, 0])]);
+  const jump = new AnimationClip('Jump', 1, [new NumberKeyframeTrack('.position[x]', [0, 1], [0, 0])]);
+  const pin = new MarkerPin(whale, { object: fitToIconSize(icon), animations: [swim, jump], splashAt: 0.5 }, 0, 1.432);
+  const water = pin.waterGroup;
+  assert.ok(water);
+  pin.setRevealed(true);
+  pin.advance(0.1, 0.1);
+  pin.pulse();
+  pin.advance(0.4, 0.5);
+  assert.equal(water.visible, false);
+  pin.advance(0.15, 0.65);
+  assert.equal(water.visible, true);
+  pin.dispose();
 });
 
 test('proximidad permite descubrir antes y conserva histéresis', () => {

@@ -3,13 +3,36 @@ export interface AnimationStepSnapshot {
   readonly loops: number;
 }
 
+/**
+ * El movimiento que el animal hace CON TODO SU CUERPO al tocarlo, encima de
+ * su clip. Es vocabulario, como `IconView`: el catálogo dice la palabra y la
+ * capa de render sabe dibujarla.
+ *
+ *   'breach'  salta fuera del agua, gira y cae con un salpicón (ballena).
+ *             El giro y la subida vienen del propio clip del diseñador.
+ *   'dive'    da una vuelta, se hunde y vuelve a salir (tortuga).
+ *   'scuttle' corretea de lado a lado a saltitos (cangrejo).
+ *   'none'    solo el clip (pava: su canto ya salta y mueve la cabeza).
+ */
+export type TapMove = 'none' | 'breach' | 'dive' | 'scuttle';
+const TAP_MOVES: readonly TapMove[] = ['none', 'breach', 'dive', 'scuttle'];
+
 export interface AnimationSequenceSnapshot {
+  /** Bucle ambiental: lo que el animal hace siempre, sin que nadie lo toque. */
   readonly steps: readonly AnimationStepSnapshot[];
   readonly crossFadeSeconds?: number;
   /** Clip expresivo que se reproduce una vez al descubrir el animal. */
   readonly entranceClip?: string;
-  /** Clip expresivo que se reinicia al tocar el animal. */
+  /**
+   * Clip expresivo que se reinicia al tocar el animal. Puede NO estar en
+   * `steps`: el salto de la ballena solo tiene sentido como respuesta.
+   */
   readonly tapClip?: string;
+  /** Velocidad del clip de toque: el mismo paso, pero con prisa. */
+  readonly tapSpeed?: number;
+  /** Cuántas vueltas da el clip de toque antes de volver al bucle ambiental. */
+  readonly tapLoops?: number;
+  readonly tapMove?: TapMove;
 }
 
 export interface AnimationStep {
@@ -24,6 +47,9 @@ export class AnimationSequence {
     readonly crossFadeSeconds: number,
     readonly entranceClip: string | null,
     readonly tapClip: string | null,
+    readonly tapSpeed: number,
+    readonly tapLoops: number,
+    readonly tapMove: TapMove,
   ) {
     Object.freeze(this.steps);
     Object.freeze(this);
@@ -49,20 +75,36 @@ export class AnimationSequence {
     }
 
     const clipNames = new Set(steps.map((step) => step.name));
-    const configuredClip = (value: string | undefined, label: string): string | null => {
-      if (value === undefined) return null;
-      const name = value.trim();
-      if (!clipNames.has(name)) {
-        throw new RangeError(`${label} "${name}" no forma parte de la secuencia`);
-      }
-      return name;
-    };
+    const entranceClip = snapshot.entranceClip?.trim();
+    if (entranceClip !== undefined && !clipNames.has(entranceClip)) {
+      throw new RangeError(`El clip de entrada "${entranceClip}" no forma parte de la secuencia`);
+    }
+    const tapClip = snapshot.tapClip?.trim();
+    if (tapClip !== undefined && tapClip.length === 0) {
+      throw new RangeError('El clip de toque no puede estar vacío');
+    }
+
+    const tapSpeed = snapshot.tapSpeed ?? 1;
+    if (!Number.isFinite(tapSpeed) || tapSpeed <= 0 || tapSpeed > 4) {
+      throw new RangeError(`Velocidad de toque inválida: ${tapSpeed}`);
+    }
+    const tapLoops = snapshot.tapLoops ?? 1;
+    if (!Number.isInteger(tapLoops) || tapLoops < 1) {
+      throw new RangeError(`Bucles de toque inválidos: ${tapLoops}`);
+    }
+    const tapMove = snapshot.tapMove ?? 'none';
+    if (!TAP_MOVES.includes(tapMove)) {
+      throw new RangeError(`Movimiento de toque desconocido: ${String(tapMove)}`);
+    }
 
     return new AnimationSequence(
       steps,
       crossFadeSeconds,
-      configuredClip(snapshot.entranceClip, 'El clip de entrada'),
-      configuredClip(snapshot.tapClip, 'El clip de toque'),
+      entranceClip ?? null,
+      tapClip ?? null,
+      tapSpeed,
+      tapLoops,
+      tapMove,
     );
   }
 }

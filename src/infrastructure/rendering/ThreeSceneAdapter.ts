@@ -192,7 +192,9 @@ export class ThreeSceneAdapter implements ScenePort {
     if (this.focusedId === id) return;
 
     if (this.focusedId !== null) {
-      this.pins.get(this.focusedId)?.reclaimIcon();
+      const previousPin = this.pins.get(this.focusedId);
+      previousPin?.reclaimWater();
+      previousPin?.reclaimIcon();
       this.stagedIcon = null;
     }
 
@@ -219,6 +221,8 @@ export class ThreeSceneAdapter implements ScenePort {
         );
 
         this.stage.add(icon);
+        const water = pin.waterGroup;
+        if (water !== null) this.stage.add(water);
         this.stagedIcon = icon;
         this.stage.userData['modelId'] = id;
         this.stageHit.visible = true;
@@ -251,8 +255,8 @@ export class ThreeSceneAdapter implements ScenePort {
     const bump = 1 + 0.3 * Math.sin((this.stagePulse / 0.45) * Math.PI);
 
     this.stageIdle += deltaSeconds * STAGE_IDLE_SPIN;
-    const yaw = this.spin + this.stageIdle;
-    icon.rotation.set(0, yaw, 0);
+    const pin = this.pins.get(this.focusedId ?? '');
+    const yaw = (pin?.stageYaw ?? 0) + this.spin + this.stageIdle;
 
     // Ajusta por la silueta que realmente ve la cámara. Usar la dimensión 3D
     // máxima hacía que la ballena fuera diminuta de frente (su largo apunta a
@@ -268,6 +272,14 @@ export class ThreeSceneAdapter implements ScenePort {
       availableWidth / Math.max(projectedWidth, this.stagedNaturalSize.z * 0.6),
     );
     icon.scale.setScalar(fittedScale * this.scale * bump);
+    // El gesto de toque (salto, buceo, correteo) y su salpicón, igual que
+    // sobre el mapa: lo aplica el propio pin, que es quien lo lleva.
+    if (pin !== undefined) {
+      pin.poseIcon(yaw);
+      pin.placeWater(0);
+    } else {
+      icon.rotation.set(0, yaw, 0);
+    }
     // El círculo tiene radio 1: queda algo mayor que el animal para que sea
     // fácil acertarle con un dedo y el teléfono en movimiento.
     this.stageHit.scale.setScalar(Math.min(availableWidth, availableHeight) * this.scale * 0.65);

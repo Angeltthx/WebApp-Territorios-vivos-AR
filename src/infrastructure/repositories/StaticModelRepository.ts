@@ -99,20 +99,29 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       'cálidas para tener a sus crías. Los machos cantan durante horas.',
     source: ModelSource.gltf('/models/Ballena_Ani.glb'),
     animation: {
+      // Nada siempre. Al tocarla salta fuera del agua, gira sobre el lomo y
+      // cae con un salpicón: es el `Jump` del diseñador, domado por
+      // `tameBreach` para que quepa en el mapa, y a casi el doble de
+      // velocidad —el original tarda diez segundos—.
       steps: [
         { name: 'Swin', loops: 1 },
       ],
       entranceClip: 'Swin',
-      tapClip: 'Swin',
+      tapClip: 'Jump',
+      tapSpeed: 1.8,
+      tapMove: 'breach',
     },
     // El punto queda dentro del dibujo de la ballena; un poco más abajo que
     // su centro para que la silueta 3D no rebase el borde en perspectiva.
     spot: { u: 0.304, v: 0.19 },
-    // Dibujo: 0.304 x 0.157. El salto del GLB se sale de la imagen; la
-    // secuencia en esta vista usa el nado para permanecer sobre el dibujo.
+    // DE PERFIL, no de frente. De frente su largo apunta a la cámara: en
+    // perspectiva crecía hasta salirse del mapa por arriba, y al acercar el
+    // teléfono para descubrirla el morro cruzaba el plano cercano de la
+    // cámara y se cortaba. De perfil enseña lo que es una ballena —el
+    // largo— y el salto se lee como un salto.
     view: 'side',
-    iconSize: 2.1,
-    facing: 0,
+    iconSize: 1.4,
+    facing: 180,
     // La primera que se calcó, y la que dejó claro que había que calcarlas
     // todas: en el mapa está buceando, con la cola alzada y la aleta
     // pectoral extendida hacia abajo. El modelo es una ballena recta;
@@ -156,18 +165,22 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       'las semillas, así que va sembrando la selva sin darse cuenta.',
     source: ModelSource.gltf('/models/Pava_Ani.glb'),
     animation: {
+      // Siempre en Idle (más el balanceo de MarkerPin, porque Idle apenas
+      // mueve huesos). El canto —salta, estira el cuello, mueve la cabeza—
+      // se reserva para la entrada y el toque: si también fuera parte del
+      // bucle, tocarla no haría nada que no hiciera ya sola.
       steps: [
         { name: 'Idle', loops: 1 },
-        { name: 'Sing', loops: 1 },
       ],
-      entranceClip: 'Sing',
+      entranceClip: 'Idle',
       tapClip: 'Sing',
+      tapSpeed: 1.2,
     },
     spot: { u: 0.9075, v: 0.5098 },
     // Dibujo: 0.121 x 0.098. Se mantiene menor que la ballena, pero con
     // presencia suficiente para que la animación Sing se lea en teléfono.
     view: 'front',
-    iconSize: 1.45,
+    iconSize: 1.55,
     facing: 0,
     // Dibujada de perfil, de pie sobre la hierba y mirando a la IZQUIERDA
     // del mapa. Contorno calcado del dibujo: el marrón de la pava contra el
@@ -203,18 +216,23 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       'limpia la costa comiendo lo que deja el mar.',
     source: ModelSource.gltf('/models/Cangrejo_Ani.glb'),
     animation: {
+      // Ratos quieto y ratos caminando. Al tocarlo, el mismo Walk pero a
+      // más del doble de velocidad y correteando de lado a saltitos.
       steps: [
-        { name: 'Idle', loops: 6 },
-        { name: 'Walk', loops: 4 },
+        { name: 'Idle', loops: 4 },
+        { name: 'Walk', loops: 2 },
       ],
       entranceClip: 'Walk',
       tapClip: 'Walk',
+      tapSpeed: 2.4,
+      tapLoops: 4,
+      tapMove: 'scuttle',
     },
     spot: { u: 0.618, v: 0.4022 },
     // Ya se veía de frente; 'front' es exactamente la misma orientación
     // que tenía con 'side' + 90°, escrita de forma directa.
     view: 'front',
-    iconSize: 1.05,
+    iconSize: 0.75,
     facing: 0,
     // Dibujado en planta, como se ve un cangrejo en la arena, con los ojos
     // y las pinzas hacia ARRIBA del mapa. Visto desde arriba el modelo mira
@@ -253,18 +271,23 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       'pasar años en mar abierto. Nuquí es una de esas playas.',
     source: ModelSource.gltf('/models/Tortuga_Ani.glb'),
     animation: {
+      // Nada y descansa. Al tocarla da una vuelta, se sumerge y vuelve a
+      // salir, braceando al doble mientras tanto.
       steps: [
-        { name: 'Swin', loops: 4 },
-        { name: 'Idle', loops: 6 },
+        { name: 'Swin', loops: 3 },
+        { name: 'Idle', loops: 4 },
       ],
       entranceClip: 'Swin',
       tapClip: 'Swin',
+      tapSpeed: 2,
+      tapLoops: 3,
+      tapMove: 'dive',
     },
     spot: { u: 0.3375, v: 0.5335 },
     // De frente es una silueta baja y ancha —una tortuga lo es—, así que
     // se agranda por encima de su dibujo para que no quede como una raya.
     view: 'front',
-    iconSize: 1.5,
+    iconSize: 1.23,
     facing: 0,
     // Dibujada nadando, vista desde arriba y con la cabeza hacia la
     // IZQUIERDA del mapa; desde arriba el modelo mira hacia abajo.

@@ -16,8 +16,11 @@
  */
 import {
   AmbientLight,
+  Box3,
+  Vector3,
   Mesh,
   MeshBasicMaterial,
+  type Object3D,
   OrthographicCamera,
   PerspectiveCamera,
   PlaneGeometry,
@@ -119,6 +122,54 @@ function mount(id: string, camera: OrthographicCamera | PerspectiveCamera): () =
 }
 
 const draw = [mount('flat', flat), mount('angled', angled)];
+
+// Permite comprobar el gesto de toque y sus efectos sin cámara ni mapa
+// impreso. La vista ortográfica comparte el sistema normalizado del catálogo.
+document.querySelector<HTMLCanvasElement>('#flat')?.addEventListener('click', (event) => {
+  const rect = event.currentTarget instanceof HTMLCanvasElement
+    ? event.currentTarget.getBoundingClientRect()
+    : null;
+  if (rect === null) return;
+  const u = (event.clientX - rect.left) / rect.width;
+  const v = (event.clientY - rect.top) / rect.height;
+  let nearest = -1;
+  let distance = 0.13;
+  NUQUI_CATALOG.forEach((model, index) => {
+    const candidate = Math.hypot(u - model.spot.u, (v - model.spot.v) * TARGET_ASPECT);
+    if (candidate < distance) {
+      nearest = index;
+      distance = candidate;
+    }
+  });
+  if (nearest >= 0 && pins[nearest]?.isRevealed) pins[nearest]!.pulse();
+});
+
+// Calibrar `iconSize` es medir, no calcular (ver CLAUDE.md): desde la
+// consola, `measureIcons()` da lo que ocupa cada animal en la vista
+// ortográfica, en anchos de mapa, para compararlo con su dibujo.
+Object.assign(window, {
+  measureIcons: () => pins.map((pin, index) => {
+    let icon: Object3D | null = null;
+    pin.group.traverse((node) => {
+      if (node !== pin.group && node.userData['modelId'] !== undefined) icon = node;
+    });
+    const size = icon === null ? new Vector3() : new Box3().setFromObject(icon).getSize(new Vector3());
+    return { id: NUQUI_CATALOG[index]?.id, ancho: +size.x.toFixed(3), alto: +size.y.toFixed(3) };
+  }),
+  // Una pestaña en segundo plano no ejecuta requestAnimationFrame, así que
+  // una animación no se puede fotografiar a mitad. `tap('whale')` y luego
+  // `stepVerify(1.2)` la dejan exactamente en ese instante.
+  tap: (id: string) => pins[NUQUI_CATALOG.findIndex((model) => model.id === id)]?.pulse(),
+  stepVerify: (seconds: number) => {
+    const frame = 1 / 60;
+    for (let t = 0; t < seconds; t += frame) {
+      elapsed += frame;
+      for (const pin of pins) pin.advance(frame, elapsed);
+    }
+    last = performance.now();
+    for (const render of draw) render();
+  },
+});
 
 let last = performance.now();
 let elapsed = 0;
