@@ -144,12 +144,13 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     // teléfono. Se probó de perfil porque de frente su largo apunta a la
     // cámara, pero lo que se veía "demasiado grande" era el PRIMER PLANO, no
     // el mapa: allí el tamaño lo acota ahora `STAGE_MAX_WIDTH` contando la
-    // perspectiva, y `focusSize` la deja un poco por debajo de ese tope.
+    // perspectiva, y `focusSize` la deja bastante por debajo de ese tope:
+    // los clientes la seguían viendo salirse del encuadre en primer plano.
     // Sobre el mapa, en cambio, se pidió MÁS grande: es el animal más grande
     // del mapa y tiene que leerse así junto a los otros tres.
     view: 'front',
     iconSize: 2.1,
-    focusSize: 0.85,
+    focusSize: 0.7,
     facing: 0,
     // La primera que se calcó, y la que dejó claro que había que calcarlas
     // todas: en el mapa está buceando, con la cola alzada y la aleta

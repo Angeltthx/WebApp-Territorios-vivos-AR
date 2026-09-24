@@ -55,7 +55,12 @@ async function cached(key) {
 
 function encode(inputs, filter, out, ambience) {
   const args = ['-hide_banner', '-loglevel', 'error', '-y'];
-  for (const input of inputs) args.push('-ss', String(input.start), '-t', String(input.dur), '-i', input.file);
+  // `loop`: una grabación corta (el canto de una rana) se repite para
+  // cubrir toda la capa en vez de quedarse sonando solo al principio.
+  for (const input of inputs) {
+    if (input.loop) args.push('-stream_loop', '-1');
+    args.push('-ss', String(input.start), '-t', String(input.dur), '-i', input.file);
+  }
   args.push('-filter_complex', filter, '-map', '[out]', '-ac', '1');
   args.push('-ar', ambience ? '32000' : '44100', '-codec:a', 'libmp3lame', '-b:a', ambience ? '48k' : '64k', out);
   execFileSync(ffmpeg, args, { stdio: 'inherit' });
@@ -67,8 +72,9 @@ const report = [];
 for (const [animal, set] of Object.entries(clips)) {
   mkdirSync(`${OUT}/${animal}`, { recursive: true });
 
+  // Los ambientes de los textos del mapa (costa, ranas) no tienen voz.
   for (const kind of ['calls', 'taps']) {
-    for (const [index, clip] of set[kind].entries()) {
+    for (const [index, clip] of (set[kind] ?? []).entries()) {
       const file = await cached(clip.src);
       const out = `${OUT}/${animal}/${kind === 'calls' ? 'call' : 'tap'}-${index + 1}.mp3`;
       const dur = clip.dur / (clip.tempo ?? 1);

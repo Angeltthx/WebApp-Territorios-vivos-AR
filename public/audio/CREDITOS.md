@@ -11,7 +11,7 @@ Generado por `npm run build-audio`. No editar a mano.
 - **Big Water Splash** — qubodup. Licencia: CC0. https://freesound.org/s/442773/
   - Usado en: whale/tap-3.mp3
 - **Ocean Waves on a Tropical Beach** — Jarrod Stanley. Licencia: CC0. https://commons.wikimedia.org/wiki/File:Ocean_Waves_on_a_Tropical_Beach.ogg
-  - Usado en: whale/ambience.mp3, crab/ambience.mp3
+  - Usado en: whale/ambience.mp3, crab/ambience.mp3, coast/ambience.mp3
 - **crab walking** — stuniverso. Licencia: CC0. https://freesound.org/s/761559/
   - Usado en: crab/call-1.mp3, crab/tap-1.mp3
 - **Crab - Legs** — Vrymaa. Licencia: CC0. https://freesound.org/s/770031/
@@ -33,4 +33,7 @@ Generado por `npm run build-audio`. No editar a mano.
 - **Penelope barbata - Bearded Guan (XC251314)** — Niels Krabbe (xeno-canto). Licencia: CC BY-SA 3.0. https://commons.wikimedia.org/wiki/File:Penelope_barbata_-_Bearded_Guan_XC251314.mp3
   - Usado en: bird/call-5.mp3
 - **Jungle_Choco 01.wav** — jaime_enrique. Licencia: CC0. https://freesound.org/s/424763/
-  - Usado en: bird/ambience.mp3
+  - Usado en: bird/ambience.mp3, coast/ambience.mp3, frogs/ambience.mp3
+- **Oophaga pumilio call (macho)** — Captainstork. Licencia: CC BY 3.0. https://commons.wikimedia.org/wiki/File:Oophaga_pumilio_call.ogg
+  - Nota: Rana del mismo género que la rana arlequín del mapa (Oophaga solanensis), de la que no hay grabaciones abiertas.
+  - Usado en: frogs/ambience.mp3

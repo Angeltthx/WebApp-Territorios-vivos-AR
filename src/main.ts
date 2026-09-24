@@ -63,6 +63,8 @@ const {
   transformPlacement,
   playModelSound,
   closeFocus,
+  openMapText,
+  mapTexts,
   interaction,
   audio,
 } = buildContainer({
@@ -119,11 +121,14 @@ view = new ArView(root, {
 
     interaction.attach({
       onTapModel: (modelId) => void playModelSound.execute(modelId),
+      onTapText: (textId) => void openMapText.execute(textId),
       onRotate: (delta) => transformPlacement.rotateBy(delta),
     });
   },
 });
 
+// Los textos del mapa para componerlos en grande al tocarlos.
+view.setMapTexts(mapTexts);
 view.render(startArExperience.current);
 
 // Libera cámara y audio si el usuario cambia de pestaña o cierra.

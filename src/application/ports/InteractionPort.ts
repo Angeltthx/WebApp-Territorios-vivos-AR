@@ -6,6 +6,11 @@ export interface InteractionHandlers {
    */
   onTapModel(modelId: string): void;
   /**
+   * Toque sobre un texto del mapa marcado con destellos (solo existen
+   * cuando ya se encontraron todos los animales).
+   */
+  onTapText(textId: string): void;
+  /**
    * Arrastre horizontal. Delta en radianes.
    *
    * No hay pellizco para escalar: se quitó a propósito. Cada animal tiene su

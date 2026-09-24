@@ -22,6 +22,9 @@ import type { ScenePort } from '@application/ports/ScenePort';
 import type { MindArRuntime } from '../mindar/MindArRuntime';
 import { IconLoader } from './IconLoader';
 import { MarkerPin } from './MarkerPin';
+import { PoseFilter } from './PoseFilter';
+import { MapTextHotspot } from './MapTextHotspot';
+import type { MapText } from '@domain/value-objects/MapText';
 
 /**
  * Adaptador de render.
@@ -47,10 +50,20 @@ import { MarkerPin } from './MarkerPin';
  * dibuje por delante de él: el mapa suele estar a más de un ancho.
  */
 const STAGE_DISTANCE = 0.5;
-/** Cuánto del alto de la pantalla puede ocupar el animal en primer plano. */
-const STAGE_FILL = 0.42;
-/** Giro lento de cortesía, para que se vea que es un objeto y no una foto. */
-const STAGE_IDLE_SPIN = 0.25;
+/**
+ * Cuánto del alto de la pantalla puede ocupar el animal en primer plano.
+ * Era 0.42 y los clientes lo veían salirse del encuadre —la ballena sobre
+ * todo—, con la ficha tapándole además la parte de abajo.
+ */
+const STAGE_FILL = 0.32;
+/** Cuánto del ancho puede ocupar, medido por la silueta que ve la cámara. */
+const STAGE_FILL_WIDTH = 0.6;
+/**
+ * Cuánto se sube el animal sobre el centro de la pantalla, en fracción del
+ * alto visible: la ficha ocupa la parte de abajo, y centrado quedaba medio
+ * tapado. Así queda en el hueco libre de arriba.
+ */
+const STAGE_LIFT = 0.13;
 /**
  * Fracción del ancho de pantalla que puede llegar a ocupar el animal en
  * primer plano CONTANDO la perspectiva. La ballena de frente apunta su largo
@@ -58,16 +71,7 @@ const STAGE_IDLE_SPIN = 0.25;
  * 1,3 veces el ancho, y en perspectiva el morro, más cerca, se veía aún
  * mayor —más grande que la pantalla—. Los animales pequeños nunca llegan.
  */
-const STAGE_MAX_WIDTH = 0.82;
-
-/**
- * Suavizado ADAPTATIVO del seguimiento. En reposo el mapa tiembla unas
- * milésimas y hay que suavizarlo; en un movimiento brusco cualquier
- * suavizado es retraso, y los animales se quedaban atrás. A partir de estos
- * saltos por fotograma se sigue a la pose tal cual.
- */
-const SNAP_DISTANCE = 0.03;
-const SNAP_ANGLE = 0.035;
+const STAGE_MAX_WIDTH = 0.62;
 
 export class ThreeSceneAdapter implements ScenePort {
   private readonly follower = new Group();
@@ -79,11 +83,14 @@ export class ThreeSceneAdapter implements ScenePort {
     new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
   );
   private readonly pins = new Map<string, MarkerPin>();
+  /** Puntos sobre los textos del mapa; se encienden al aceptar explorarlos. */
+  private readonly hotspots = new Map<string, MapTextHotspot>();
 
   private stabilization: Stabilization = Stabilization.default();
   private proximity: Proximity = Proximity.default();
   private elapsed = 0;
-  private hasPose = false;
+  /** Suaviza la pose del mapa: quieto o temblando no mueve a los animales. */
+  private readonly poseFilter = new PoseFilter();
   private mounted = false;
   private unsubscribeFrame: (() => void) | null = null;
 
@@ -95,7 +102,6 @@ export class ThreeSceneAdapter implements ScenePort {
   private focusedId: string | null = null;
   private stagedIcon: Object3D | null = null;
   private readonly stagedNaturalSize = new ThreeVector3(1, 1, 1);
-  private stageIdle = 0;
   /** Giro que el usuario imprime con el dedo. */
   private spin = 0;
   private scale = 1;
@@ -126,6 +132,7 @@ export class ThreeSceneAdapter implements ScenePort {
   constructor(
     private readonly runtime: MindArRuntime,
     private readonly targetAspect: number,
+    private readonly mapTexts: readonly MapText[] = [],
   ) {
     this.stageHit.visible = false;
     this.stageHit.position.z = 0.02;
@@ -147,6 +154,13 @@ export class ThreeSceneAdapter implements ScenePort {
       this.overlay.add(pin.group);
       this.pins.set(model.id.value, pin);
     });
+    if (this.mapTexts.length > 0) {
+      this.mapTexts.forEach((text, index) => {
+        const hotspot = new MapTextHotspot(text, this.targetAspect, index + 1);
+        this.overlay.add(hotspot.group);
+        this.hotspots.set(text.id, hotspot);
+      });
+    }
     if (runtime.status === 'rejected') {
       this.clear();
       throw runtime.reason;
@@ -186,6 +200,10 @@ export class ThreeSceneAdapter implements ScenePort {
     for (const [key, pin] of this.pins) {
       if (discovery.isUnlocked(ModelId.of(key))) pin.setRevealed(true);
     }
+    // Los puntos de los textos: con todos los animales encontrados y nada
+    // abierto (con una ficha o un texto en pantalla, apagados).
+    const textsOn = discovery.hasFoundAll(this.pins.size) && !discovery.isBusy;
+    for (const hotspot of this.hotspots.values()) hotspot.setActive(textsOn);
     this.setFocus(discovery.focused?.value ?? null);
   }
 
@@ -216,7 +234,6 @@ export class ThreeSceneAdapter implements ScenePort {
     }
 
     this.focusedId = id;
-    this.stageIdle = 0;
     this.stageHit.visible = false;
     delete this.stage.userData['modelId'];
 
@@ -263,17 +280,21 @@ export class ThreeSceneAdapter implements ScenePort {
     const camera = this.runtime.mindar.camera;
     const distance = STAGE_DISTANCE * this.unit;
 
-    this.stage.quaternion.copy(camera.quaternion);
-    this.stage.position.set(0, 0, -distance).applyQuaternion(camera.quaternion).add(camera.position);
-
     const fov = (camera.fov * Math.PI) / 180;
     const visibleHeight = 2 * distance * Math.tan(fov / 2);
+
+    this.stage.quaternion.copy(camera.quaternion);
+    this.stage.position
+      .set(0, visibleHeight * STAGE_LIFT, -distance)
+      .applyQuaternion(camera.quaternion)
+      .add(camera.position);
     this.stagePulse = Math.max(0, this.stagePulse - deltaSeconds);
     const bump = 1 + 0.3 * Math.sin((this.stagePulse / 0.45) * Math.PI);
 
-    this.stageIdle += deltaSeconds * STAGE_IDLE_SPIN;
+    // Sin giro automático: no es un producto en un expositor. Solo gira
+    // cuando el usuario lo arrastra con el dedo.
     const pin = this.pins.get(this.focusedId ?? '');
-    const yaw = (pin?.stageYaw ?? 0) + this.spin + this.stageIdle;
+    const yaw = (pin?.stageYaw ?? 0) + this.spin;
 
     // Ajusta por la silueta que realmente ve la cámara. Usar la dimensión 3D
     // máxima hacía que la ballena fuera diminuta de frente (su largo apunta a
@@ -283,7 +304,7 @@ export class ThreeSceneAdapter implements ScenePort {
       Math.abs(Math.cos(yaw)) * this.stagedNaturalSize.x +
       Math.abs(Math.sin(yaw)) * this.stagedNaturalSize.z;
     const availableHeight = visibleHeight * STAGE_FILL;
-    const availableWidth = visibleHeight * camera.aspect * 0.76;
+    const availableWidth = visibleHeight * camera.aspect * STAGE_FILL_WIDTH;
     // Tope que no depende del giro: el lado mayor en planta, con lo que lo
     // agranda la perspectiva cuando apunta a la cámara (su extremo queda a
     // `distance - s·r` en vez de a `distance`). Despejando s de
@@ -326,7 +347,12 @@ export class ThreeSceneAdapter implements ScenePort {
       pin.dispose();
     }
     this.pins.clear();
-    this.hasPose = false;
+    for (const hotspot of this.hotspots.values()) {
+      this.overlay.remove(hotspot.group);
+      hotspot.dispose();
+    }
+    this.hotspots.clear();
+    this.poseFilter.reset();
     this.nearbyId = null;
     this.focusedId = null;
     this.stagedIcon = null;
@@ -367,6 +393,9 @@ export class ThreeSceneAdapter implements ScenePort {
     for (const [key, pin] of this.pins) {
       if (pin.isRevealed) map.set(key, pin.group);
     }
+    for (const [key, hotspot] of this.hotspots) {
+      if (hotspot.isActive) map.set(`text:${key}`, hotspot.group);
+    }
     return map;
   }
 
@@ -401,6 +430,9 @@ export class ThreeSceneAdapter implements ScenePort {
       // Con el mapa fuera de cuadro solo se anima el animal que permanece en
       // primer plano. Los demás quedan pausados para ahorrar CPU y batería.
       if (this.follower.visible || pin.isFocused) pin.advance(deltaSeconds, this.elapsed);
+    }
+    if (this.follower.visible) {
+      for (const hotspot of this.hotspots.values()) hotspot.advance(deltaSeconds, this.elapsed);
     }
     // Hay algo que pintar: si no, el runtime se ahorra el render.
     return this.follower.visible || this.stage.visible;
@@ -516,16 +548,16 @@ export class ThreeSceneAdapter implements ScenePort {
   }
 
   /**
-   * Interpolación exponencial independiente del framerate: el resultado es
-   * el mismo a 30 fps que a 60 fps, cosa que un lerp con factor fijo no
-   * garantiza.
+   * Copia la pose del anchor al `follower` a través del PoseFilter (One
+   * Euro): el temblor del seguimiento y el del pulso se quedan fuera, el
+   * gesto de mover el teléfono pasa sin retraso.
    */
   private followAnchor(deltaSeconds: number): void {
     const visible = this.runtime.anchorVisible;
     this.follower.visible = visible;
 
     if (!visible) {
-      this.hasPose = false;
+      this.poseFilter.reset();
       return;
     }
 
@@ -534,27 +566,16 @@ export class ThreeSceneAdapter implements ScenePort {
       this.tmpQuaternion,
       this.tmpScale,
     );
-
-    if (!this.hasPose) {
-      this.follower.position.copy(this.tmpPosition);
-      this.follower.quaternion.copy(this.tmpQuaternion);
-      this.follower.scale.copy(this.tmpScale);
-      this.hasPose = true;
-      return;
-    }
-
-    const factor = this.stabilization.smoothingFactor;
-    const smooth = factor >= 1 ? 1 : 1 - Math.pow(1 - factor, deltaSeconds * 60);
-    // Cuánto se ha movido el mapa respecto a lo pintado: en anchos de mapa
-    // (la escala del anchor es el ancho del mapa) y en radianes.
-    const moved = this.follower.position.distanceTo(this.tmpPosition) / Math.max(this.tmpScale.x, 1e-6);
-    const turned = this.follower.quaternion.angleTo(this.tmpQuaternion);
-    const urgency = Math.min(1, Math.max(moved / SNAP_DISTANCE, turned / SNAP_ANGLE));
-    const step = smooth + (1 - smooth) * urgency;
-
-    this.follower.position.lerp(this.tmpPosition, step);
-    this.follower.quaternion.slerp(this.tmpQuaternion, step);
-    this.follower.scale.lerp(this.tmpScale, step);
+    this.poseFilter.update(
+      this.tmpPosition,
+      this.tmpQuaternion,
+      this.tmpScale,
+      deltaSeconds,
+      this.stabilization,
+    );
+    this.follower.position.copy(this.poseFilter.position);
+    this.follower.quaternion.copy(this.poseFilter.quaternion);
+    this.follower.scale.copy(this.poseFilter.scale);
   }
 
   private configureRendering(): void {

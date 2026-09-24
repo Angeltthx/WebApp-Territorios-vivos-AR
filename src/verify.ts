@@ -34,6 +34,9 @@ import { addLights } from '@infrastructure/rendering/ThreeSceneAdapter';
 import { IconLoader } from '@infrastructure/rendering/IconLoader';
 import { MarkerPin } from '@infrastructure/rendering/MarkerPin';
 import { NUQUI_CATALOG } from '@infrastructure/repositories/StaticModelRepository';
+import { NUQUI_MAP_TEXTS } from '@infrastructure/repositories/StaticMapTextRepository';
+import { MapTextHotspot } from '@infrastructure/rendering/MapTextHotspot';
+import { MapText } from '@domain/value-objects/MapText';
 
 const TARGET_ASPECT = 1432 / 1000;
 const MAP_URL = '/targets/map.jpg';
@@ -69,6 +72,13 @@ scene.add(new Mesh(
 // mala escala o mal pivote, aquí se ve exactamente igual que en el teléfono.
 // Antes esta página forzaba las figuras procedurales, así que dejó de
 // verificar nada en cuanto el catálogo pasó a .glb.
+// Los puntos de los textos del mapa, los mismos que monta la app.
+const hotspots = NUQUI_MAP_TEXTS.map((snapshot, index) => {
+  const hotspot = new MapTextHotspot(MapText.of(snapshot), TARGET_ASPECT, index + 1);
+  scene.add(hotspot.group);
+  return hotspot;
+});
+
 const icons = new IconLoader();
 const pins: MarkerPin[] = [];
 
@@ -100,6 +110,9 @@ void ready.then((loaded) => {
   // humo, imposible de comprobar en el teléfono sin el mapa impreso.
   window.setTimeout(() => {
     for (const [, pin] of loaded) pin.setRevealed(true);
+    // Con los cuatro "encontrados", se encienden los puntos de los textos:
+    // aquí se comprueba que cada uno cae sobre su texto.
+    for (const hotspot of hotspots) hotspot.setActive(true);
   }, REVEAL_DELAY_MS);
 });
 
@@ -165,6 +178,7 @@ Object.assign(window, {
     for (let t = 0; t < seconds; t += frame) {
       elapsed += frame;
       for (const pin of pins) pin.advance(frame, elapsed);
+      for (const hotspot of hotspots) hotspot.advance(frame, elapsed);
     }
     last = performance.now();
     for (const render of draw) render();
@@ -182,6 +196,7 @@ function renderer(): void {
   elapsed += delta;
 
   for (const pin of pins) pin.advance(delta, elapsed);
+  for (const hotspot of hotspots) hotspot.advance(delta, elapsed);
   for (const render of draw) render();
 
   requestAnimationFrame(renderer);

@@ -14,7 +14,8 @@
     "bench-detection": "node scripts/detection-bench.mjs public/targets/map.mind",
     "optimize-models": "node scripts/optimize-models.mjs",
     "optimize-splash": "node scripts/optimize-splash.mjs",
-    "build-audio": "node scripts/build-audio.mjs"
+    "build-audio": "node scripts/build-audio.mjs",
+    "cut-illustrations": "node scripts/cut-illustrations.mjs"
   },
   "dependencies": {
     "mind-ar": "1.2.5",

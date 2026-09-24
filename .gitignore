@@ -11,3 +11,4 @@ dist/
 # va versionada; el PDF se queda en local.
 *.pdf
 audio-src/.cache/
+.preview/

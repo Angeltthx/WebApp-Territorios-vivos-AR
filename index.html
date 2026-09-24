@@ -451,6 +451,78 @@
         transition: opacity 0.45s ease, visibility 0.45s;
       }
       #approach[data-visible="true"] { opacity: 1; visibility: visible; }
+      /* Si en 7 s no ha encontrado ningún animal: un teléfono de línea
+         blanca baja hacia un contorno dorado punteado sobre el mapa —el
+         mismo que marca a los animales por encontrar—; en su pantalla el
+         animal crece y, al llegar, el contorno late. Enseña a la vez QUÉ
+         buscar y QUÉ hacer (acercarse; aquí no hay zoom con los dedos).
+         Mismo lenguaje que el visor de la guía: punteado blanco, esquinas. */
+      #approach-hands {
+        position: absolute;
+        left: 50%;
+        bottom: calc(12vh + env(safe-area-inset-bottom));
+        width: min(52vw, 210px);
+        transform: translateX(-50%);
+        opacity: 0;
+        transition: opacity 0.6s ease;
+        overflow: visible;
+        filter: drop-shadow(0 2px 12px rgba(0, 0, 0, 0.75));
+      }
+      #approach[data-stuck="true"] #approach-hands { opacity: 1; }
+      #approach-hands .sheet {
+        fill: rgba(255, 255, 255, 0.06);
+        stroke: rgba(255, 255, 255, 0.55);
+        stroke-width: 1.6;
+        stroke-dasharray: 5 5;
+        stroke-linejoin: round;
+      }
+      #approach-hands .outline,
+      #approach-hands .seen {
+        fill: none;
+        stroke: #ffc53d;
+        stroke-width: 2.2;
+        stroke-dasharray: 4 4;
+      }
+      #approach-hands .outline {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: contorno 2.6s ease-in-out infinite;
+      }
+      #approach-hands .phone {
+        animation: bajar 2.6s ease-in-out infinite;
+      }
+      #approach-hands .body {
+        fill: rgba(0, 0, 0, 0.28);
+        stroke: #fff;
+        stroke-width: 2.4;
+      }
+      #approach-hands .corner {
+        fill: none;
+        stroke: #fff;
+        stroke-width: 2.2;
+        stroke-linecap: round;
+      }
+      #approach-hands .seen {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: crecer 2.6s ease-in-out infinite;
+      }
+      @keyframes bajar {
+        0%, 10% { transform: translateY(0); }
+        55%, 72% { transform: translateY(26px); }
+        100% { transform: translateY(0); }
+      }
+      @keyframes crecer {
+        0%, 10% { transform: scale(0.55); opacity: 0.6; }
+        55%, 72% { transform: scale(1.35); opacity: 1; }
+        100% { transform: scale(0.55); opacity: 0.6; }
+      }
+      @keyframes contorno {
+        0%, 50% { transform: scale(1); opacity: 0.75; }
+        60% { transform: scale(1.14); opacity: 1; }
+        72%, 100% { transform: scale(1); opacity: 0.75; }
+      }
+
 
       #approach-title {
         margin: 0;
@@ -759,6 +831,269 @@
 
       [hidden] { display: none !important; }
 
+
+      /* ------------------------------------------------------------------
+         LEER UN TEXTO DEL MAPA
+
+         Con los cuatro animales encontrados, los textos del mapa se tocan
+         y aparecen aquí en grande: el MISMO texto, con el aspecto que tiene
+         en el papel —párrafos en serif blanca sobre el mar, etiquetas en
+         cápsulas fucsia, pueblos en cápsula blanca—, sobre el color de la
+         zona del mapa donde está impreso. Entra como un recorte que se
+         amplía desde el centro. Se cierra con la X o tocando fuera.
+
+         Las tipografías (Merriweather, Arvo, Oswald) NO se piden al abrir
+         la página: la portada se pinta sin fuentes externas. ArView las
+         pide al desbloquearse los textos, mucho después.
+         ------------------------------------------------------------------ */
+      #reading {
+        position: fixed;
+        inset: 0;
+        z-index: 4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: calc(74px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+        /* Sin tarjeta de color: el texto flota sobre la cámara, oscurecida
+           lo justo para leer. El mapa se sigue viendo detrás. */
+        background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.42) 75%);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.35s ease, visibility 0.35s;
+      }
+      #reading[data-visible="true"] { opacity: 1; visibility: visible; }
+      #reading-close {
+        position: absolute;
+        top: calc(14px + env(safe-area-inset-top));
+        right: calc(14px + env(safe-area-inset-right));
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        background: rgba(0, 0, 0, 0.45);
+        color: #fff;
+        font-size: 20px;
+        cursor: pointer;
+      }
+      #reading-card {
+        width: 100%;
+        max-width: 34rem;
+        max-height: 100%;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        box-sizing: border-box;
+        padding: 30px 24px;
+        color: #fff;
+        text-align: left;
+        text-shadow: 0 2px 16px rgba(0, 0, 0, 0.85);
+      }
+      /* El dibujo del mapa, recortado y sin fondo, sobre su texto. */
+      .rt-illustration {
+        display: block;
+        width: auto;
+        max-width: 100%;
+        max-height: 34vh;
+        margin: 0 auto 22px;
+        filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.55));
+      }
+      #reading[data-visible="true"] .rt-illustration {
+        animation: dibujo 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.1s both;
+      }
+      @keyframes dibujo {
+        from { transform: translateY(18px) scale(0.6); opacity: 0; }
+        to { transform: none; opacity: 1; }
+      }
+      #reading-card[data-centered="true"] { text-align: center; }
+      #reading[data-visible="true"] #reading-card {
+        animation: recorte 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+      }
+      @keyframes recorte {
+        from {
+          transform: scale(0.35);
+          clip-path: inset(35% 25% round 10px);
+          filter: blur(3px);
+          opacity: 0.2;
+        }
+        to {
+          transform: none;
+          clip-path: inset(0 round 20px);
+          filter: none;
+          opacity: 1;
+        }
+      }
+      .rt-paragraph {
+        margin: 0;
+        font-family: "Merriweather", Georgia, serif;
+        font-size: clamp(18px, 4.9vw, 22px);
+        line-height: 1.6;
+        /* Justificado, con guiones en español para que no abra ríos. */
+        text-align: justify;
+        text-align-last: left;
+        -webkit-hyphens: auto;
+        hyphens: auto;
+      }
+      .rt-paragraph + .rt-paragraph { margin-top: 1.1em; }
+      .rt-directory { list-style: none; margin: 0; padding: 0; }
+      .rt-directory li {
+        font-family: "Merriweather", Georgia, serif;
+        font-size: clamp(17px, 4.6vw, 20px);
+        line-height: 1.3;
+      }
+      .rt-directory li + li { margin-top: 12px; }
+      .rt-handle {
+        display: inline-block;
+        margin-top: 4px;
+        padding: 2px 10px 3px;
+        border-radius: 7px;
+        background: #e8744f;
+        font-size: 0.8em;
+        overflow-wrap: anywhere;
+      }
+      .rt-pin {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-family: "Arvo", Rockwell, Georgia, serif;
+        font-weight: 700;
+        font-size: clamp(19px, 5.2vw, 24px);
+        line-height: 1.25;
+      }
+      .rt-pin + .rt-pin { margin-top: 14px; }
+      .rt-pin::before {
+        content: "";
+        flex: none;
+        width: 26px;
+        height: 34px;
+        background: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 32'%3E%3Cpath d='M12 0C5.4 0 0 5.2 0 11.7 0 20.5 12 32 12 32s12-11.5 12-20.3C24 5.2 18.6 0 12 0z' fill='%23e0417f'/%3E%3Ccircle cx='12' cy='11.5' r='4.6' fill='%23fff'/%3E%3C/svg%3E");
+      }
+      .rt-pin span {
+        padding: 8px 14px 9px;
+        border-radius: 10px;
+        border: 2px solid rgba(255, 255, 255, 0.9);
+        background: #e0417f;
+      }
+      .rt-place {
+        display: inline-block;
+        padding: 10px 26px 12px;
+        border-radius: 999px;
+        background: #fffdf5;
+        color: #1d3b2a;
+        font-family: "Arvo", Rockwell, Georgia, serif;
+        font-weight: 700;
+        font-size: clamp(30px, 9vw, 44px);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .rt-sea {
+        margin: 0;
+        font-family: "Fraunces", Georgia, serif;
+        font-style: italic;
+        font-size: clamp(40px, 12vw, 60px);
+        line-height: 1.1;
+        letter-spacing: 0.02em;
+      }
+      .rt-link {
+        display: inline-block;
+        padding: 8px 18px 9px;
+        border-radius: 999px;
+        background: #fffdf5;
+        color: #0a5d66;
+        font-size: clamp(18px, 5vw, 22px);
+        overflow-wrap: anywhere;
+      }
+      .rt-species { display: inline-flex; flex-direction: column; min-width: 70%; }
+      .rt-species span:first-child {
+        padding: 6px 18px;
+        border-radius: 10px 10px 0 0;
+        background: #7f9fce;
+        font-family: "Oswald", "Arial Narrow", sans-serif;
+        font-weight: 500;
+        font-size: clamp(24px, 7vw, 32px);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .rt-species span:last-child {
+        padding: 6px 18px 8px;
+        border-radius: 0 0 10px 10px;
+        background: #2f64a8;
+        font-style: italic;
+        font-size: clamp(20px, 5.6vw, 26px);
+      }
+
+
+      /* Invitación a tocar los puntos, al encontrar a los cuatro animales.
+         Mismo lenguaje que el visor de «Apunta al mapa»: transparente,
+         borde blanco punteado, esquinas de visor y Fraunces con sombra. No
+         es un botón: los puntos ya están en el mapa, esto solo lo cuenta. */
+      #explore {
+        position: fixed;
+        left: 50%;
+        bottom: calc(26px + env(safe-area-inset-bottom));
+        z-index: 3;
+        width: min(calc(100% - 44px), 23rem);
+        box-sizing: border-box;
+        padding: 16px 20px 18px;
+        border: 2px dashed rgba(255, 255, 255, 0.5);
+        border-radius: 16px;
+        background: rgba(0, 0, 0, 0.18);
+        color: #fff;
+        text-align: center;
+        pointer-events: none;
+        transform: translate(-50%, 14px);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.5s ease, transform 0.5s ease, visibility 0.5s;
+      }
+      #explore[data-visible="true"] {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, 0);
+        /* Respira como el visor, pero sin perder el centrado (translate). */
+        animation: respirar-centrado 2.6s ease-in-out infinite;
+      }
+      @keyframes respirar-centrado {
+        0%, 100% { transform: translate(-50%, 0) scale(1); }
+        50% { transform: translate(-50%, 0) scale(1.022); }
+      }
+      #explore > span {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #fff;
+      }
+      #explore > span:nth-child(1) { top: -3px; left: -3px; border-right: 0; border-bottom: 0; border-radius: 16px 0 0 0; }
+      #explore > span:nth-child(2) { top: -3px; right: -3px; border-left: 0; border-bottom: 0; border-radius: 0 16px 0 0; }
+      #explore > span:nth-child(3) { bottom: -3px; left: -3px; border-right: 0; border-top: 0; border-radius: 0 0 0 16px; }
+      #explore > span:nth-child(4) { bottom: -3px; right: -3px; border-left: 0; border-top: 0; border-radius: 0 0 16px 0; }
+      /* El mismo punto con onda que hay sobre los textos: "esto es lo que se toca". */
+      .explore-dot {
+        display: block;
+        width: 10px;
+        height: 10px;
+        margin: 0 auto 10px;
+        border-radius: 50%;
+        background: #fff4d6;
+        animation: onda 2s ease-out infinite;
+      }
+      @keyframes onda {
+        from { box-shadow: 0 0 0 0 rgba(255, 244, 214, 0.7); }
+        to { box-shadow: 0 0 0 14px rgba(255, 244, 214, 0); }
+      }
+      #explore-title {
+        margin: 0;
+        font-family: "Fraunces", Georgia, serif;
+        font-weight: 600;
+        font-size: clamp(20px, 5.4vw, 25px);
+        line-height: 1.2;
+        text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
+      }
+      #explore-sub {
+        margin: 6px 0 0;
+        font-size: 13.5px;
+        color: rgba(255, 255, 255, 0.88);
+        text-shadow: 0 1px 14px rgba(0, 0, 0, 0.95);
+      }
+
       /* No gastar animaciones CSS bajo la cámara una vez retirada la portada. */
       #boot[data-visible="false"] *,
       #guide[data-visible="false"] * { animation-play-state: paused !important; }
@@ -841,6 +1176,18 @@
       <div id="approach" data-visible="false" aria-hidden="true">
         <p id="approach-title">Acerca tu cámara a un animal</p>
         <p id="approach-sub">Busca las siluetas punteadas sobre el mapa</p>
+        <svg id="approach-hands" viewBox="0 0 220 200" aria-hidden="true">
+          <!-- El mapa, en perspectiva y punteado como el visor de la guía. -->
+          <path class="sheet" d="M52 142 L168 142 L204 190 L16 190 Z" />
+          <!-- Un animal por encontrar: el mismo contorno dorado del mapa. -->
+          <ellipse class="outline" cx="110" cy="166" rx="30" ry="10" />
+          <!-- El teléfono baja hacia él; en su pantalla, el animal crece. -->
+          <g class="phone">
+            <rect class="body" x="82" y="16" width="56" height="96" rx="11" />
+            <path class="corner" d="M92 38 v-8 h8 M128 38 v-8 h-8 M92 90 v8 h8 M128 90 v8 h-8" />
+            <ellipse class="seen" cx="110" cy="64" rx="12" ry="5" />
+          </g>
+        </svg>
       </div>
 
       <!-- Primer plano de un animal descubierto. -->
@@ -849,6 +1196,20 @@
         <h2 id="focus-name"></h2>
         <p id="focus-species"></p>
         <div id="focus-info"></div>
+      </div>
+
+      <!-- Un texto del mapa, en grande. Se rellena desde ArView. -->
+      <div id="reading" data-visible="false" aria-hidden="true" role="dialog" aria-label="Texto del mapa">
+        <button type="button" id="reading-close" aria-label="Cerrar el texto">✕</button>
+        <div id="reading-card"></div>
+      </div>
+      <!-- Con los cuatro animales encontrados: una invitación a tocar los
+           puntos de los textos. Sin botones; se aparta sola (ver ArView). -->
+      <div id="explore" data-visible="false" aria-hidden="true" aria-live="polite">
+        <span></span><span></span><span></span><span></span>
+        <i class="explore-dot" aria-hidden="true"></i>
+        <p id="explore-title">¿Quieres conocer más del Chocó?</p>
+        <p id="explore-sub">Toca los puntos del mapa para interactuar</p>
       </div>
 
       <div id="ui">

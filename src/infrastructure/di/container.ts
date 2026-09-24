@@ -1,6 +1,7 @@
 import { AnimalSoundscape } from '@application/use-cases/AnimalSoundscape';
 import { CloseFocus } from '@application/use-cases/CloseFocus';
 import { DiscoverNearbyModel } from '@application/use-cases/DiscoverNearbyModel';
+import { OpenMapText } from '@application/use-cases/OpenMapText';
 import { PlayModelSound } from '@application/use-cases/PlayModelSound';
 import { StartArExperience } from '@application/use-cases/StartArExperience';
 import { TransformPlacement } from '@application/use-cases/TransformPlacement';
@@ -11,6 +12,7 @@ import { WebAudioAdapter } from '../audio/WebAudioAdapter';
 import { PointerInteractionAdapter } from '../interaction/PointerInteractionAdapter';
 import { MindArRuntime } from '../mindar/MindArRuntime';
 import { NUQUI_CATALOG, StaticModelRepository } from '../repositories/StaticModelRepository';
+import { NUQUI_MAP_TEXTS, StaticMapTextRepository } from '../repositories/StaticMapTextRepository';
 import { ThreeSceneAdapter } from '../rendering/ThreeSceneAdapter';
 import { MindArTrackingAdapter } from '../tracking/MindArTrackingAdapter';
 
@@ -36,7 +38,8 @@ export function buildContainer(config: ContainerConfig) {
 
   // ↓↓↓ Las dos líneas que cambiarías al migrar de motor de tracking ↓↓↓
   const tracking = new MindArTrackingAdapter(runtime);
-  const scene = new ThreeSceneAdapter(runtime, config.targetAspect);
+  const mapTexts = new StaticMapTextRepository(NUQUI_MAP_TEXTS);
+  const scene = new ThreeSceneAdapter(runtime, config.targetAspect, mapTexts.all);
   // ↑↑↑
 
   const audio = new WebAudioAdapter();
@@ -74,6 +77,9 @@ export function buildContainer(config: ContainerConfig) {
     discoverNearbyModel.resume(closed),
   );
 
+  // Con los cuatro animales encontrados, los textos del mapa se leen en grande.
+  const openMapText = new OpenMapText(scene, mapTexts, models, sounds, analytics, getSession, emit);
+
   scene.setProximity(config.proximity);
   scene.onNearbyModel((modelId) => discoverNearbyModel.execute(modelId));
 
@@ -82,6 +88,8 @@ export function buildContainer(config: ContainerConfig) {
     transformPlacement,
     playModelSound,
     closeFocus,
+    openMapText,
+    mapTexts: mapTexts.all,
     interaction,
     // Se expone para poder desbloquearlo en el PRIMER toque del usuario.
     // Al quitar el boton de inicio se perdio el gesto que lo desbloqueaba,

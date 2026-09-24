@@ -105,5 +105,13 @@
     "title": "Aquatic sound of the mangrove from the boat close to Punta Allen (Sian Ka’an)",
     "author": "felix.blume",
     "license": "CC0"
+  },
+  "frog-oophaga": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/4/47/Oophaga_pumilio_call.ogg",
+    "page": "https://commons.wikimedia.org/wiki/File:Oophaga_pumilio_call.ogg",
+    "title": "Oophaga pumilio call (macho)",
+    "author": "Captainstork",
+    "license": "CC BY 3.0",
+    "note": "Rana del mismo género que la rana arlequín del mapa (Oophaga solanensis), de la que no hay grabaciones abiertas."
   }
 }

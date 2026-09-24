@@ -22,19 +22,24 @@ export class CloseFocus {
     private readonly analytics: AnalyticsPort,
     private readonly getSession: () => ArSession,
     private readonly update: (session: ArSession) => void,
-    private readonly afterClose: (closed: ModelId) => void = () => {},
+    private readonly afterClose: (closed: ModelId | null) => void = () => {},
   ) {}
 
   execute(): void {
     const session = this.getSession();
+    // Lo abierto puede ser un animal o un texto del mapa: la X cierra ambos.
     const closing = session.discovery.focused;
-    if (closing === null) return;
+    const reading = session.discovery.reading;
+    if (closing === null && reading === null) return;
 
     const discovery = session.discovery.focus(null);
     this.scene.applyDiscovery(discovery);
     this.update(session.withDiscovery(discovery));
     this.sounds.focusClosed();
-    this.analytics.track('focus_closed', { modelId: closing.value });
+    this.analytics.track(
+      'focus_closed',
+      closing === null ? { textId: reading ?? '' } : { modelId: closing.value },
+    );
     this.afterClose(closing);
   }
 }
