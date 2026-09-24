@@ -1,3 +1,4 @@
+import { AnimalSoundscape } from '@application/use-cases/AnimalSoundscape';
 import { CloseFocus } from '@application/use-cases/CloseFocus';
 import { DiscoverNearbyModel } from '@application/use-cases/DiscoverNearbyModel';
 import { PlayModelSound } from '@application/use-cases/PlayModelSound';
@@ -58,15 +59,20 @@ export function buildContainer(config: ContainerConfig) {
     startArExperience.update(session),
   );
 
-  const playModelSound = new PlayModelSound(audio, scene, models, analytics, getSession);
+  const sounds = new AnimalSoundscape(audio, getSession);
+  const playModelSound = new PlayModelSound(sounds, scene, models, analytics, getSession);
 
   // Los animales no se regalan por apuntar al mapa: hay que acercarse. La
   // medida la hace el adaptador de escena, que es el unico que sabe donde
   // esta la camara; que acercarse signifique DESCUBRIR —desbloquear para
   // siempre y abrir la ficha— lo decide el caso de uso.
   const emit = (session: ArSession) => startArExperience.update(session);
-  const discoverNearbyModel = new DiscoverNearbyModel(scene, analytics, getSession, emit);
-  const closeFocus = new CloseFocus(scene, analytics, getSession, emit);
+  const discoverNearbyModel = new DiscoverNearbyModel(scene, models, sounds, analytics, getSession, emit);
+  // El primer plano bloquea a los demás animales; al cerrarlo, el que
+  // estuviera cerca se descubre ahora (ver DiscoverNearbyModel).
+  const closeFocus = new CloseFocus(scene, sounds, analytics, getSession, emit, (closed) =>
+    discoverNearbyModel.resume(closed),
+  );
 
   scene.setProximity(config.proximity);
   scene.onNearbyModel((modelId) => discoverNearbyModel.execute(modelId));

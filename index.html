@@ -609,6 +609,17 @@
         line-height: 1.15;
         text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
       }
+      #focus-species {
+        margin: -6px 0 0;
+        font-size: 13px;
+        font-style: italic;
+        letter-spacing: 0.01em;
+        color: rgba(255, 255, 255, 0.72);
+        text-shadow: 0 1px 12px rgba(0, 0, 0, 0.95);
+      }
+      #focus-species:empty { display: none; }
+      #focus-info p { margin: 0; }
+      #focus-info p + p { margin-top: 0.7em; }
       #focus-info {
         margin: 0;
         max-width: 34ch;
@@ -754,7 +765,17 @@
 
       #guide { gap: clamp(10px, 3vh, 24px); }
       #focus { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
-      #focus-info { max-height: 24vh; overflow-y: auto; pointer-events: auto; }
+      /* Dos o tres párrafos por animal: la ficha se desplaza en vez de
+         taparlo, y un difuminado abajo avisa de que hay más texto. */
+      #focus-info {
+        max-height: 30vh;
+        overflow-y: auto;
+        pointer-events: auto;
+        overscroll-behavior: contain;
+        -webkit-mask-image: linear-gradient(#000 calc(100% - 22px), transparent);
+        mask-image: linear-gradient(#000 calc(100% - 22px), transparent);
+        padding-bottom: 14px;
+      }
       @media (max-height: 500px) and (orientation: landscape) {
         #guide { padding: 12px 70px; gap: 8px; }
         #guide-frame { height: calc(var(--vh) * 0.43); }
@@ -826,7 +847,8 @@
       <div id="focus" data-visible="false" aria-hidden="true">
         <button type="button" id="focus-close" aria-label="Cerrar la ficha">✕</button>
         <h2 id="focus-name"></h2>
-        <p id="focus-info"></p>
+        <p id="focus-species"></p>
+        <div id="focus-info"></div>
       </div>
 
       <div id="ui">
@@ -844,7 +866,7 @@
         <!-- Opciones provisionales: los nombres están puestos para ver la
              idea, no para quedarse. -->
         <nav id="menu" data-visible="false" aria-hidden="true">
-          <button type="button" data-action="share-story">Comparte tu historia</button>
+          <button type="button" data-action="share-story">Historia</button>
           <button type="button" data-action="social">Redes sociales</button>
           <button type="button" data-action="soon">Próximamente</button>
         </nav>

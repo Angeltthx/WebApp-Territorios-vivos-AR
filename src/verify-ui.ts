@@ -11,7 +11,10 @@ html.querySelectorAll('script').forEach((script) => script.remove());
 const screens = document.querySelector('#screens')!;
 const results = document.querySelector('#results')!;
 const catalog = NUQUI_CATALOG.map(ArModel.fromSnapshot);
-const initial = catalog[0]!;
+// `?animal=turtle` para comprobar la ficha de otro: la de la tortuga, con
+// tres párrafos, es la que más ocupa.
+const requested = new URLSearchParams(location.search).get('animal');
+const initial = catalog.find((model) => model.id.value === requested) ?? catalog[0]!;
 const searching = ArSession.idle().searching(Placement.initial(initial.id, initial.defaultScale));
 const focused = searching.tracking().withDiscovery(searching.discovery.unlock(initial.id));
 const fixtures: { frame: HTMLIFrameElement; view: ArView; width: number; height: number }[] = [];
@@ -47,7 +50,7 @@ function check(mode: 'splash' | 'guide' | 'focus'): void {
       }
     }
     for (const id of mode === 'splash' ? ['#start'] : mode === 'guide'
-      ? ['#guide-frame', '#guide-title', '#guide-link'] : ['#focus-name', '#focus-info', '#focus-close']) {
+      ? ['#guide-frame', '#guide-title', '#guide-link'] : ['#focus-name', '#focus-species', '#focus-info', '#focus-close']) {
       const r = rect(id);
       if (r.left < -1 || r.top < -1 || r.right > width + 1 || r.bottom > height + 1) {
         failures.push(`${width}×${height}: ${id} fuera de pantalla`);

@@ -1,4 +1,5 @@
 import { ArSession } from '@domain/entities/ArSession';
+import { soundPreloadOrder } from './AnimalSoundscape';
 import type { ArModel } from '@domain/entities/ArModel';
 import { Placement } from '@domain/entities/Placement';
 import { ModelId } from '@domain/value-objects/ModelId';
@@ -84,6 +85,9 @@ export class StartArExperience {
     const initial = catalog.find((model) => model.id.equals(requested)) ?? catalog[0]!;
 
     await this.scene.preload(catalog);
+    // Las grabaciones, después de lo que hace falta para ver algo: modelos
+    // y mapa van primero. Una a una y en segundo plano (ver AudioPort).
+    this.audio.preload(soundPreloadOrder(catalog));
     this.scene.setHighlightedModel(initial.id);
     this.scene.setStabilization(this.session.stabilization);
 

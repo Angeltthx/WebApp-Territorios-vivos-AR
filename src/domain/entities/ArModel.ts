@@ -4,6 +4,7 @@ import { ModelId } from '../value-objects/ModelId';
 import { ModelSource } from '../value-objects/ModelSource';
 import { Scale } from '../value-objects/Scale';
 import { SoundProfile, type SoundSnapshot } from '../value-objects/SoundProfile';
+import { Soundscape, type SoundscapeSnapshot } from '../value-objects/Soundscape';
 import {
   AnimationSequence,
   type AnimationSequenceSnapshot,
@@ -12,10 +13,18 @@ import {
 export interface ArModelSnapshot {
   readonly id: string;
   readonly name: string;
-  /** Ficha corta que se lee en el primer plano, bajo el modelo. */
-  readonly description: string;
+  /**
+   * Ficha que se lee en el primer plano, bajo el modelo: un párrafo o
+   * varios. Con varios se muestran todos, uno debajo de otro.
+   */
+  readonly description: string | readonly string[];
+  /** Nombre científico y nombre común, bajo el título de la ficha. */
+  readonly species?: string;
   readonly source: ModelSource;
+  /** Timbre sintetizado: respaldo si el animal no tiene `soundscape`. */
   readonly sound: SoundSnapshot;
+  /** Grabaciones reales: su voz, lo que suena al tocarlo y dónde vive. */
+  readonly soundscape?: SoundscapeSnapshot;
   /** Clips del GLB y cuántas vueltas da cada uno antes de pasar al siguiente. */
   readonly animation?: AnimationSequenceSnapshot;
   /** Dónde vive este modelo sobre la imagen del marcador (u, v en 0–1). */
@@ -56,9 +65,12 @@ export class ArModel {
   private constructor(
     readonly id: ModelId,
     readonly name: string,
-    readonly description: string,
+    /** Párrafos de la ficha, en orden. Al menos uno. */
+    readonly paragraphs: readonly string[],
+    readonly species: string | null,
     readonly source: ModelSource,
     readonly sound: SoundProfile,
+    readonly soundscape: Soundscape | null,
     readonly animation: AnimationSequence | null,
     readonly spot: MarkerSpot,
     /** Vacío si el contorno se deduce del modelo. */
@@ -75,12 +87,21 @@ export class ArModel {
       throw new RangeError('ArModel requiere un nombre no vacío');
     }
     const view = snapshot.view ?? 'front';
+    const paragraphs = (typeof snapshot.description === 'string' ? [snapshot.description] : snapshot.description)
+      .map((paragraph) => paragraph.trim())
+      .filter((paragraph) => paragraph.length > 0);
+    if (paragraphs.length === 0) {
+      throw new RangeError(`"${name}" necesita al menos un párrafo de descripción`);
+    }
+    const species = snapshot.species?.trim() || null;
     return new ArModel(
       ModelId.of(snapshot.id),
       name,
-      snapshot.description.trim(),
+      Object.freeze(paragraphs),
+      species,
       snapshot.source,
       SoundProfile.of(snapshot.sound),
+      snapshot.soundscape === undefined ? null : Soundscape.of(snapshot.soundscape),
       snapshot.animation === undefined ? null : AnimationSequence.of(snapshot.animation),
       MarkerSpot.of(snapshot.spot.u, snapshot.spot.v),
       (snapshot.outlineShape ?? []).map((point) => MarkerSpot.of(point.u, point.v)),

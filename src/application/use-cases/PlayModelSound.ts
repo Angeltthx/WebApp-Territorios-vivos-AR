@@ -1,9 +1,9 @@
 import type { ArSession } from '@domain/entities/ArSession';
 import { ModelId } from '@domain/value-objects/ModelId';
 import type { AnalyticsPort } from '../ports/AnalyticsPort';
-import type { AudioPort } from '../ports/AudioPort';
 import type { ModelRepository } from '../ports/ModelRepository';
 import type { ScenePort } from '../ports/ScenePort';
+import type { AnimalSoundscape } from './AnimalSoundscape';
 
 /**
  * Toque sobre un icono: suena y da realimentación visual sobre ESE icono.
@@ -19,7 +19,7 @@ import type { ScenePort } from '../ports/ScenePort';
  */
 export class PlayModelSound {
   constructor(
-    private readonly audio: AudioPort,
+    private readonly sounds: AnimalSoundscape,
     private readonly scene: ScenePort,
     private readonly models: ModelRepository,
     private readonly analytics: AnalyticsPort,
@@ -35,7 +35,9 @@ export class PlayModelSound {
     const model = await this.models.findById(ModelId.of(rawModelId));
     if (model === null) return;
 
-    this.audio.play(model.sound);
+    // Su grabación de toque (un soplido, un chapuzón…); sin grabaciones,
+    // el timbre sintetizado de siempre.
+    this.sounds.tapped(model);
     this.scene.setHighlightedModel(model.id);
     this.scene.pulse(model.id);
     this.analytics.track('model_tapped', { modelId: model.id.value });
