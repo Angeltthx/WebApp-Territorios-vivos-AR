@@ -1,7 +1,13 @@
 import { test } from 'node:test';
+import { existsSync } from 'node:fs';
+import { NUQUI_CATALOG } from '../src/infrastructure/repositories/StaticModelRepository';
 import assert from 'node:assert/strict';
 import { StartArExperience } from '../src/application/use-cases/StartArExperience';
 import { PlayModelSound } from '../src/application/use-cases/PlayModelSound';
+import { AnimalSoundscape, soundPreloadOrder } from '../src/application/use-cases/AnimalSoundscape';
+import { DiscoverNearbyModel } from '../src/application/use-cases/DiscoverNearbyModel';
+import { CloseFocus } from '../src/application/use-cases/CloseFocus';
+import { pickDifferent } from '../src/domain/value-objects/Soundscape';
 import { ArSession } from '../src/domain/entities/ArSession';
 import { ArModel } from '../src/domain/entities/ArModel';
 import { ModelId } from '../src/domain/value-objects/ModelId';
@@ -67,7 +73,10 @@ function harness() {
     applyPlacement() {}, setStabilization() {}, setProximity() {},
     applyDiscovery() {}, onNearbyModel() {}, pulse() {}, clear() {}, dispose() {},
   };
-  const audio = { unlock: async () => { calls.unlocks++; }, play() {}, dispose() {} };
+  const audio = {
+    unlock: async () => { calls.unlocks++; }, play() {}, dispose() {},
+    preload() {}, playClip() {}, startAmbience() {}, stopAmbience() {},
+  };
   const app = new StartArExperience(tracking, scene, audio, models, analytics, () => {});
   return { app, tracking, scene, audio, calls, handlers };
 }
@@ -167,7 +176,7 @@ test('primer plano suena sin mapa; animal bloqueado o perdido sin ficha no suena
   let count = 0;
   h.audio.play = () => { count++; };
   let state = ArSession.idle().searching(Placement.initial(model.id, model.defaultScale)).tracking();
-  const play = new PlayModelSound(h.audio, h.scene, models, analytics, () => state);
+  const play = new PlayModelSound(new AnimalSoundscape(h.audio as never, () => state), h.scene, models, analytics, () => state);
   await play.execute('whale');
   assert.equal(count, 0);
   state = state.withDiscovery(state.discovery.unlock(model.id)).lost();
@@ -561,4 +570,148 @@ test('en primer plano, un animal largo mirando a la cámara no se sale de la pan
     }
   }
   adapter.clear();
+});
+
+function soundHarness() {
+  const log: string[] = [];
+  const audio = {
+    unlock: async () => {}, dispose() {}, preload() {},
+    play: () => { log.push('synth'); },
+    playClip: (url: string) => { log.push(`clip ${url}`); },
+    startAmbience: (url: string) => { log.push(`ambience ${url}`); },
+    stopAmbience: () => { log.push('ambience off'); },
+  };
+  let pending: { fn: () => void; ms: number } | null = null;
+  const timers = {
+    set: (fn: () => void, ms: number) => { pending = { fn, ms }; return 1; },
+    clear: () => { pending = null; },
+  };
+  const fire = () => { const next = pending; pending = null; next?.fn(); return next?.ms; };
+  return { audio, timers, log, fire, pendingMs: () => pending?.ms ?? null };
+}
+
+const voiced = (id: string, extra: Partial<Parameters<typeof ArModel.fromSnapshot>[0]> = {}) => ArModel.fromSnapshot({
+  id, name: id, description: ['Uno.', 'Dos.'], species: 'Especie / nombre',
+  source: ModelSource.primitive('whale', 0x224466), spot: { u: 0.5, v: 0.5 },
+  outlineShape: [{ u: 0.4, v: 0.4 }, { u: 0.6, v: 0.4 }, { u: 0.5, v: 0.6 }],
+  sound: { waveform: 'sine', rootFrequencyHz: 90, overtoneRatios: [1], durationMs: 1800 },
+  soundscape: { calls: [`/${id}/c1`, `/${id}/c2`, `/${id}/c3`], taps: [`/${id}/t1`, `/${id}/t2`], ambience: `/${id}/amb` },
+  ...extra,
+});
+
+test('la ficha guarda todos los párrafos y la especie; un paisaje sonoro no admite más de cinco', () => {
+  const whale = voiced('whale');
+  assert.deepEqual(whale.paragraphs, ['Uno.', 'Dos.']);
+  assert.equal(whale.species, 'Especie / nombre');
+  assert.equal(voiced('x', { species: '  ' }).species, null);
+  assert.throws(() => voiced('x', { description: ['  '] }));
+  assert.throws(() => voiced('x', { soundscape: { calls: ['a', 'b', 'c', 'd', 'e', 'f'] } }));
+  assert.throws(() => voiced('x', { soundscape: { calls: [] } }));
+});
+
+test('nunca suena la misma grabación dos veces seguidas', () => {
+  let previous: string | null = null;
+  for (let i = 0; i < 200; i += 1) {
+    const next = pickDifferent(['a', 'b', 'c'], previous);
+    assert.notEqual(next, previous);
+    previous = next;
+  }
+  assert.equal(pickDifferent(['solo'], 'solo'), 'solo');
+  assert.equal(pickDifferent([], null), null);
+});
+
+test('primer plano: ambiente, una llamada al entrar y otras distintas mientras siga abierto', () => {
+  const whale = voiced('whale');
+  let state = ArSession.idle().searching(Placement.initial(whale.id, whale.defaultScale)).tracking();
+  state = state.withDiscovery(state.discovery.unlock(whale.id));
+  const h = soundHarness();
+  const sounds = new AnimalSoundscape(h.audio as never, () => state, h.timers);
+  sounds.focusOpened(whale);
+  assert.deepEqual(h.log, ['ambience /whale/amb']);
+  assert.equal(h.fire(), 400);
+  const calls = h.log.filter((entry) => entry.startsWith('clip'));
+  assert.equal(calls.length, 1);
+  const gap = h.pendingMs();
+  assert.ok(gap !== null && gap >= 10_000 && gap <= 16_000);
+  h.fire();
+  const again = h.log.filter((entry) => entry.startsWith('clip'));
+  assert.equal(again.length, 2);
+  assert.notEqual(again[0], again[1]);
+
+  // Tocarlo suena a toque, no a llamada.
+  sounds.tapped(whale);
+  assert.match(h.log.at(-1)!, /^clip \/whale\/t/);
+
+  // Cerrar apaga el ambiente y ya no suenan más llamadas.
+  sounds.focusClosed();
+  assert.equal(h.log.at(-1), 'ambience off');
+  assert.equal(h.pendingMs(), null);
+
+  // Sin grabaciones, el toque cae al timbre sintetizado.
+  sounds.tapped(ArModel.fromSnapshot({ ...NUQUI_CATALOG[0]!, soundscape: undefined }));
+  assert.equal(h.log.at(-1), 'synth');
+});
+
+test('una llamada programada no suena si la sesión perdió el primer plano por otra vía', () => {
+  const whale = voiced('whale');
+  let state = ArSession.idle().searching(Placement.initial(whale.id, whale.defaultScale)).tracking();
+  state = state.withDiscovery(state.discovery.unlock(whale.id));
+  const h = soundHarness();
+  const sounds = new AnimalSoundscape(h.audio as never, () => state, h.timers);
+  sounds.focusOpened(whale);
+  state = state.withDiscovery(state.discovery.focus(null));
+  h.fire();
+  assert.equal(h.log.filter((entry) => entry.startsWith('clip')).length, 0);
+  assert.equal(h.pendingMs(), null);
+});
+
+test('con un animal en primer plano, acercarse a otro no le quita el sitio; al cerrar, sí cuenta', async () => {
+  const whale = voiced('whale');
+  const crab = voiced('crab');
+  const repo = { findAll: async () => [whale, crab], findById: async (id: ModelId) => (id.value === 'whale' ? whale : crab) };
+  let state = ArSession.idle().searching(Placement.initial(whale.id, whale.defaultScale)).tracking();
+  const h = soundHarness();
+  const sounds = new AnimalSoundscape(h.audio as never, () => state, h.timers);
+  const applied: (string | null)[] = [];
+  const scene = { applyDiscovery: (d: { focused: ModelId | null }) => { applied.push(d.focused?.value ?? null); } };
+  const discover = new DiscoverNearbyModel(scene as never, repo as never, sounds, analytics, () => state, (next) => { state = next; });
+  const close = new CloseFocus(scene as never, sounds, analytics, () => state, (next) => { state = next; },
+    (closed) => discover.resume(closed));
+
+  discover.execute('whale');
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(state.discovery.focused?.value, 'whale');
+  assert.equal(h.log[0], 'ambience /whale/amb');
+
+  // Bloqueado: el cangrejo ni se descubre ni roba el primer plano.
+  discover.execute('crab');
+  assert.equal(state.discovery.focused?.value, 'whale');
+  assert.equal(state.discovery.isUnlocked(crab.id), false);
+
+  // Al cerrar con la X, el cangrejo —junto al que ya está la cámara— sí.
+  close.execute();
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(state.discovery.focused?.value, 'crab');
+  assert.ok(h.log.includes('ambience off'));
+  assert.equal(h.log.at(-1), 'ambience /crab/amb');
+
+  // Cerrar el cangrejo estando todavía junto a él no lo reabre solo.
+  close.execute();
+  assert.equal(state.discovery.focused, null);
+  assert.deepEqual(applied, ['whale', null, 'crab', null]);
+});
+
+test('cada sonido del catálogo existe en public/audio, y se precarga primero lo que suena al entrar', () => {
+  const catalog = NUQUI_CATALOG.map(ArModel.fromSnapshot);
+  for (const model of catalog) {
+    assert.ok(model.soundscape, `${model.id.value} sin grabaciones`);
+    for (const url of model.soundscape.urls) {
+      assert.ok(existsSync(`public${url}`), `Falta public${url}: ¿se ejecutó npm run build-audio?`);
+    }
+  }
+  const order = soundPreloadOrder(catalog);
+  assert.equal(new Set(order).size, order.length);
+  const firstTap = order.findIndex((url) => url.includes('/tap-'));
+  const lastAmbience = order.map((url) => url.includes('ambience')).lastIndexOf(true);
+  assert.ok(lastAmbience < firstTap, 'los ambientes van antes que los toques');
 });

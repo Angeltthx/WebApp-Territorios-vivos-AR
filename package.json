@@ -13,13 +13,15 @@
     "compile-target": "node scripts/compile-target.mjs public/targets/map.jpg public/targets/map.mind",
     "bench-detection": "node scripts/detection-bench.mjs public/targets/map.mind",
     "optimize-models": "node scripts/optimize-models.mjs",
-    "optimize-splash": "node scripts/optimize-splash.mjs"
+    "optimize-splash": "node scripts/optimize-splash.mjs",
+    "build-audio": "node scripts/build-audio.mjs"
   },
   "dependencies": {
     "mind-ar": "1.2.5",
     "three": "0.160.0"
   },
   "devDependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@gltf-transform/core": "^4.4.2",
     "@gltf-transform/extensions": "^4.4.2",
     "@gltf-transform/functions": "^4.4.2",

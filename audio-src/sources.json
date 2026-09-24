@@ -1,0 +1,109 @@
+{
+  "whale-moo": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/6/67/Humpback_whale_moo.ogg",
+    "page": "https://commons.wikimedia.org/wiki/File:Humpback_whale_moo.ogg",
+    "title": "Humpback whale moo",
+    "author": "U.S. National Park Service (Glacier Bay)",
+    "license": "Dominio público"
+  },
+  "whale-song": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/1/13/Humpbackwhale2.ogg",
+    "page": "https://commons.wikimedia.org/wiki/File:Humpbackwhale2.ogg",
+    "title": "Humpbackwhale2",
+    "author": "Spyrogumas",
+    "license": "CC0"
+  },
+  "whale-blow": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/d/d4/Humpback_whale_wheezeblow.ogg",
+    "page": "https://commons.wikimedia.org/wiki/File:Humpback_whale_wheezeblow.ogg",
+    "title": "Humpback whale wheezeblow",
+    "author": "U.S. National Park Service (Glacier Bay)",
+    "license": "Dominio público"
+  },
+  "big-splash": {
+    "url": "https://cdn.freesound.org/previews/442/442773_71257-hq.mp3",
+    "page": "https://freesound.org/s/442773/",
+    "title": "Big Water Splash",
+    "author": "qubodup",
+    "license": "CC0"
+  },
+  "ocean-waves": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/6/64/Ocean_Waves_on_a_Tropical_Beach.ogg",
+    "page": "https://commons.wikimedia.org/wiki/File:Ocean_Waves_on_a_Tropical_Beach.ogg",
+    "title": "Ocean Waves on a Tropical Beach",
+    "author": "Jarrod Stanley",
+    "license": "CC0"
+  },
+  "crab-legs": {
+    "url": "https://cdn.freesound.org/previews/770/770031_13973196-hq.mp3",
+    "page": "https://freesound.org/s/770031/",
+    "title": "Crab - Legs",
+    "author": "Vrymaa",
+    "license": "CC0",
+    "note": "Foley: recreado con uñas sobre una superficie dura, no es una grabación de un cangrejo."
+  },
+  "crab-walk": {
+    "url": "https://cdn.freesound.org/previews/761/761559_16036556-hq.mp3",
+    "page": "https://freesound.org/s/761559/",
+    "title": "crab walking",
+    "author": "stuniverso",
+    "license": "CC0"
+  },
+  "mangrove-2": {
+    "url": "https://cdn.freesound.org/previews/733/733186_1171107-hq.mp3",
+    "page": "https://freesound.org/s/733186/",
+    "title": "PasirRisMangrove3",
+    "author": "polymorpheva",
+    "license": "CC0"
+  },
+  "submerge": {
+    "url": "https://cdn.freesound.org/previews/852/852167_18763192-hq.mp3",
+    "page": "https://freesound.org/s/852167/",
+    "title": "Underwater Submerge Transition",
+    "author": "KolbyRFX",
+    "license": "CC0",
+    "note": "Hidrófono real combinado con elementos sintetizados."
+  },
+  "rocks-bubbles": {
+    "url": "https://cdn.freesound.org/previews/705/705058_1661766-hq.mp3",
+    "page": "https://freesound.org/s/705058/",
+    "title": "Sea waves underwater, back and forth, close to the rocks with water bubbles",
+    "author": "felix.blume",
+    "license": "CC0"
+  },
+  "jungle-choco": {
+    "url": "https://cdn.freesound.org/previews/424/424763_3158178-hq.mp3",
+    "page": "https://freesound.org/s/424763/",
+    "title": "Jungle_Choco 01.wav",
+    "author": "jaime_enrique",
+    "license": "CC0"
+  },
+  "guan-bearded-1": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/9/92/Penelope_barbata_-_Bearded_Guan_XC251314.mp3",
+    "page": "https://commons.wikimedia.org/wiki/File:Penelope_barbata_-_Bearded_Guan_XC251314.mp3",
+    "title": "Penelope barbata - Bearded Guan (XC251314)",
+    "author": "Niels Krabbe (xeno-canto)",
+    "license": "CC BY-SA 3.0"
+  },
+  "guan-bearded-2": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/0/0a/Penelope_barbata_-_Bearded_Guan_XC251312.mp3",
+    "page": "https://commons.wikimedia.org/wiki/File:Penelope_barbata_-_Bearded_Guan_XC251312.mp3",
+    "title": "Penelope barbata - Bearded Guan (XC251312)",
+    "author": "Niels Krabbe (xeno-canto)",
+    "license": "CC BY-SA 3.0"
+  },
+  "guan-andean": {
+    "url": "https://upload.wikimedia.org/wikipedia/commons/7/77/Penelope_montagnii_-_Andean_Guan_XC251315.mp3",
+    "page": "https://commons.wikimedia.org/wiki/File:Penelope_montagnii_-_Andean_Guan_XC251315.mp3",
+    "title": "Penelope montagnii - Andean Guan (XC251315)",
+    "author": "Niels Krabbe (xeno-canto)",
+    "license": "CC BY-SA 3.0"
+  },
+  "sian-kaan": {
+    "url": "https://cdn.freesound.org/previews/328/328307_1661766-hq.mp3",
+    "page": "https://freesound.org/s/328307/",
+    "title": "Aquatic sound of the mangrove from the boat close to Punta Allen (Sian Ka’an)",
+    "author": "felix.blume",
+    "license": "CC0"
+  }
+}

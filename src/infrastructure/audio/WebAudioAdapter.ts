@@ -9,8 +9,30 @@ import type { SoundProfile } from '@domain/value-objects/SoundProfile';
  * lo deja arrancar dentro de un gesto del usuario. Por eso unlock() debe
  * llamarse desde el handler del botón, no en el arranque de la app.
  */
+interface Ambience {
+  readonly url: string;
+  readonly gain: GainNode;
+  readonly sources: AudioBufferSourceNode[];
+  timer: number | null;
+}
+
+/** Volumen de las voces y los toques, sobre archivos ya igualados a −16 LUFS. */
+const CLIPS_GAIN = 0.9;
+/** El ambiente acompaña, no compite: bastante por debajo de la voz. */
+const AMBIENCE_GAIN = 0.55;
+const AMBIENCE_FADE_S = 1.2;
+const AMBIENCE_CROSSFADE_S = 3;
+const CLIP_MAX_DELAY_S = 1.5;
+
+/** Curvas de potencia constante para el fundido cruzado del ambiente. */
+const FADE_IN = Float32Array.from({ length: 32 }, (_, i) => Math.sin((i / 31) * Math.PI / 2));
+const FADE_OUT = Float32Array.from({ length: 32 }, (_, i) => Math.cos((i / 31) * Math.PI / 2));
+
 export class WebAudioAdapter implements AudioPort {
   private context: AudioContext | null = null;
+  private readonly buffers = new Map<string, Promise<AudioBuffer | null>>();
+  private readonly buses = new Map<string, GainNode>();
+  private ambience: Ambience | null = null;
 
   async unlock(): Promise<void> {
     this.claimPlaybackSession();
@@ -123,9 +145,166 @@ export class WebAudioAdapter implements AudioPort {
     }
   }
 
+  preload(urls: readonly string[]): void {
+    // Una a una, no todas a la vez: en un gama media, veinte descargas en
+    // paralelo compiten con el seguimiento por la red y la CPU.
+    void urls.reduce<Promise<unknown>>((chain, url) => chain.then(() => this.load(url)), Promise.resolve());
+  }
+
+  playClip(url: string): void {
+    const context = this.ensureRunning();
+    if (context === null) return;
+    const requested = context.currentTime;
+    void this.load(url).then((buffer) => {
+      if (buffer === null || this.context !== context) return;
+      // Un toque que suena un segundo después ya no parece suyo.
+      if (context.currentTime - requested > CLIP_MAX_DELAY_S) return;
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.connect(this.bus(context, 'clips'));
+      source.onended = () => source.disconnect();
+      source.start();
+    });
+  }
+
+  startAmbience(url: string): void {
+    if (this.ambience?.url === url) return;
+    this.stopAmbience();
+    const context = this.ensureRunning();
+    if (context === null) return;
+
+    const gain = context.createGain();
+    gain.gain.setValueAtTime(0, context.currentTime);
+    gain.gain.linearRampToValueAtTime(1, context.currentTime + AMBIENCE_FADE_S);
+    gain.connect(this.bus(context, 'ambience'));
+    const ambience: Ambience = { url, gain, sources: [], timer: null };
+    this.ambience = ambience;
+
+    void this.load(url).then((buffer) => {
+      if (buffer === null || this.ambience !== ambience || this.context !== context) return;
+      this.loopLayer(context, ambience, buffer, context.currentTime + 0.05);
+    });
+  }
+
+  stopAmbience(): void {
+    const ambience = this.ambience;
+    if (ambience === null) return;
+    this.ambience = null;
+    if (ambience.timer !== null) window.clearTimeout(ambience.timer);
+    const context = this.context;
+    if (context === null) return;
+    const now = context.currentTime;
+    ambience.gain.gain.cancelScheduledValues(now);
+    ambience.gain.gain.setValueAtTime(ambience.gain.gain.value, now);
+    ambience.gain.gain.linearRampToValueAtTime(0, now + AMBIENCE_FADE_S);
+    for (const source of ambience.sources) {
+      try {
+        source.stop(now + AMBIENCE_FADE_S + 0.05);
+      } catch {
+        // Ya parada: nada que hacer.
+      }
+    }
+    window.setTimeout(() => ambience.gain.disconnect(), (AMBIENCE_FADE_S + 0.2) * 1000);
+  }
+
   dispose(): void {
+    this.stopAmbience();
     void this.context?.close();
     this.context = null;
+    this.buffers.clear();
+    this.buses.clear();
+  }
+
+  /**
+   * Una vuelta del ambiente, que se solapa con la siguiente.
+   *
+   * Un `loop = true` deja una costura audible donde el final empalma con
+   * el principio: son trozos de grabaciones de campo, no bucles hechos para
+   * encajar. Aquí cada vuelta entra y sale con un fundido de potencia
+   * constante (seno/coseno) y la siguiente empieza mientras la anterior se
+   * va, así que la unión no se oye. Con fundidos lineales el volumen caía
+   * unos 3 dB en cada empalme, justo lo que el oído detecta en un rumor
+   * continuo como el mar.
+   */
+  private loopLayer(context: AudioContext, ambience: Ambience, buffer: AudioBuffer, when: number): void {
+    const fade = Math.min(AMBIENCE_CROSSFADE_S, buffer.duration / 4);
+    const end = when + buffer.duration;
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    const layer = context.createGain();
+    // Sin setValueAtTime previo: una curva no puede compartir instante con
+    // otro evento de automatización, y la de entrada ya empieza en 0.
+    layer.gain.value = 0;
+    layer.gain.setValueCurveAtTime(FADE_IN, when, fade);
+    layer.gain.setValueCurveAtTime(FADE_OUT, end - fade, fade);
+    source.connect(layer);
+    layer.connect(ambience.gain);
+    source.onended = () => {
+      source.disconnect();
+      layer.disconnect();
+      const index = ambience.sources.indexOf(source);
+      if (index >= 0) ambience.sources.splice(index, 1);
+    };
+    source.start(when);
+    source.stop(end);
+    ambience.sources.push(source);
+
+    const next = end - fade;
+    // Se programa la siguiente con un segundo de margen: un temporizador
+    // de JavaScript no es puntual, el reloj de audio sí.
+    ambience.timer = window.setTimeout(() => {
+      if (this.ambience === ambience) this.loopLayer(context, ambience, buffer, next);
+    }, Math.max(0, (next - context.currentTime - 1) * 1000));
+  }
+
+  private load(url: string): Promise<AudioBuffer | null> {
+    const cached = this.buffers.get(url);
+    if (cached !== undefined) return cached;
+    const context = this.ensureContext();
+    if (context === null) return Promise.resolve(null);
+    const loading = fetch(url)
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.arrayBuffer();
+      })
+      // La forma con callbacks: Safari antiguo no devuelve promesa.
+      .then((data) => new Promise<AudioBuffer>((resolve, reject) => {
+        void context.decodeAudioData(data, resolve, reject);
+      }))
+      .catch((error: unknown) => {
+        console.warn(`[WebAudioAdapter] No se pudo cargar ${url}`, error);
+        this.buffers.delete(url);
+        return null;
+      });
+    this.buffers.set(url, loading);
+    return loading;
+  }
+
+  /**
+   * Dos buses con su volumen: las voces por delante y el ambiente detrás.
+   * Los archivos ya vienen igualados en sonoridad (ver build-audio), así
+   * que el equilibrio entre ambos se decide aquí y en ningún otro sitio.
+   */
+  private bus(context: AudioContext, name: 'clips' | 'ambience'): GainNode {
+    const existing = this.buses.get(name);
+    if (existing !== undefined) return existing;
+    const bus = context.createGain();
+    bus.gain.value = name === 'clips' ? CLIPS_GAIN : AMBIENCE_GAIN;
+    bus.connect(context.destination);
+    this.buses.set(name, bus);
+    return bus;
+  }
+
+  private ensureRunning(): AudioContext | null {
+    this.claimPlaybackSession();
+    const context = this.ensureContext();
+    if (context === null) return null;
+    if (context.state !== 'running') {
+      void context.resume().catch((error: unknown) => {
+        console.warn('[WebAudioAdapter] El navegador no dejó reanudar el audio', error);
+      });
+    }
+    return context;
   }
 
   /**

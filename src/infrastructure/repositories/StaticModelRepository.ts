@@ -44,10 +44,16 @@ export class StaticModelRepository implements ModelRepository {
  * Los timbres son deliberadamente distintos para que se reconozcan de oído
  * sin mirar la pantalla.
  *
- * `description` es la ficha que se lee en el primer plano, bajo el modelo.
- * Está escrita para leerse de un vistazo con el teléfono en la mano: dos
- * frases, sin cifras que nadie va a retener. REVÍSALA con quien conozca el
- * territorio antes de enseñarla — la escribió alguien que no ha estado allí.
+ * `description` es la ficha que se lee en el primer plano, bajo el modelo:
+ * los textos que entregó el equipo, uno o varios párrafos que se muestran
+ * todos. `species` es la línea de nombre científico / nombre común que va
+ * bajo el título.
+ *
+ * `soundscape` son GRABACIONES REALES: su voz, lo que suena al tocarlo y el
+ * ambiente del lugar donde vive (ver AnimalSoundscape). Los archivos los
+ * genera `npm run build-audio` desde `audio-src/`, y de dónde sale cada uno
+ * —autor y licencia— está en `public/audio/CREDITOS.md`. `sound` (timbre
+ * sintetizado) queda como respaldo para un animal sin grabaciones.
  *
  * `outlineShape` es el contorno punteado que se pinta antes de revelar al
  * animal, CALCADO DEL DIBUJO del mapa con `scripts/trace-outline.mjs` y en
@@ -93,9 +99,30 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   {
     id: 'whale',
     name: 'Ballena jorobada',
-    description:
-      'Cada año nada más de 8.000 km desde la Antártida hasta estas aguas ' +
-      'cálidas para tener a sus crías. Los machos cantan durante horas.',
+    species: 'Megaptera novaeangliae / Ballena yubarta o jorobada',
+    description: [
+      'Cada año viaja más de 8.000 km desde la Antártida hasta estas aguas tibias ' +
+        'para tener a sus crías. Nuquí es su sala de parto.',
+      'El macho canta bajo el agua durante horas: la melodía más larga del reino ' +
+        'animal. Y la compone frente a estas costas.',
+    ],
+    // Canto de jorobada (Parques Nacionales de EE. UU. y CC0), su soplido al
+    // salir a respirar y un chapuzón para el salto, y el mar de fondo.
+    soundscape: {
+      calls: [
+        '/audio/whale/call-1.mp3',
+        '/audio/whale/call-2.mp3',
+        '/audio/whale/call-3.mp3',
+        '/audio/whale/call-4.mp3',
+        '/audio/whale/call-5.mp3',
+      ],
+      taps: [
+        '/audio/whale/tap-1.mp3',
+        '/audio/whale/tap-2.mp3',
+        '/audio/whale/tap-3.mp3',
+      ],
+      ambience: '/audio/whale/ambience.mp3',
+    },
     source: ModelSource.gltf('/models/Ballena_Ani.glb'),
     animation: {
       // Nada siempre. Al tocarla salta fuera del agua, gira sobre el lomo y
@@ -161,10 +188,32 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   },
   {
     id: 'bird',
-    name: 'Pava del Chocó',
-    description:
-      'Vive en las copas del bosque húmedo y come frutos. Al volar esparce ' +
-      'las semillas, así que va sembrando la selva sin darse cuenta.',
+    name: 'Pava',
+    species: 'Penelope ortoni / Pava del Chocó',
+    description: [
+      'Endémica del Chocó biogeográfico: no existe en ningún otro lugar del planeta. ' +
+        'Su canto anuncia que el bosque está sano.',
+      'Dispersa las semillas de los árboles gigantes al comer sus frutos. ' +
+        'Cada vuelo suyo siembra selva.',
+    ],
+    // No hay grabaciones abiertas de Penelope ortoni (las de xeno-canto no se
+    // pueden descargar sin cuenta): son pavas del MISMO GÉNERO, de los Andes
+    // de Colombia y Ecuador, cuyo llamado es muy parecido. El ambiente sí es
+    // selva del Chocó.
+    soundscape: {
+      calls: [
+        '/audio/bird/call-1.mp3',
+        '/audio/bird/call-2.mp3',
+        '/audio/bird/call-3.mp3',
+        '/audio/bird/call-4.mp3',
+        '/audio/bird/call-5.mp3',
+      ],
+      taps: [
+        '/audio/bird/tap-1.mp3',
+        '/audio/bird/tap-2.mp3',
+      ],
+      ambience: '/audio/bird/ambience.mp3',
+    },
     source: ModelSource.gltf('/models/Pava_Ani.glb'),
     animation: {
       // Siempre en Idle (más el balanceo de MarkerPin, porque Idle apenas
@@ -212,10 +261,28 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   },
   {
     id: 'crab',
-    name: 'Cangrejo de manglar',
-    description:
-      'Vive entre el manglar y la playa. Excava madrigueras en la arena y ' +
-      'limpia la costa comiendo lo que deja el mar.',
+    name: 'Cangrejo',
+    species: 'Gecarcinus quadratus / Cangrejo',
+    description: [
+      'Naranja fuego sobre patas de tierra: nace en el mar pero vive en la selva. ' +
+        'Baja a la orilla solo para dejar su descendencia en las olas.',
+      'Cava túneles que airean el suelo del bosque costero. Cada madriguera suya ' +
+        'ayuda a que el manglar respire.',
+    ],
+    // Un cangrejo no tiene voz: suena al moverse. Sus pasos (uno de ellos,
+    // recreado) y, de fondo, la playa con el manglar detrás.
+    soundscape: {
+      calls: [
+        '/audio/crab/call-1.mp3',
+        '/audio/crab/call-2.mp3',
+        '/audio/crab/call-3.mp3',
+      ],
+      taps: [
+        '/audio/crab/tap-1.mp3',
+        '/audio/crab/tap-2.mp3',
+      ],
+      ambience: '/audio/crab/ambience.mp3',
+    },
     source: ModelSource.gltf('/models/Cangrejo_Ani.glb'),
     animation: {
       // Ratos quieto y ratos caminando. Al tocarlo, el mismo Walk pero a
@@ -268,10 +335,33 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   },
   {
     id: 'turtle',
-    name: 'Tortuga golfina',
-    description:
-      'Vuelve a poner sus huevos en la misma playa donde nació, después de ' +
-      'pasar años en mar abierto. Nuquí es una de esas playas.',
+    name: 'Tortuga carey',
+    species: 'Eretmochelys imbricata / Tortuga carey',
+    description: [
+      'Navega los océanos por 50 años y siempre recuerda el camino de vuelta. ' +
+        'Su caparazón, de escamas que se montan como tejas, es único: no hay dos ' +
+        'iguales en todo el mar.',
+      'Es la jardinera de los arrecifes: con su pico curvo como el de un ave come ' +
+        'esponjas que nadie más toca, y así mantiene vivo el coral. Sin ella, el ' +
+        'arrecife se ahoga.',
+      'Puede cruzar océanos enteros guiándose por el campo magnético de la Tierra, ' +
+        'como una brújula viva. Lleva más de cien millones de años surcando estos ' +
+        'mares, desde mucho antes que nosotros.',
+    ],
+    // Tampoco tiene voz: burbujas bajo el agua, el sonido de sumergirse para
+    // su buceo y, de fondo, un hidrófono en un arrecife del Caribe.
+    soundscape: {
+      calls: [
+        '/audio/turtle/call-1.mp3',
+        '/audio/turtle/call-2.mp3',
+        '/audio/turtle/call-3.mp3',
+      ],
+      taps: [
+        '/audio/turtle/tap-1.mp3',
+        '/audio/turtle/tap-2.mp3',
+      ],
+      ambience: '/audio/turtle/ambience.mp3',
+    },
     source: ModelSource.gltf('/models/Tortuga_Ani.glb'),
     animation: {
       // Nada y descansa. Al tocarla da una vuelta, se sumerge y vuelve a

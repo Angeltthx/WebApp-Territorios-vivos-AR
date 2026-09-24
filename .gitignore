@@ -10,3 +10,4 @@ dist/
 # build. La imagen de la que SÍ sale el target (`Mapa para el fondo.jpeg`)
 # va versionada; el PDF se queda en local.
 *.pdf
+audio-src/.cache/

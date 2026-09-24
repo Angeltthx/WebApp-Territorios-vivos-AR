@@ -84,6 +84,7 @@ export class ArView {
   private modelsReady = false;
   private readonly focus: HTMLElement;
   private readonly focusName: HTMLElement;
+  private readonly focusSpecies: HTMLElement;
   private readonly focusInfo: HTMLElement;
   private readonly focusClose: HTMLButtonElement;
 
@@ -121,6 +122,7 @@ export class ArView {
     this.bootStatusText = this.require(root, '#boot-status-text');
     this.focus = this.require(root, '#focus');
     this.focusName = this.require(root, '#focus-name');
+    this.focusSpecies = this.require(root, '#focus-species');
     this.focusInfo = this.require(root, '#focus-info');
     this.focusClose = this.require<HTMLButtonElement>(root, '#focus-close');
 
@@ -283,7 +285,15 @@ export class ArView {
       this.focus.dataset['modelId'] = focused.value;
       const model = this.catalog.find((candidate) => candidate.id.equals(focused));
       this.focusName.textContent = model?.name ?? '';
-      this.focusInfo.textContent = model?.description ?? '';
+      this.focusSpecies.textContent = model?.species ?? '';
+      // Un <p> por párrafo, con textContent: el texto del catálogo nunca se
+      // interpreta como HTML.
+      this.focusInfo.replaceChildren(...(model?.paragraphs ?? []).map((text) => {
+        const paragraph = document.createElement('p');
+        paragraph.textContent = text;
+        return paragraph;
+      }));
+      this.focusInfo.scrollTop = 0;
     }
 
     this.focus.dataset['visible'] = show ? 'true' : 'false';
