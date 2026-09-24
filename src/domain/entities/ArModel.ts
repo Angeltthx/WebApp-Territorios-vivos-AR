@@ -34,6 +34,8 @@ export interface ArModelSnapshot {
   readonly iconSize?: number;
   /** Hacia dónde mira, en grados sobre su eje vertical. Por defecto 0. */
   readonly facing?: number;
+  /** Tamaño en primer plano respecto a lo que cabe en pantalla (≤ 1). Por defecto 1. */
+  readonly focusSize?: number;
   /**
    * Desde qué cara se calca el CONTORNO punteado. Por defecto, la misma
    * desde la que se mira el icono; se separa porque el dibujo del mapa y el
@@ -89,6 +91,7 @@ export class ArModel {
         snapshot.outlineView ?? view,
         snapshot.outlineSpin ?? 0,
         snapshot.outlineMirror ?? false,
+        snapshot.focusSize ?? 1,
       ),
       Scale.of(snapshot.defaultScale ?? 1),
     );

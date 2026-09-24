@@ -1,6 +1,41 @@
 import type { MindARThree, MindARAnchor } from 'mind-ar/dist/mindar-image-three.prod.js';
 
-export type FrameCallback = (deltaSeconds: number) => void;
+import { FrameLockedBackground } from './FrameLockedBackground';
+
+/**
+ * Trabajo por fotograma. Devuelve `true` si ha dejado algo que pintar: si
+ * nadie lo hace, el fotograma no se renderiza (ver `startLoop`).
+ */
+export type FrameCallback = (deltaSeconds: number) => boolean | void;
+
+/**
+ * Cuánto se le pide a la GPU. 'full' es lo de siempre; 'lite' pinta a menos
+ * resolución y a 30 fps, que en un gama media es la diferencia entre que el
+ * seguimiento vaya fluido o a trompicones: three y TensorFlow comparten GPU,
+ * y cada milisegundo que gasta el render se lo quita al detector.
+ */
+export type RenderProfile = 'full' | 'lite';
+
+const PROFILE = {
+  full: { maxPixelRatio: 1.5, pixelBudget: 1_500_000, frameMs: 1000 / 60 },
+  lite: { maxPixelRatio: 1, pixelBudget: 700_000, frameMs: 1000 / 30 },
+} as const;
+
+/** Por encima de esto (media móvil del intervalo real entre fotogramas) el teléfono no llega. */
+const STRUGGLING_FRAME_MS = 1000 / 38;
+/** Segundos seguidos sin llegar antes de bajar a 'lite'. Nunca se vuelve a subir: oscilar se ve peor. */
+const STRUGGLING_SECONDS = 2.5;
+
+/**
+ * El punto de partida por dispositivo. `deviceMemory` solo existe en
+ * Chrome/Android —justo donde está la gama media— y redondea a la baja:
+ * un teléfono de 4 GB informa 4. iPhone no lo expone y arranca en 'full';
+ * si no llegara, el gobernador de `startLoop` lo baja solo.
+ */
+export function initialRenderProfile(): RenderProfile {
+  const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  return memory !== undefined && memory <= 4 ? 'lite' : 'full';
+}
 
 export interface MindArTuning {
   readonly maxTrack: number;
@@ -49,6 +84,11 @@ export class MindArRuntime {
   private instance: MindARThree | null = null;
   private anchorRef: MindARAnchor | null = null;
   private readonly frameCallbacks = new Set<FrameCallback>();
+  private readonly frameLock = new FrameLockedBackground();
+  private profile: RenderProfile = initialRenderProfile();
+  private averageFrameMs = 1000 / 60;
+  private strugglingSeconds = 0;
+  private drewLastFrame = true;
   private lastFrameMs = 0;
   private looping = false;
   private anchorVisibleFlag = false;
@@ -152,18 +192,28 @@ export class MindArRuntime {
 
     renderer.setAnimationLoop(() => {
       const now = performance.now();
-      // Pantallas de 90/120/144 Hz no necesitan duplicar el trabajo de AR.
-      if (now - this.lastFrameMs < 1000 / 60 - 1) return;
-      const delta = Math.min((now - this.lastFrameMs) / 1000, 0.1);
+      // Pantallas de 90/120/144 Hz no necesitan duplicar el trabajo de AR,
+      // y en 'lite' se pinta a 30.
+      if (now - this.lastFrameMs < PROFILE[this.profile].frameMs - 1) return;
+      const elapsedMs = now - this.lastFrameMs;
+      const delta = Math.min(elapsedMs / 1000, 0.1);
       this.lastFrameMs = now;
 
       // Las poses de MindAR se escriben en las matrices locales de forma
       // asíncrona respecto al render, así que hay que refrescar el árbol
       // antes de leerlas para el suavizado.
       scene.updateMatrixWorld(true);
-      this.frameCallbacks.forEach((callback) => callback(delta));
+      let drew = false;
+      this.frameCallbacks.forEach((callback) => {
+        if (callback(delta) === true) drew = true;
+      });
 
-      renderer.render(scene, camera);
+      // Sin nada en escena (buscando el mapa) no se pinta: la GPU queda
+      // entera para el detector, que es lo que hay que acelerar entonces.
+      // Un último render deja el lienzo limpio al desaparecer todo.
+      if (drew || this.drewLastFrame) renderer.render(scene, camera);
+      this.drewLastFrame = drew;
+      if (drew) this.govern(elapsedMs, delta);
     });
   }
 
@@ -182,8 +232,37 @@ export class MindArRuntime {
     this.anchorVisibleFlag = visible;
   }
 
+  /**
+   * Visible Y con una pose que corresponde a lo que se ve. Con el fondo
+   * sincronizado, un seguimiento perdido por un tirón oculta los animales
+   * en vez de dejarlos flotando donde estaba el mapa (ver FrameLockedBackground).
+   */
   get anchorVisible(): boolean {
-    return this.anchorVisibleFlag;
+    return this.anchorVisibleFlag && !this.frameLock.isStale;
+  }
+
+  /**
+   * Engancha la vigilancia de poses viejas. Tras `mindar.start()`. El fondo
+   * sigue siendo el vídeo en vivo: sincronizarlo con la pose hacía vibrar
+   * la imagen (ver FrameLockedBackground).
+   */
+  lockBackgroundToPose(): void {
+    const mindar = this.mindar;
+    const installed = this.frameLock.install(
+      (mindar as unknown as { controller?: unknown }).controller,
+      mindar.video,
+      this.container,
+      { lockBackground: false },
+    );
+    if (!installed) console.info('[MindArRuntime] Sin vigilancia de poses: MindAR no expone su controlador');
+  }
+
+  unlockBackground(): void {
+    this.frameLock.uninstall();
+  }
+
+  get renderProfile(): RenderProfile {
+    return this.profile;
   }
 
   get mindar(): MindARThree {
@@ -205,17 +284,38 @@ export class MindArRuntime {
    * imagen real de la cámara: gestión de color correcta, tone mapping
    * fílmico y densidad de píxeles limitada para no fundir la batería.
    */
-  private configureRenderer(): void {
-    const renderer = this.mindar.renderer;
+  /**
+   * Baja a 'lite' si el teléfono no sostiene el ritmo. Solo cuenta los
+   * fotogramas que sí se pintan: buscando el mapa no se renderiza nada y
+   * ese intervalo no dice nada de la GPU.
+   */
+  private govern(elapsedMs: number, delta: number): void {
+    if (this.profile === 'lite') return;
+    this.averageFrameMs += (Math.min(elapsedMs, 200) - this.averageFrameMs) * 0.1;
+    this.strugglingSeconds = this.averageFrameMs > STRUGGLING_FRAME_MS
+      ? this.strugglingSeconds + delta
+      : 0;
+    if (this.strugglingSeconds < STRUGGLING_SECONDS) return;
+    this.profile = 'lite';
+    this.applyPixelRatio();
+    console.info(`[MindArRuntime] Perfil lite: ${this.averageFrameMs.toFixed(0)} ms por fotograma`);
+  }
+
+  private applyPixelRatio(): void {
     // Limita el trabajo de fragmentos también en tablets y pantallas retina.
     // No cambia la resolución del detector ni la proyección de la cámara.
-    const pixelRatio = () => Math.max(0.75, Math.min(
+    const { maxPixelRatio, pixelBudget } = PROFILE[this.profile];
+    const area = Math.max(1, this.container.clientWidth * this.container.clientHeight);
+    this.mindar.renderer.setPixelRatio(Math.max(0.75, Math.min(
       window.devicePixelRatio || 1,
-      1.5,
-      Math.sqrt(1500000 / Math.max(1, this.container.clientWidth * this.container.clientHeight)),
-    ));
-    renderer.setPixelRatio(pixelRatio());
-    window.addEventListener('resize', () => renderer.setPixelRatio(pixelRatio()));
+      maxPixelRatio,
+      Math.sqrt(pixelBudget / area),
+    )));
+  }
+
+  private configureRenderer(): void {
+    this.applyPixelRatio();
+    window.addEventListener('resize', () => this.applyPixelRatio());
 
     // MindAR mete SIEMPRE un CSS3DRenderer en el contenedor, se use o no
     // (three.js:42-43), y lo añade DESPUÉS del canvas WebGL. Su div queda

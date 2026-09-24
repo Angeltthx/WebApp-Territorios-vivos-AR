@@ -71,9 +71,8 @@ export class StaticModelRepository implements ModelRepository {
  * pivote descentrado): IconLoader los recentra y los encaja a ICON_TARGET_SIZE
  * al cargarlos, así que aquí no hay que tocar `defaultScale` por modelo.
  *
- * Pava, cangrejo y tortuga van de frente. La ballena va de perfil: su cuerpo
- * largo apuntando a la cámara crecía demasiado en perspectiva y salía del
- * borde superior. Arrastrando el dedo se pueden girar en su propio sitio.
+ * Los cuatro van de frente, mirando a quien sostiene el teléfono.
+ * Arrastrando el dedo se pueden girar en su propio sitio.
  *
  * `iconSize` es por animal porque cada uno enseña una silueta distinta. Los
  * números se comprueban sobre el mapa en pantalla, no solo con las medidas
@@ -114,14 +113,17 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     // El punto queda dentro del dibujo de la ballena; un poco más abajo que
     // su centro para que la silueta 3D no rebase el borde en perspectiva.
     spot: { u: 0.304, v: 0.19 },
-    // DE PERFIL, no de frente. De frente su largo apunta a la cámara: en
-    // perspectiva crecía hasta salirse del mapa por arriba, y al acercar el
-    // teléfono para descubrirla el morro cruzaba el plano cercano de la
-    // cámara y se cortaba. De perfil enseña lo que es una ballena —el
-    // largo— y el salto se lee como un salto.
-    view: 'side',
-    iconSize: 1.4,
-    facing: 180,
+    // De frente, como los otros tres: los cuatro miran a quien sostiene el
+    // teléfono. Se probó de perfil porque de frente su largo apunta a la
+    // cámara, pero lo que se veía "demasiado grande" era el PRIMER PLANO, no
+    // el mapa: allí el tamaño lo acota ahora `STAGE_MAX_WIDTH` contando la
+    // perspectiva, y `focusSize` la deja un poco por debajo de ese tope.
+    // Sobre el mapa, en cambio, se pidió MÁS grande: es el animal más grande
+    // del mapa y tiene que leerse así junto a los otros tres.
+    view: 'front',
+    iconSize: 2.1,
+    focusSize: 0.85,
+    facing: 0,
     // La primera que se calcó, y la que dejó claro que había que calcarlas
     // todas: en el mapa está buceando, con la cola alzada y la aleta
     // pectoral extendida hacia abajo. El modelo es una ballena recta;
@@ -232,7 +234,8 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     // Ya se veía de frente; 'front' es exactamente la misma orientación
     // que tenía con 'side' + 90°, escrita de forma directa.
     view: 'front',
-    iconSize: 0.75,
+    // Algo mayor que su dibujo (0.08), que en pantalla se quedaba en nada.
+    iconSize: 0.95,
     facing: 0,
     // Dibujado en planta, como se ve un cangrejo en la arena, con los ojos
     // y las pinzas hacia ARRIBA del mapa. Visto desde arriba el modelo mira

@@ -237,6 +237,7 @@ export class MarkerPin {
   /** Giro propio del animal, del catálogo. Se suma al del usuario. */
   private readonly facing: number;
   private readonly view: IconView;
+  private readonly focusFactor: number;
   /**
    * Medio fondo del icono a escala 1, medido tras orientarlo.
    *
@@ -292,6 +293,7 @@ export class MarkerPin {
     applyView(this.lift, model.pose.view);
     this.facing = model.pose.facing;
     this.view = model.pose.view;
+    this.focusFactor = model.pose.focusSize;
     this.lift.position.z = HOVER_HEIGHT;
     this.lift.add(this.icon);
     this.group.add(this.lift);
@@ -426,6 +428,11 @@ export class MarkerPin {
    * en el mapa. Allí el escenario no aplica `applyView`, así que la ballena
    * —de perfil sobre el mapa— salía de morro hacia la cámara.
    */
+  /** Factor del catálogo para el tamaño en primer plano (ver IconPose.focusSize). */
+  get focusSize(): number {
+    return this.focusFactor;
+  }
+
   get stageYaw(): number {
     return this.facing + (this.view === 'side' ? -Math.PI / 2 : 0);
   }

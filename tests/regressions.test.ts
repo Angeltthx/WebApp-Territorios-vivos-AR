@@ -15,6 +15,7 @@ import { MarkerPin } from '../src/infrastructure/rendering/MarkerPin';
 import { fitToIconSize, tameBreach } from '../src/infrastructure/rendering/IconLoader';
 import { TapChoreography } from '../src/infrastructure/rendering/TapChoreography';
 import { MindArTrackingAdapter } from '../src/infrastructure/tracking/MindArTrackingAdapter';
+import { FrameLockedBackground } from '../src/infrastructure/mindar/FrameLockedBackground';
 import { CameraPermissionDeniedError } from '../src/application/ports/TrackingPort';
 import {
   AnimationClip,
@@ -151,7 +152,7 @@ test('adaptador conserva denegación de cámara, silencia antes de await y resta
   };
   const runtime = {
     init: () => mindar, mindar, anchor: {}, isInitialized: true,
-    setAnchorVisible() {}, stopLoop() {},
+    setAnchorVisible() {}, stopLoop() {}, unlockBackground() {}, renderProfile: 'full',
   };
   const tracking = new MindArTrackingAdapter(runtime as never);
   const start = tracking.start();
@@ -429,4 +430,135 @@ test('pin real conserva ID en primer plano, permite raycast, pulsa y libera geom
   adapter.clear();
   assert.equal(disposed, true);
   assert.equal(adapter.pickables, null);
+});
+
+test('el fondo muestra el fotograma analizado y suelta a los animales si el seguimiento se pierde', () => {
+  const drawn: unknown[] = [];
+  const canvases: { style: Record<string, string>; width: number; height: number; removed: boolean }[] = [];
+  globalThis.document = {
+    createElement: () => {
+      const canvas = {
+        style: {} as Record<string, string>, width: 0, height: 0, removed: false,
+        setAttribute() {}, remove() { canvas.removed = true; },
+        getContext: () => ({ drawImage: (source: unknown) => drawn.push(source) }),
+      };
+      canvases.push(canvas);
+      return canvas;
+    },
+  } as unknown as Document;
+  const source = { width: 1280, height: 720 };
+  const originalLoad = () => 'tensor';
+  const states = [{ showing: true, isTracking: true }];
+  const updates: string[] = [];
+  const originalUpdate = (data: { type: string }) => { updates.push(data.type); };
+  const controller = {
+    inputLoader: { context: { canvas: source }, loadInput: originalLoad },
+    onUpdate: originalUpdate as ((data: { type: string }) => void) | null,
+    trackingStates: states,
+  };
+  const video = { videoWidth: 1280, videoHeight: 720, style: { top: '-10px', left: '0px', width: '400px', height: '700px', opacity: '' } };
+  const container = { appendChild() {} };
+  const frame = (tracking: boolean) => {
+    states[0]!.isTracking = tracking;
+    assert.equal(controller.inputLoader.loadInput(video), 'tensor');
+    controller.onUpdate!({ type: 'processDone' });
+  };
+
+  const lock = new FrameLockedBackground();
+  assert.equal(lock.install(controller, video as never, container as never, { lockBackground: true }), true);
+  frame(true);
+  // Se copió el fotograma analizado y se enseña con el encuadre del vídeo.
+  assert.equal(drawn[0], source);
+  assert.equal(canvases.filter((c) => c.style['visibility'] === 'visible').length, 1);
+  assert.equal(canvases.find((c) => c.style['visibility'] === 'visible')?.style['top'], '-10px');
+  assert.equal(video.style.opacity, '0');
+  assert.deepEqual(updates, ['processDone']);
+
+  // Unos fallos se aguantan congelados; más, y los animales se ocultan.
+  for (let i = 0; i < 3; i += 1) frame(false);
+  assert.equal(lock.isStale, false);
+  frame(false);
+  assert.equal(lock.isStale, true);
+  assert.equal(video.style.opacity, '');
+  frame(true);
+  assert.equal(lock.isStale, false);
+
+  lock.uninstall();
+  assert.equal(controller.inputLoader.loadInput, originalLoad);
+  assert.equal(controller.onUpdate, originalUpdate);
+  assert.ok(canvases.every((c) => c.removed));
+
+  // Teléfono girado: la copia de MindAR va rotada y no se engancha nada.
+  const rotated = new FrameLockedBackground();
+  assert.equal(rotated.install(controller, { ...video, videoWidth: 720, videoHeight: 1280 } as never, container as never, { lockBackground: true }), false);
+  assert.equal(controller.inputLoader.loadInput, originalLoad);
+});
+
+test('por defecto el fondo sigue en vivo y solo se vigilan las poses viejas', () => {
+  const states = [{ showing: true, isTracking: true }];
+  const originalLoad = () => 'tensor';
+  const originalUpdate = () => {};
+  const controller = {
+    inputLoader: { context: { canvas: { width: 1280, height: 720 } }, loadInput: originalLoad },
+    onUpdate: originalUpdate as ((data: { type: string }) => void) | null,
+    trackingStates: states,
+  };
+  const video = { videoWidth: 1280, videoHeight: 720, style: { opacity: '' } };
+  const lock = new FrameLockedBackground();
+  assert.equal(lock.install(controller, video as never, { appendChild() { throw new Error('sin lienzos'); } } as never), true);
+  // Ni se copia el fotograma ni se toca el vídeo…
+  assert.equal(controller.inputLoader.loadInput, originalLoad);
+  states[0]!.isTracking = false;
+  for (let i = 0; i < 5; i += 1) controller.onUpdate!({ type: 'processDone' });
+  assert.equal(lock.isStale, false);
+  controller.onUpdate!({ type: 'processDone' });
+  assert.equal(video.style.opacity, '');
+  // …pero una pose vieja sigue ocultando a los animales.
+  assert.equal(lock.isStale, true);
+  lock.uninstall();
+  assert.equal(controller.onUpdate, originalUpdate);
+});
+
+test('en primer plano, un animal largo mirando a la cámara no se sale de la pantalla', async () => {
+  globalThis.document = { createElement: () => ({ getContext: () => null }) } as unknown as Document;
+  const scene = new Scene();
+  // Proporción de un teléfono en vertical.
+  const camera = new PerspectiveCamera(60, 0.46, 0.01, 100);
+  let advance = (_delta: number): unknown => undefined;
+  const runtime = {
+    prepare: async () => {},
+    init: () => ({ scene, renderer: {} }),
+    mindar: { scene, camera, renderer: {} },
+    onFrame: (fn: (delta: number) => unknown) => { advance = fn; return () => {}; },
+    anchorVisible: false,
+  };
+  const whale = ArModel.fromSnapshot({
+    id: 'whale', name: 'Ballena', description: 'Ficha',
+    source: ModelSource.primitive('whale', 0x224466), spot: { u: 0.5, v: 0.5 },
+    view: 'front', iconSize: 1.6,
+    outlineShape: [{ u: 0.4, v: 0.4 }, { u: 0.6, v: 0.4 }, { u: 0.5, v: 0.6 }],
+    sound: { waveform: 'sine', rootFrequencyHz: 90, overtoneRatios: [1], durationMs: 1800 },
+  });
+  const adapter = new ThreeSceneAdapter(runtime as never, 1.432);
+  await adapter.preload([whale]);
+  // Descubrirla la pone en primer plano.
+  adapter.applyDiscovery(ArSession.idle().discovery.unlock(whale.id));
+  const icon = adapter.pickables?.get('whale')?.children.find((child) => child.userData['modelId'] === 'whale');
+  assert.ok(icon);
+  camera.updateMatrixWorld(true);
+  // Toda una vuelta del giro de cortesía: de lado, de morro, de espaldas.
+  for (let frame = 0; frame < 120; frame += 1) {
+    assert.equal(advance(0.25), true);
+    scene.updateMatrixWorld(true);
+    const box = new Box3().setFromObject(icon);
+    for (const x of [box.min.x, box.max.x]) {
+      for (const y of [box.min.y, box.max.y]) {
+        for (const z of [box.min.z, box.max.z]) {
+          const ndc = new Vector3(x, y, z).project(camera);
+          assert.ok(Math.abs(ndc.x) <= 1, `se sale por el lado en el fotograma ${frame}: ${ndc.x.toFixed(2)}`);
+        }
+      }
+    }
+  }
+  adapter.clear();
 });

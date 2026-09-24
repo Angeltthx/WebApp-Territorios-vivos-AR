@@ -65,6 +65,12 @@ export class IconPose {
      * espejo, porque eso además deja al animal panza arriba.
      */
     readonly outlineMirror: boolean,
+    /**
+     * Multiplica el tamaño en PRIMER PLANO, y solo ahí. Allí el animal se
+     * encaja a la pantalla, no al mapa, así que `size` no le afecta: esto
+     * es lo que deja ajustar uno sin tocar a los demás. 1 = como encaja.
+     */
+    readonly focusSize: number = 1,
   ) {
     Object.freeze(this);
   }
@@ -77,7 +83,11 @@ export class IconPose {
     outlineView: IconView = view,
     outlineSpinDegrees = 0,
     outlineMirror = false,
+    focusSize = 1,
   ): IconPose {
+    if (!Number.isFinite(focusSize) || focusSize <= 0 || focusSize > 1) {
+      throw new RangeError(`Tamaño en primer plano inválido: ${focusSize}. Entre 0 y 1.`);
+    }
     if (!VIEWS.includes(view)) {
       throw new RangeError(`Vista desconocida: "${view}". Usa ${VIEWS.join(' o ')}.`);
     }
@@ -102,6 +112,7 @@ export class IconPose {
       outlineView,
       (outlineSpinDegrees * Math.PI) / 180,
       outlineMirror,
+      focusSize,
     );
   }
 

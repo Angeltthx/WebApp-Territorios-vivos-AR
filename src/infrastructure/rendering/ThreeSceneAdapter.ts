@@ -51,6 +51,23 @@ const STAGE_DISTANCE = 0.5;
 const STAGE_FILL = 0.42;
 /** Giro lento de cortesía, para que se vea que es un objeto y no una foto. */
 const STAGE_IDLE_SPIN = 0.25;
+/**
+ * Fracción del ancho de pantalla que puede llegar a ocupar el animal en
+ * primer plano CONTANDO la perspectiva. La ballena de frente apunta su largo
+ * a la cámara: el ajuste por la silueta proyectada la dejaba medir hasta
+ * 1,3 veces el ancho, y en perspectiva el morro, más cerca, se veía aún
+ * mayor —más grande que la pantalla—. Los animales pequeños nunca llegan.
+ */
+const STAGE_MAX_WIDTH = 0.82;
+
+/**
+ * Suavizado ADAPTATIVO del seguimiento. En reposo el mapa tiembla unas
+ * milésimas y hay que suavizarlo; en un movimiento brusco cualquier
+ * suavizado es retraso, y los animales se quedaban atrás. A partir de estos
+ * saltos por fotograma se sigue a la pose tal cual.
+ */
+const SNAP_DISTANCE = 0.03;
+const SNAP_ANGLE = 0.035;
 
 export class ThreeSceneAdapter implements ScenePort {
   private readonly follower = new Group();
@@ -267,11 +284,19 @@ export class ThreeSceneAdapter implements ScenePort {
       Math.abs(Math.sin(yaw)) * this.stagedNaturalSize.z;
     const availableHeight = visibleHeight * STAGE_FILL;
     const availableWidth = visibleHeight * camera.aspect * 0.76;
+    // Tope que no depende del giro: el lado mayor en planta, con lo que lo
+    // agranda la perspectiva cuando apunta a la cámara (su extremo queda a
+    // `distance - s·r` en vez de a `distance`). Despejando s de
+    // s·r·d / (d − s·r) ≤ W queda la expresión de abajo.
+    const halfWidth = (visibleHeight * camera.aspect * STAGE_MAX_WIDTH) / 2;
+    const radius = Math.max(this.stagedNaturalSize.x, this.stagedNaturalSize.z) / 2;
+    const perspectiveCap = (halfWidth * distance) / (radius * (distance + halfWidth));
     const fittedScale = Math.min(
       availableHeight / this.stagedNaturalSize.y,
       availableWidth / Math.max(projectedWidth, this.stagedNaturalSize.z * 0.6),
+      perspectiveCap,
     );
-    icon.scale.setScalar(fittedScale * this.scale * bump);
+    icon.scale.setScalar(fittedScale * (pin?.focusSize ?? 1) * this.scale * bump);
     // El gesto de toque (salto, buceo, correteo) y su salpicón, igual que
     // sobre el mapa: lo aplica el propio pin, que es quien lo lleva.
     if (pin !== undefined) {
@@ -367,7 +392,7 @@ export class ThreeSceneAdapter implements ScenePort {
     this.mounted = true;
   }
 
-  private onFrame(deltaSeconds: number): void {
+  private onFrame(deltaSeconds: number): boolean {
     this.elapsed += deltaSeconds;
     this.followAnchor(deltaSeconds);
     this.evaluateProximity(deltaSeconds);
@@ -377,6 +402,8 @@ export class ThreeSceneAdapter implements ScenePort {
       // primer plano. Los demás quedan pausados para ahorrar CPU y batería.
       if (this.follower.visible || pin.isFocused) pin.advance(deltaSeconds, this.elapsed);
     }
+    // Hay algo que pintar: si no, el runtime se ahorra el render.
+    return this.follower.visible || this.stage.visible;
   }
 
   /**
@@ -517,7 +544,13 @@ export class ThreeSceneAdapter implements ScenePort {
     }
 
     const factor = this.stabilization.smoothingFactor;
-    const step = factor >= 1 ? 1 : 1 - Math.pow(1 - factor, deltaSeconds * 60);
+    const smooth = factor >= 1 ? 1 : 1 - Math.pow(1 - factor, deltaSeconds * 60);
+    // Cuánto se ha movido el mapa respecto a lo pintado: en anchos de mapa
+    // (la escala del anchor es el ancho del mapa) y en radianes.
+    const moved = this.follower.position.distanceTo(this.tmpPosition) / Math.max(this.tmpScale.x, 1e-6);
+    const turned = this.follower.quaternion.angleTo(this.tmpQuaternion);
+    const urgency = Math.min(1, Math.max(moved / SNAP_DISTANCE, turned / SNAP_ANGLE));
+    const step = smooth + (1 - smooth) * urgency;
 
     this.follower.position.lerp(this.tmpPosition, step);
     this.follower.quaternion.slerp(this.tmpQuaternion, step);

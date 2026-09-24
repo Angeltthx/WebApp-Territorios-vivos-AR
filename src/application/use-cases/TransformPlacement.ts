@@ -4,9 +4,9 @@ import type { ScenePort } from '../ports/ScenePort';
 import type { SessionListener } from './StartArExperience';
 
 /**
- * Rotar y escalar el objeto ya colocado. Las reglas (límites de escala,
- * normalización del ángulo) viven en el dominio; este caso de uso solo
- * coordina dominio y escena.
+ * Rotar los animales en su sitio. La regla (normalización del ángulo) vive
+ * en el dominio; este caso de uso solo coordina dominio y escena. Escalar
+ * a mano se quitó: cada animal tiene su tamaño fijo en el catálogo.
  */
 export class TransformPlacement {
   constructor(
@@ -14,10 +14,6 @@ export class TransformPlacement {
     private readonly getSession: () => ArSession,
     private readonly onSessionChange: SessionListener,
   ) {}
-
-  scaleBy(factor: number): void {
-    this.apply((placement) => placement.scaledBy(factor));
-  }
 
   rotateBy(radians: number): void {
     this.apply((placement) => placement.rotatedBy(radians));

@@ -68,6 +68,9 @@ export class MindArTrackingAdapter implements TrackingPort {
     this.silenceVideoChrome(mindar.video);
     this.resumePlayback(mindar.video);
     this.tuneCamera(mindar.video);
+    // El fondo pasa a ser el fotograma analizado, no el vídeo en vivo: los
+    // animales dejan de ir a destiempo al mover el teléfono de golpe.
+    this.runtime.lockBackgroundToPose();
     this.runtime.startLoop();
   }
 
@@ -75,6 +78,7 @@ export class MindArTrackingAdapter implements TrackingPort {
     if (!this.runtime.isInitialized) return;
     this.runtime.setAnchorVisible(false);
     this.runtime.stopLoop();
+    this.runtime.unlockBackground();
     const mindar = this.runtime.mindar;
     // stop() de MindAR asume controlador Y stream: no existen si se denegó
     // el permiso o falló el arranque. Limpieza válida también en ese caso.
@@ -124,6 +128,12 @@ export class MindArTrackingAdapter implements TrackingPort {
    * 960 px → 9/12 y 321; 1280 px → 10/12 y 399. Detectar a la primera es
    * lo que se nota como "reconoce rápido", así que se pide 1280x720.
    *
+   * SALVO en perfil 'lite' (gama media, ver `initialRenderProfile`): ahí se
+   * pide 960x540. El seguimiento de cada fotograma cuesta en proporción a
+   * sus píxeles, y en esos teléfonos un seguimiento lento es justo lo que
+   * hacía que los animales fueran a destiempo. 960 detecta casi igual
+   * (9/12 frente a 10/12) con un 44 % menos de píxeles.
+   *
    * Por qué un parche temporal a `getUserMedia` y no `applyConstraints`
    * después: para cuando el stream existe, MindAR ya creó el Controller
    * con el tamaño viejo, y cambiar la resolución entonces descuadra la
@@ -135,6 +145,12 @@ export class MindArTrackingAdapter implements TrackingPort {
    * propósito: una cámara que no pueda dar 720p entrega lo que tenga en
    * vez de fallar.
    */
+  private cameraSize(): MediaTrackConstraints {
+    return this.runtime.renderProfile === 'lite'
+      ? { width: { ideal: 960 }, height: { ideal: 540 } }
+      : { width: { ideal: 1280 }, height: { ideal: 720 } };
+  }
+
   private withSharperCamera<T>(run: () => T): T {
     const media = navigator.mediaDevices;
     const original = media?.getUserMedia;
@@ -144,7 +160,7 @@ export class MindArTrackingAdapter implements TrackingPort {
       const video = constraints?.video;
       const enriched: MediaStreamConstraints =
         typeof video === 'object'
-          ? { ...constraints, video: { width: { ideal: 1280 }, height: { ideal: 720 }, ...video } }
+          ? { ...constraints, video: { ...this.cameraSize(), ...video } }
           : (constraints ?? {});
       return original.call(media, enriched).catch((error: unknown) => {
         // MindAR llama reject() sin argumento; conservamos la causa real.

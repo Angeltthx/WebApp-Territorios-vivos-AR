@@ -120,7 +120,6 @@ view = new ArView(root, {
     interaction.attach({
       onTapModel: (modelId) => void playModelSound.execute(modelId),
       onRotate: (delta) => transformPlacement.rotateBy(delta),
-      onScale: (factor) => transformPlacement.scaleBy(factor),
     });
   },
 });
