@@ -8,6 +8,7 @@ import type { MindArRuntime } from '../mindar/MindArRuntime';
 
 export class MindArTrackingAdapter implements TrackingPort {
   private readonly handlers = new Map<TrackingEvent, Set<() => void>>();
+  private cameraError: unknown = null;
 
   constructor(private readonly runtime: MindArRuntime) {}
 
@@ -18,7 +19,9 @@ export class MindArTrackingAdapter implements TrackingPort {
     const hasWebGL = (() => {
       try {
         const canvas = document.createElement('canvas');
-        return (canvas.getContext('webgl2') ?? canvas.getContext('webgl')) !== null;
+        const gl = canvas.getContext('webgl2') ?? canvas.getContext('webgl');
+        gl?.getExtension('WEBGL_lose_context')?.loseContext();
+        return gl !== null;
       } catch {
         return false;
       }
@@ -31,6 +34,7 @@ export class MindArTrackingAdapter implements TrackingPort {
   }
 
   async start(): Promise<void> {
+    this.cameraError = null;
     const mindar = this.runtime.init();
     const anchor = this.runtime.anchor;
 
@@ -53,8 +57,9 @@ export class MindArTrackingAdapter implements TrackingPort {
     try {
       await starting;
     } catch (error) {
-      if (this.isPermissionError(error)) throw new CameraPermissionDeniedError();
-      throw error;
+      const cause = this.cameraError ?? error;
+      if (this.isPermissionError(cause)) throw new CameraPermissionDeniedError();
+      throw cause;
     }
 
     // Otra vez con el stream ya puesto: barato, y deshace cualquier atributo
@@ -63,6 +68,9 @@ export class MindArTrackingAdapter implements TrackingPort {
     this.silenceVideoChrome(mindar.video);
     this.resumePlayback(mindar.video);
     this.tuneCamera(mindar.video);
+    // El fondo pasa a ser el fotograma analizado, no el vídeo en vivo: los
+    // animales dejan de ir a destiempo al mover el teléfono de golpe.
+    this.runtime.lockBackgroundToPose();
     this.runtime.startLoop();
   }
 
@@ -70,7 +78,20 @@ export class MindArTrackingAdapter implements TrackingPort {
     if (!this.runtime.isInitialized) return;
     this.runtime.setAnchorVisible(false);
     this.runtime.stopLoop();
-    this.runtime.mindar.stop();
+    this.runtime.unlockBackground();
+    const mindar = this.runtime.mindar;
+    // stop() de MindAR asume controlador Y stream: no existen si se denegó
+    // el permiso o falló el arranque. Limpieza válida también en ese caso.
+    mindar.controller?.stopProcessVideo();
+    const video = mindar.video as HTMLVideoElement | undefined;
+    const stream = video?.srcObject;
+    if (stream instanceof MediaStream) stream.getTracks().forEach((track) => track.stop());
+    if (video !== undefined) {
+      video.pause();
+      video.srcObject = null;
+      video.remove();
+    }
+    this.runtime.anchor.visible = false;
   }
 
   on(event: TrackingEvent, handler: () => void): Unsubscribe {
@@ -107,6 +128,12 @@ export class MindArTrackingAdapter implements TrackingPort {
    * 960 px → 9/12 y 321; 1280 px → 10/12 y 399. Detectar a la primera es
    * lo que se nota como "reconoce rápido", así que se pide 1280x720.
    *
+   * SALVO en perfil 'lite' (gama media, ver `initialRenderProfile`): ahí se
+   * pide 960x540. El seguimiento de cada fotograma cuesta en proporción a
+   * sus píxeles, y en esos teléfonos un seguimiento lento es justo lo que
+   * hacía que los animales fueran a destiempo. 960 detecta casi igual
+   * (9/12 frente a 10/12) con un 44 % menos de píxeles.
+   *
    * Por qué un parche temporal a `getUserMedia` y no `applyConstraints`
    * después: para cuando el stream existe, MindAR ya creó el Controller
    * con el tamaño viejo, y cambiar la resolución entonces descuadra la
@@ -118,6 +145,12 @@ export class MindArTrackingAdapter implements TrackingPort {
    * propósito: una cámara que no pueda dar 720p entrega lo que tenga en
    * vez de fallar.
    */
+  private cameraSize(): MediaTrackConstraints {
+    return this.runtime.renderProfile === 'lite'
+      ? { width: { ideal: 960 }, height: { ideal: 540 } }
+      : { width: { ideal: 1280 }, height: { ideal: 720 } };
+  }
+
   private withSharperCamera<T>(run: () => T): T {
     const media = navigator.mediaDevices;
     const original = media?.getUserMedia;
@@ -127,9 +160,13 @@ export class MindArTrackingAdapter implements TrackingPort {
       const video = constraints?.video;
       const enriched: MediaStreamConstraints =
         typeof video === 'object'
-          ? { ...constraints, video: { width: { ideal: 1280 }, height: { ideal: 720 }, ...video } }
+          ? { ...constraints, video: { ...this.cameraSize(), ...video } }
           : (constraints ?? {});
-      return original.call(media, enriched);
+      return original.call(media, enriched).catch((error: unknown) => {
+        // MindAR llama reject() sin argumento; conservamos la causa real.
+        this.cameraError = error;
+        throw error;
+      });
     };
 
     try {

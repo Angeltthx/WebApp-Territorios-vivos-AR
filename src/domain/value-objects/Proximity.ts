@@ -59,7 +59,10 @@ export class Proximity {
    * se ajustan mirando ese número en el teléfono.
    */
   static default(): Proximity {
-    return new Proximity(1.25, 1.6, 0.62);
+    // Calibración de dispositivo: 1,25 obligaba a acercar el teléfono hasta
+    // comprometer el encuadre del mapa. A 1,75 el gesto sigue siendo claro,
+    // pero el detector aún conserva suficientes rasgos alrededor del animal.
+    return new Proximity(1.75, 2.15, 0.72);
   }
 
   /**

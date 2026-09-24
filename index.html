@@ -20,15 +20,7 @@
     />
     <title>Territorios Vivos AR · Nuquí, Chocó</title>
 
-    <!-- Fuente solo para el rótulo de la guía. `display=swap` para que la
-         página nunca se quede en blanco esperándola: si tarda o falla, se
-         ve en la serif del sistema y luego cambia. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Tipografía del sistema: sin CSS ni fuentes externas que retrasen el primer dibujo. -->
     <style>
       :root {
         color-scheme: dark;
@@ -322,6 +314,61 @@
         height: 100%;
       }
 
+      /*
+         EL CARTEL DE ARRANQUE, Y POR QUE EXISTE.
+
+         Al pulsar "Iniciar" la portada se iba al instante y quedaba una
+         pantalla NEGRA de varios segundos: el permiso de la camara, el
+         calentamiento de MindAR y lo que faltara por bajar ocurren despues
+         del toque, y ahi no hay nada que mirar. Siete segundos en negro se
+         leen como "se colgo", y quien lo cree cierra la pagina.
+
+         Ahora la portada se queda puesta hasta que la camara esta dando
+         imagen, y este cartel —bajo el boton dibujado, dentro del marco de
+         la foto, asi que cae en su sitio en cualquier pantalla— dice en
+         que paso va. No acelera nada: hace que la espera se entienda, que
+         es la mitad del problema. La otra mitad se ataca aparte.
+      */
+      #boot-status {
+        position: absolute;
+        left: 8%;
+        top: 75.5%;
+        width: 84%;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.55em;
+        font-size: clamp(0.78rem, 3.4vw, 1rem);
+        color: #fff;
+        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75);
+      }
+      #boot-status[hidden] { display: none; }
+
+      #boot-spinner {
+        width: 1em;
+        height: 1em;
+        flex: none;
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        border-top-color: #ffc53d;
+        border-radius: 50%;
+        animation: boot-spin 0.9s linear infinite;
+      }
+      @keyframes boot-spin {
+        to { transform: rotate(360deg); }
+      }
+
+      /* Pulsado el boton, el halo que invitaba a tocarlo sobra: ya se
+         toco, y seguir latiendo invita a tocar otra vez. */
+      #boot[data-starting="true"] #start {
+        animation: none;
+        pointer-events: none;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #boot-spinner { animation-duration: 2.4s; }
+      }
+
       /* Medido sobre la imagen: el boton naranja va de 32,6% a 69,2% de
          ancho y de 66,3% a 72,0% de alto. Aqui va un pelo mas grande por
          todos lados, para que el dedo no tenga que ser preciso. */
@@ -457,9 +504,10 @@
       #guide[data-visible="true"] { opacity: 1; visibility: visible; }
 
       #guide-frame {
+        flex-shrink: 0;
         position: relative;
         aspect-ratio: 1000 / 1432;
-        height: min(52vh, 112vw);
+        height: min(calc(var(--vh) * 0.52), 112vw);
         max-width: 74vw;
         border: 2px dashed rgba(255, 255, 255, 0.5);
         border-radius: 16px;
@@ -699,6 +747,26 @@
       }
 
       [hidden] { display: none !important; }
+
+      /* No gastar animaciones CSS bajo la cámara una vez retirada la portada. */
+      #boot[data-visible="false"] *,
+      #guide[data-visible="false"] * { animation-play-state: paused !important; }
+
+      #guide { gap: clamp(10px, 3vh, 24px); }
+      #focus { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+      #focus-info { max-height: 24vh; overflow-y: auto; pointer-events: auto; }
+      @media (max-height: 500px) and (orientation: landscape) {
+        #guide { padding: 12px 70px; gap: 8px; }
+        #guide-frame { height: calc(var(--vh) * 0.43); }
+        #guide-title, #approach-title { font-size: 21px; }
+        #approach { padding-top: calc(64px + env(safe-area-inset-top)); }
+        #focus { gap: 4px; }
+        #focus-name { font-size: 22px; }
+        #focus-info { max-width: 60ch; font-size: 13px; line-height: 1.3; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #guide-frame { animation: none; }
+      }
     </style>
   </head>
   <body>
@@ -724,6 +792,14 @@
           <!-- Sin texto: el rótulo ya está dibujado en la foto. El nombre
                accesible lo pone aria-label. -->
           <button type="button" id="start" aria-label="Iniciar experiencia AR"></button>
+
+          <!-- Lo que se ve mientras arranca la cámara, EN LUGAR de una
+               pantalla negra. Vive dentro del marco de la foto para caer
+               siempre justo bajo el botón dibujado. -->
+          <p id="boot-status" hidden aria-live="polite">
+            <span id="boot-spinner" aria-hidden="true"></span>
+            <span id="boot-status-text">Encendiendo la cámara…</span>
+          </p>
         </div>
       </div>
 

@@ -71,20 +71,18 @@ export class StaticModelRepository implements ModelRepository {
  * pivote descentrado): IconLoader los recentra y los encaja a ICON_TARGET_SIZE
  * al cargarlos, así que aquí no hay que tocar `defaultScale` por modelo.
  *
- * Los cuatro van en `view: 'front'`: erguidos sobre el mapa y mirando a
- * quien sostiene el teléfono. Arrastrando el dedo se giran hacia los lados,
- * así que quien quiera ver a un animal de perfil lo gira.
+ * Los cuatro van de frente, mirando a quien sostiene el teléfono.
+ * Arrastrando el dedo se pueden girar en su propio sitio.
  *
- * `iconSize` es por animal porque de frente cada uno enseña una silueta
- * distinta: la pava se ve entera, la tortuga es baja y ancha, y la ballena
- * se ve escorzada porque su longitud apunta a la cámara. Los números están
- * medidos en pantalla, no calculados sobre el tamaño del archivo.
+ * `iconSize` es por animal porque cada uno enseña una silueta distinta. Los
+ * números se comprueban sobre el mapa en pantalla, no solo con las medidas
+ * tridimensionales del archivo.
  *
  * En el mapa de 2026 los dibujos encogieron —la ballena sigue midiendo 0,30
  * de ancho de mapa, pero la tortuga bajó a 0,18, la pava a 0,12 y el
- * cangrejo a 0,09—, así que cada `iconSize` se escaló por esa misma
- * proporción. Es un punto de partida verificado en /verify.html; el ajuste
- * fino solo se puede hacer con el mapa impreso delante.
+ * cangrejo a 0,09—. Los tamaños conservan esa jerarquía visual sin permitir
+ * que el pulso o el giro desborden la imagen. El ajuste fino aún necesita el
+ * mapa impreso delante.
  *
  * Si un .glb faltara, ese animal cae a un disco gris y los otros tres siguen
  * funcionando. Para volver a los iconos procedurales de PrimitiveFactory —que
@@ -98,13 +96,33 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     description:
       'Cada año nada más de 8.000 km desde la Antártida hasta estas aguas ' +
       'cálidas para tener a sus crías. Los machos cantan durante horas.',
-    source: ModelSource.gltf('/models/Ballena_PBR.glb'),
-    spot: { u: 0.304, v: 0.1268 },
-    // Lo más grande que cabe de frente sin hundirse en el papel: mirando a
-    // la cámara la ballena se extiende HACIA FUERA, no a lo ancho, así que
-    // el límite lo pone su fondo, no su silueta. Dibujo: 0.304 x 0.157.
+    source: ModelSource.gltf('/models/Ballena_Ani.glb'),
+    animation: {
+      // Nada siempre. Al tocarla salta fuera del agua, gira sobre el lomo y
+      // cae con un salpicón: es el `Jump` del diseñador, domado por
+      // `tameBreach` para que quepa en el mapa, y a casi el doble de
+      // velocidad —el original tarda diez segundos—.
+      steps: [
+        { name: 'Swin', loops: 1 },
+      ],
+      entranceClip: 'Swin',
+      tapClip: 'Jump',
+      tapSpeed: 1.8,
+      tapMove: 'breach',
+    },
+    // El punto queda dentro del dibujo de la ballena; un poco más abajo que
+    // su centro para que la silueta 3D no rebase el borde en perspectiva.
+    spot: { u: 0.304, v: 0.19 },
+    // De frente, como los otros tres: los cuatro miran a quien sostiene el
+    // teléfono. Se probó de perfil porque de frente su largo apunta a la
+    // cámara, pero lo que se veía "demasiado grande" era el PRIMER PLANO, no
+    // el mapa: allí el tamaño lo acota ahora `STAGE_MAX_WIDTH` contando la
+    // perspectiva, y `focusSize` la deja un poco por debajo de ese tope.
+    // Sobre el mapa, en cambio, se pidió MÁS grande: es el animal más grande
+    // del mapa y tiene que leerse así junto a los otros tres.
     view: 'front',
-    iconSize: 3.2,
+    iconSize: 2.1,
+    focusSize: 0.85,
     facing: 0,
     // La primera que se calcó, y la que dejó claro que había que calcarlas
     // todas: en el mapa está buceando, con la cola alzada y la aleta
@@ -147,12 +165,24 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     description:
       'Vive en las copas del bosque húmedo y come frutos. Al volar esparce ' +
       'las semillas, así que va sembrando la selva sin darse cuenta.',
-    source: ModelSource.gltf('/models/Pava_PBR.glb'),
+    source: ModelSource.gltf('/models/Pava_Ani.glb'),
+    animation: {
+      // Siempre en Idle (más el balanceo de MarkerPin, porque Idle apenas
+      // mueve huesos). El canto —salta, estira el cuello, mueve la cabeza—
+      // se reserva para la entrada y el toque: si también fuera parte del
+      // bucle, tocarla no haría nada que no hiciera ya sola.
+      steps: [
+        { name: 'Idle', loops: 1 },
+      ],
+      entranceClip: 'Idle',
+      tapClip: 'Sing',
+      tapSpeed: 1.2,
+    },
     spot: { u: 0.9075, v: 0.5098 },
-    // Dibujo: 0.121 x 0.098. En el mapa nuevo la pava es la mitad de
-    // grande que en el viejo, y su icono bajó de 1.8 a 1.0 con ella.
+    // Dibujo: 0.121 x 0.098. Se mantiene menor que la ballena, pero con
+    // presencia suficiente para que la animación Sing se lea en teléfono.
     view: 'front',
-    iconSize: 1,
+    iconSize: 1.55,
     facing: 0,
     // Dibujada de perfil, de pie sobre la hierba y mirando a la IZQUIERDA
     // del mapa. Contorno calcado del dibujo: el marrón de la pava contra el
@@ -186,12 +216,26 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     description:
       'Vive entre el manglar y la playa. Excava madrigueras en la arena y ' +
       'limpia la costa comiendo lo que deja el mar.',
-    source: ModelSource.gltf('/models/Cangrejo_PBR.glb'),
+    source: ModelSource.gltf('/models/Cangrejo_Ani.glb'),
+    animation: {
+      // Ratos quieto y ratos caminando. Al tocarlo, el mismo Walk pero a
+      // más del doble de velocidad y correteando de lado a saltitos.
+      steps: [
+        { name: 'Idle', loops: 4 },
+        { name: 'Walk', loops: 2 },
+      ],
+      entranceClip: 'Walk',
+      tapClip: 'Walk',
+      tapSpeed: 2.4,
+      tapLoops: 4,
+      tapMove: 'scuttle',
+    },
     spot: { u: 0.618, v: 0.4022 },
     // Ya se veía de frente; 'front' es exactamente la misma orientación
     // que tenía con 'side' + 90°, escrita de forma directa.
     view: 'front',
-    iconSize: 0.62,
+    // Algo mayor que su dibujo (0.08), que en pantalla se quedaba en nada.
+    iconSize: 0.95,
     facing: 0,
     // Dibujado en planta, como se ve un cangrejo en la arena, con los ojos
     // y las pinzas hacia ARRIBA del mapa. Visto desde arriba el modelo mira
@@ -228,12 +272,25 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     description:
       'Vuelve a poner sus huevos en la misma playa donde nació, después de ' +
       'pasar años en mar abierto. Nuquí es una de esas playas.',
-    source: ModelSource.gltf('/models/Tortuga_PBR.glb'),
+    source: ModelSource.gltf('/models/Tortuga_Ani.glb'),
+    animation: {
+      // Nada y descansa. Al tocarla da una vuelta, se sumerge y vuelve a
+      // salir, braceando al doble mientras tanto.
+      steps: [
+        { name: 'Swin', loops: 3 },
+        { name: 'Idle', loops: 4 },
+      ],
+      entranceClip: 'Swin',
+      tapClip: 'Swin',
+      tapSpeed: 2,
+      tapLoops: 3,
+      tapMove: 'dive',
+    },
     spot: { u: 0.3375, v: 0.5335 },
     // De frente es una silueta baja y ancha —una tortuga lo es—, así que
     // se agranda por encima de su dibujo para que no quede como una raya.
     view: 'front',
-    iconSize: 1.4,
+    iconSize: 1.23,
     facing: 0,
     // Dibujada nadando, vista desde arriba y con la cabeza hacia la
     // IZQUIERDA del mapa; desde arriba el modelo mira hacia abajo.

@@ -27,6 +27,9 @@ export class WebAudioAdapter implements AudioPort {
   }
 
   play(profile: SoundProfile): void {
+    // El toque es otro gesto válido en iOS y recupera la categoría playback
+    // si Safari la perdió al volver desde segundo plano.
+    this.claimPlaybackSession();
     const context = this.ensureContext();
     if (context === null) return;
 
@@ -80,6 +83,7 @@ export class WebAudioAdapter implements AudioPort {
     const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
 
     const oscillators: OscillatorNode[] = [];
+    const partials: GainNode[] = [];
 
     profile.overtoneRatios.forEach((ratio, index) => {
       const frequency = profile.rootFrequencyHz * ratio;
@@ -94,6 +98,7 @@ export class WebAudioAdapter implements AudioPort {
       // hasta cero: esta caída se MULTIPLICA por la del bus, y dos
       // exponenciales encadenadas apagaban el sonido en un suspiro.
       const partial = context.createGain();
+      partials.push(partial);
       const weight = weights[index]! / totalWeight;
       const partialDuration = Math.max(0.05, duration * (1 - index * 0.12));
       partial.gain.setValueAtTime(weight, now);
@@ -108,7 +113,11 @@ export class WebAudioAdapter implements AudioPort {
 
     const last = oscillators[oscillators.length - 1];
     if (last !== undefined) {
-      last.onended = () => master.disconnect();
+      last.onended = () => {
+        oscillators.forEach((oscillator) => oscillator.disconnect());
+        partials.forEach((partial) => partial.disconnect());
+        master.disconnect();
+      };
     } else {
       master.disconnect();
     }

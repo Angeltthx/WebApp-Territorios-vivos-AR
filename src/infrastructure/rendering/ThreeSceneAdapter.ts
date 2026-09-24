@@ -1,9 +1,13 @@
 import {
   ACESFilmicToneMapping,
   Box3,
+  CircleGeometry,
   DirectionalLight,
+  DoubleSide,
   Group,
   HemisphereLight,
+  Mesh,
+  MeshBasicMaterial,
   Object3D,
   Quaternion,
   Vector3 as ThreeVector3,
@@ -43,16 +47,37 @@ import { MarkerPin } from './MarkerPin';
  * dibuje por delante de él: el mapa suele estar a más de un ancho.
  */
 const STAGE_DISTANCE = 0.5;
-/** Cuánto del alto de la pantalla ocupa el animal en primer plano. */
+/** Cuánto del alto de la pantalla puede ocupar el animal en primer plano. */
 const STAGE_FILL = 0.42;
 /** Giro lento de cortesía, para que se vea que es un objeto y no una foto. */
 const STAGE_IDLE_SPIN = 0.25;
+/**
+ * Fracción del ancho de pantalla que puede llegar a ocupar el animal en
+ * primer plano CONTANDO la perspectiva. La ballena de frente apunta su largo
+ * a la cámara: el ajuste por la silueta proyectada la dejaba medir hasta
+ * 1,3 veces el ancho, y en perspectiva el morro, más cerca, se veía aún
+ * mayor —más grande que la pantalla—. Los animales pequeños nunca llegan.
+ */
+const STAGE_MAX_WIDTH = 0.82;
+
+/**
+ * Suavizado ADAPTATIVO del seguimiento. En reposo el mapa tiembla unas
+ * milésimas y hay que suavizarlo; en un movimiento brusco cualquier
+ * suavizado es retraso, y los animales se quedaban atrás. A partir de estos
+ * saltos por fotograma se sigue a la pose tal cual.
+ */
+const SNAP_DISTANCE = 0.03;
+const SNAP_ANGLE = 0.035;
 
 export class ThreeSceneAdapter implements ScenePort {
-  private readonly icons = new IconLoader();
   private readonly follower = new Group();
   private readonly overlay = new Group();
   private readonly stage = new Group();
+  /** Superficie invisible y generosa para que el primer plano sea fácil de tocar. */
+  private readonly stageHit = new Mesh(
+    new CircleGeometry(1, 24),
+    new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
+  );
   private readonly pins = new Map<string, MarkerPin>();
 
   private stabilization: Stabilization = Stabilization.default();
@@ -66,13 +91,15 @@ export class ThreeSceneAdapter implements ScenePort {
   private nearbyId: string | null = null;
   private nearbyListener: ((modelId: string | null) => void) | null = null;
 
-  /** El animal en primer plano: su id, su icono prestado y su tamaño natural. */
+  /** El animal en primer plano: su id, su icono prestado y sus medidas naturales. */
   private focusedId: string | null = null;
   private stagedIcon: Object3D | null = null;
-  private stagedNaturalSize = 1;
+  private readonly stagedNaturalSize = new ThreeVector3(1, 1, 1);
   private stageIdle = 0;
   /** Giro que el usuario imprime con el dedo. */
   private spin = 0;
+  private scale = 1;
+  private stagePulse = 0;
   /**
    * Cuánto mide un ancho de mapa en unidades de mundo, del último fotograma
    * con marcador a la vista. Se guarda para que el primer plano siga
@@ -99,20 +126,37 @@ export class ThreeSceneAdapter implements ScenePort {
   constructor(
     private readonly runtime: MindArRuntime,
     private readonly targetAspect: number,
-  ) {}
+  ) {
+    this.stageHit.visible = false;
+    this.stageHit.position.z = 0.02;
+    this.stage.add(this.stageHit);
+  }
 
   async preload(models: readonly ArModel[]): Promise<void> {
-    this.mount();
-
-    const icons = await Promise.all(
-      models.map(async (model) => [model, await this.icons.load(model)] as const),
-    );
+    const loader = new IconLoader();
+    const [runtime, loaded] = await Promise.allSettled([
+      this.runtime.prepare(),
+      Promise.all(models.map(async (model) => [model, await loader.load(model)] as const))
+        .finally(() => loader.dispose()),
+    ]);
+    if (loaded.status === 'rejected') throw loaded.reason;
+    const icons = loaded.value;
 
     icons.forEach(([model, icon], index) => {
       const pin = new MarkerPin(model, icon, index, this.targetAspect);
       this.overlay.add(pin.group);
       this.pins.set(model.id.value, pin);
     });
+    if (runtime.status === 'rejected') {
+      this.clear();
+      throw runtime.reason;
+    }
+    try {
+      this.mount();
+    } catch (error) {
+      this.clear();
+      throw error;
+    }
   }
 
   setHighlightedModel(id: ModelId): void {
@@ -127,6 +171,7 @@ export class ThreeSceneAdapter implements ScenePort {
     this.overlay.position.set(offset.x, offset.y, offset.z);
 
     this.spin = rotationY;
+    this.scale = scale.value;
     for (const pin of this.pins.values()) pin.applyTransform(scale.value, rotationY);
   }
 
@@ -164,12 +209,16 @@ export class ThreeSceneAdapter implements ScenePort {
     if (this.focusedId === id) return;
 
     if (this.focusedId !== null) {
-      this.pins.get(this.focusedId)?.reclaimIcon();
+      const previousPin = this.pins.get(this.focusedId);
+      previousPin?.reclaimWater();
+      previousPin?.reclaimIcon();
       this.stagedIcon = null;
     }
 
     this.focusedId = id;
     this.stageIdle = 0;
+    this.stageHit.visible = false;
+    delete this.stage.userData['modelId'];
 
     if (id !== null) {
       const pin = this.pins.get(id);
@@ -181,11 +230,19 @@ export class ThreeSceneAdapter implements ScenePort {
         icon.scale.setScalar(1);
         icon.rotation.set(0, 0, 0);
         icon.updateMatrixWorld(true);
-        const size = new Box3().setFromObject(icon).getSize(this.tmpWorld);
-        this.stagedNaturalSize = Math.max(size.x, size.y, size.z) || 1;
+        new Box3().setFromObject(icon).getSize(this.stagedNaturalSize);
+        this.stagedNaturalSize.set(
+          this.stagedNaturalSize.x || 1,
+          this.stagedNaturalSize.y || 1,
+          this.stagedNaturalSize.z || 1,
+        );
 
         this.stage.add(icon);
+        const water = pin.waterGroup;
+        if (water !== null) this.stage.add(water);
         this.stagedIcon = icon;
+        this.stage.userData['modelId'] = id;
+        this.stageHit.visible = true;
       }
     }
 
@@ -211,10 +268,46 @@ export class ThreeSceneAdapter implements ScenePort {
 
     const fov = (camera.fov * Math.PI) / 180;
     const visibleHeight = 2 * distance * Math.tan(fov / 2);
-    icon.scale.setScalar((visibleHeight * STAGE_FILL) / this.stagedNaturalSize);
+    this.stagePulse = Math.max(0, this.stagePulse - deltaSeconds);
+    const bump = 1 + 0.3 * Math.sin((this.stagePulse / 0.45) * Math.PI);
 
     this.stageIdle += deltaSeconds * STAGE_IDLE_SPIN;
-    icon.rotation.set(0, this.spin + this.stageIdle, 0);
+    const pin = this.pins.get(this.focusedId ?? '');
+    const yaw = (pin?.stageYaw ?? 0) + this.spin + this.stageIdle;
+
+    // Ajusta por la silueta que realmente ve la cámara. Usar la dimensión 3D
+    // máxima hacía que la ballena fuera diminuta de frente (su largo apunta a
+    // la cámara) y enorme al girarla. La proyección X/Z mantiene el volumen
+    // visual estable durante todo el giro.
+    const projectedWidth =
+      Math.abs(Math.cos(yaw)) * this.stagedNaturalSize.x +
+      Math.abs(Math.sin(yaw)) * this.stagedNaturalSize.z;
+    const availableHeight = visibleHeight * STAGE_FILL;
+    const availableWidth = visibleHeight * camera.aspect * 0.76;
+    // Tope que no depende del giro: el lado mayor en planta, con lo que lo
+    // agranda la perspectiva cuando apunta a la cámara (su extremo queda a
+    // `distance - s·r` en vez de a `distance`). Despejando s de
+    // s·r·d / (d − s·r) ≤ W queda la expresión de abajo.
+    const halfWidth = (visibleHeight * camera.aspect * STAGE_MAX_WIDTH) / 2;
+    const radius = Math.max(this.stagedNaturalSize.x, this.stagedNaturalSize.z) / 2;
+    const perspectiveCap = (halfWidth * distance) / (radius * (distance + halfWidth));
+    const fittedScale = Math.min(
+      availableHeight / this.stagedNaturalSize.y,
+      availableWidth / Math.max(projectedWidth, this.stagedNaturalSize.z * 0.6),
+      perspectiveCap,
+    );
+    icon.scale.setScalar(fittedScale * (pin?.focusSize ?? 1) * this.scale * bump);
+    // El gesto de toque (salto, buceo, correteo) y su salpicón, igual que
+    // sobre el mapa: lo aplica el propio pin, que es quien lo lleva.
+    if (pin !== undefined) {
+      pin.poseIcon(yaw);
+      pin.placeWater(0);
+    } else {
+      icon.rotation.set(0, yaw, 0);
+    }
+    // El círculo tiene radio 1: queda algo mayor que el animal para que sea
+    // fácil acertarle con un dedo y el teléfono en movimiento.
+    this.stageHit.scale.setScalar(Math.min(availableWidth, availableHeight) * this.scale * 0.65);
   }
 
   onNearbyModel(listener: (modelId: string | null) => void): void {
@@ -222,10 +315,12 @@ export class ThreeSceneAdapter implements ScenePort {
   }
 
   pulse(id: ModelId): void {
+    if (this.focusedId === id.value) this.stagePulse = 0.45;
     this.pins.get(id.value)?.pulse();
   }
 
   clear(): void {
+    this.setFocus(null);
     for (const pin of this.pins.values()) {
       this.overlay.remove(pin.group);
       pin.dispose();
@@ -235,14 +330,15 @@ export class ThreeSceneAdapter implements ScenePort {
     this.nearbyId = null;
     this.focusedId = null;
     this.stagedIcon = null;
-    this.stage.clear();
+    this.follower.visible = false;
   }
 
   dispose(): void {
     this.unsubscribeFrame?.();
     this.unsubscribeFrame = null;
     this.clear();
-    this.icons.dispose();
+    this.stageHit.geometry.dispose();
+    this.stageHit.material.dispose();
     if (this.runtime.isInitialized) {
       this.runtime.mindar.renderer.dispose();
     }
@@ -259,7 +355,7 @@ export class ThreeSceneAdapter implements ScenePort {
     // El animal en primer plano es tocable siempre, esté el mapa a la vista
     // o no: es lo único que se está mirando.
     if (this.focusedId !== null && this.stagedIcon !== null) {
-      map.set(this.focusedId, this.stagedIcon);
+      map.set(this.focusedId, this.stage);
       return map;
     }
 
@@ -278,7 +374,6 @@ export class ThreeSceneAdapter implements ScenePort {
 
   private mount(): void {
     if (this.mounted) return;
-    this.mounted = true;
 
     const mindar = this.runtime.init();
     this.configureRendering();
@@ -294,14 +389,21 @@ export class ThreeSceneAdapter implements ScenePort {
     mindar.scene.add(this.stage);
 
     this.unsubscribeFrame = this.runtime.onFrame((delta) => this.onFrame(delta));
+    this.mounted = true;
   }
 
-  private onFrame(deltaSeconds: number): void {
+  private onFrame(deltaSeconds: number): boolean {
     this.elapsed += deltaSeconds;
     this.followAnchor(deltaSeconds);
     this.evaluateProximity(deltaSeconds);
     this.updateStage(deltaSeconds);
-    for (const pin of this.pins.values()) pin.advance(deltaSeconds, this.elapsed);
+    for (const pin of this.pins.values()) {
+      // Con el mapa fuera de cuadro solo se anima el animal que permanece en
+      // primer plano. Los demás quedan pausados para ahorrar CPU y batería.
+      if (this.follower.visible || pin.isFocused) pin.advance(deltaSeconds, this.elapsed);
+    }
+    // Hay algo que pintar: si no, el runtime se ahorra el render.
+    return this.follower.visible || this.stage.visible;
   }
 
   /**
@@ -442,7 +544,13 @@ export class ThreeSceneAdapter implements ScenePort {
     }
 
     const factor = this.stabilization.smoothingFactor;
-    const step = factor >= 1 ? 1 : 1 - Math.pow(1 - factor, deltaSeconds * 60);
+    const smooth = factor >= 1 ? 1 : 1 - Math.pow(1 - factor, deltaSeconds * 60);
+    // Cuánto se ha movido el mapa respecto a lo pintado: en anchos de mapa
+    // (la escala del anchor es el ancho del mapa) y en radianes.
+    const moved = this.follower.position.distanceTo(this.tmpPosition) / Math.max(this.tmpScale.x, 1e-6);
+    const turned = this.follower.quaternion.angleTo(this.tmpQuaternion);
+    const urgency = Math.min(1, Math.max(moved / SNAP_DISTANCE, turned / SNAP_ANGLE));
+    const step = smooth + (1 - smooth) * urgency;
 
     this.follower.position.lerp(this.tmpPosition, step);
     this.follower.quaternion.slerp(this.tmpQuaternion, step);

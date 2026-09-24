@@ -31,7 +31,7 @@ import { readdirSync, mkdirSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import { draco, dedup, prune, textureCompress } from '@gltf-transform/functions';
+import { draco, dedup, prune, resample, textureCompress } from '@gltf-transform/functions';
 import draco3d from 'draco3dgltf';
 import sharp from 'sharp';
 
@@ -39,7 +39,7 @@ const SOURCE_DIR = resolve('models-src');
 const OUTPUT_DIR = resolve('public/models');
 
 /**
- * Calidad por tipo de mapa. Distinta a propósito:
+ * Calidad Y TAMAÑO por tipo de mapa. Distintos a propósito:
  *
  *  - baseColor es lo único que el ojo lee como "el animal", así que va alto.
  *  - normal codifica direcciones en el color; los artefactos se ven como
@@ -47,11 +47,21 @@ const OUTPUT_DIR = resolve('public/models');
  *  - metallicRoughness es de frecuencia muy baja (manchas suaves de brillo)
  *    y además llega en PNG, que es donde está el mayor derroche: ~1 MB por
  *    archivo. Aguanta bastante más compresión sin que se note.
+ *
+ * EL TAMAÑO IMPORTA MÁS QUE LA CALIDAD, y no solo por los megas. Los mapas
+ * llegan a 1024×1024 y un icono ocupa en la pantalla del teléfono unos 150
+ * o 200 px: se está bajando, descodificando y subiendo a la GPU ocho veces
+ * más textura de la que se puede llegar a ver. Cada 1024² ocupa 4 MB en
+ * memoria de vídeo ya descomprimido (5,3 con mipmaps), y son doce: unos 64
+ * MB que un Samsung de gama baja no tiene de sobra, más el tiempo de
+ * descodificar los doce al arrancar. A 512 el color sigue sobrando para el
+ * tamaño en que se ve, y el relieve y el brillo aguantan 256 de sobra
+ * porque no llevan detalle fino. Memoria de vídeo: de ~64 MB a ~10 MB.
  */
 const QUALITY = [
-  { slots: /baseColorTexture/, quality: 90 },
-  { slots: /normalTexture/, quality: 90 },
-  { slots: /metallicRoughnessTexture/, quality: 80 },
+  { slots: /baseColorTexture/, quality: 90, resize: [512, 512] },
+  { slots: /normalTexture/, quality: 90, resize: [256, 256] },
+  { slots: /metallicRoughnessTexture/, quality: 80, resize: [256, 256] },
 ];
 
 const io = new NodeIO()
@@ -81,9 +91,12 @@ for (const name of files) {
   await document.transform(
     // Una pasada por tipo de mapa: textureCompress aplica una sola calidad,
     // y aquí interesa una distinta para cada uno (ver QUALITY).
-    ...QUALITY.map(({ slots, quality }) =>
-      textureCompress({ encoder: sharp, targetFormat: 'webp', slots, quality }),
+    ...QUALITY.map(({ slots, quality, resize }) =>
+      textureCompress({ encoder: sharp, targetFormat: 'webp', slots, quality, resize }),
     ),
+    // Blender suele exportar una clave por fotograma. Se eliminan las que
+    // son idénticas a la interpolación de sus vecinas sin alterar el gesto.
+    resample(),
     // Texturas y accessors repetidos entre materiales, y nodos/datos que no
     // referencia nadie. En estos archivos apenas hay, pero es gratis.
     dedup(),

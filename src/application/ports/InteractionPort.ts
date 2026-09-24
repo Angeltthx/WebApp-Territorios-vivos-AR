@@ -5,10 +5,14 @@ export interface InteractionHandlers {
    * "se tocó algo" ya no basta.
    */
   onTapModel(modelId: string): void;
-  /** Arrastre horizontal. Delta en radianes. */
+  /**
+   * Arrastre horizontal. Delta en radianes.
+   *
+   * No hay pellizco para escalar: se quitó a propósito. Cada animal tiene su
+   * tamaño calibrado en el catálogo y agrandarlo a mano rompía esa
+   * jerarquía (y lo sacaba de encima de su dibujo).
+   */
   onRotate(deltaRadians: number): void;
-  /** Pellizco. Factor multiplicativo respecto a la escala actual. */
-  onScale(factor: number): void;
 }
 
 export interface InteractionPort {

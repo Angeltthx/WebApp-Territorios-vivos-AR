@@ -48,6 +48,7 @@ declare module 'mind-ar/dist/mindar-image-three.prod.js' {
   }
 
   export class MindARThree {
+    readonly controller?: { stopProcessVideo(): void };
     constructor(options: MindARThreeOptions);
     readonly renderer: WebGLRenderer;
     /** Capa CSS3D. Nunca la usamos, pero se superpone al canvas. */

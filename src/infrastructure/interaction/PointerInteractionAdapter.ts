@@ -24,7 +24,7 @@ export interface InteractiveSource {
 
 /**
  * Traduce eventos de puntero en intenciones del dominio:
- * toque sobre el objeto, arrastre para rotar, pellizco para escalar.
+ * toque sobre el objeto y arrastre para rotar (sin pellizco: el tamaño es fijo).
  *
  * Usa Pointer Events, que unifican ratón y táctil y funcionan en Safari iOS
  * desde la versión 13. No hay ramas separadas para touch y mouse.
@@ -39,12 +39,15 @@ export class PointerInteractionAdapter implements InteractionPort {
   private startY = 0;
   private startedAt = 0;
   private lastX = 0;
-  private pinchDistance = 0;
   private moved = false;
 
   private readonly onPointerDown = (event: PointerEvent) => this.handleDown(event);
   private readonly onPointerMove = (event: PointerEvent) => this.handleMove(event);
   private readonly onPointerUp = (event: PointerEvent) => this.handleUp(event);
+  private readonly onPointerCancel = () => {
+    this.active.clear();
+    this.moved = true;
+  };
 
   constructor(
     private readonly runtime: MindArRuntime,
@@ -58,7 +61,8 @@ export class PointerInteractionAdapter implements InteractionPort {
     canvas.addEventListener('pointerdown', this.onPointerDown);
     canvas.addEventListener('pointermove', this.onPointerMove);
     canvas.addEventListener('pointerup', this.onPointerUp);
-    canvas.addEventListener('pointercancel', this.onPointerUp);
+    canvas.addEventListener('pointercancel', this.onPointerCancel);
+    canvas.addEventListener('lostpointercapture', this.onPointerCancel);
   }
 
   detach(): void {
@@ -66,12 +70,14 @@ export class PointerInteractionAdapter implements InteractionPort {
     canvas.removeEventListener('pointerdown', this.onPointerDown);
     canvas.removeEventListener('pointermove', this.onPointerMove);
     canvas.removeEventListener('pointerup', this.onPointerUp);
-    canvas.removeEventListener('pointercancel', this.onPointerUp);
+    canvas.removeEventListener('pointercancel', this.onPointerCancel);
+    canvas.removeEventListener('lostpointercapture', this.onPointerCancel);
     this.active.clear();
     this.handlers = null;
   }
 
   private handleDown(event: PointerEvent): void {
+    this.canvas.setPointerCapture(event.pointerId);
     this.active.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
     if (this.active.size === 1) {
@@ -83,9 +89,9 @@ export class PointerInteractionAdapter implements InteractionPort {
       return;
     }
 
-    if (this.active.size === 2) {
-      this.pinchDistance = this.currentPinchDistance();
-    }
+    // Un segundo dedo anula el toque, pero ya no escala: el tamaño de cada
+    // animal es fijo (ver InteractionPort).
+    if (this.active.size >= 2) this.moved = true;
   }
 
   private handleMove(event: PointerEvent): void {
@@ -93,11 +99,6 @@ export class PointerInteractionAdapter implements InteractionPort {
     this.active.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
     if (this.active.size >= 2) {
-      const distance = this.currentPinchDistance();
-      if (this.pinchDistance > 0 && distance > 0) {
-        this.handlers.onScale(distance / this.pinchDistance);
-      }
-      this.pinchDistance = distance;
       this.moved = true;
       return;
     }
@@ -114,7 +115,6 @@ export class PointerInteractionAdapter implements InteractionPort {
     const wasSinglePointer = this.active.size === 1;
     this.active.delete(event.pointerId);
 
-    if (this.active.size < 2) this.pinchDistance = 0;
     if (this.handlers === null || !wasSinglePointer || this.moved) return;
 
     const elapsed = performance.now() - this.startedAt;
@@ -153,14 +153,6 @@ export class PointerInteractionAdapter implements InteractionPort {
       if (id !== null) return id;
     }
     return null;
-  }
-
-  private currentPinchDistance(): number {
-    const points = [...this.active.values()];
-    const first = points[0];
-    const second = points[1];
-    if (first === undefined || second === undefined) return 0;
-    return Math.hypot(first.x - second.x, first.y - second.y);
   }
 
   private get canvas(): HTMLCanvasElement {
