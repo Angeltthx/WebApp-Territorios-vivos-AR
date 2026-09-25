@@ -7,6 +7,9 @@
  *     abierto, de vez en cuando otra distinta.
  *   - `taps`: lo que suena al tocarlo —un soplido, un chapuzón, un
  *     correteo—, distinto de sus llamadas para que tocar se note.
+ *   - `splash`: el chapuzón de los que caen al agua (ballena, tortuga).
+ *     Suena en el fotograma exacto en que el salpicón toca el agua, con
+ *     más o menos volumen según lo fuerte que sea.
  *   - `ambience`: el lugar donde vive (el mar, el manglar, la selva), en
  *     bucle y bajito mientras está en primer plano.
  *
@@ -16,6 +19,7 @@ export interface SoundscapeSnapshot {
   readonly calls: readonly string[];
   readonly taps?: readonly string[];
   readonly ambience?: string;
+  readonly splash?: string;
 }
 
 const MAX_VARIANTS = 5;
@@ -25,6 +29,7 @@ export class Soundscape {
     readonly calls: readonly string[],
     readonly taps: readonly string[],
     readonly ambience: string | null,
+    readonly splash: string | null,
   ) {
     Object.freeze(this.calls);
     Object.freeze(this.taps);
@@ -44,12 +49,19 @@ export class Soundscape {
     if (calls.length === 0) throw new RangeError('Un paisaje sonoro necesita al menos una llamada');
     const ambience = snapshot.ambience?.trim() ?? null;
     if (ambience !== null && ambience.length === 0) throw new RangeError('Ambiente: ruta vacía');
-    return new Soundscape(calls, clean(snapshot.taps ?? [], 'Toques'), ambience);
+    const splash = snapshot.splash?.trim() ?? null;
+    if (splash !== null && splash.length === 0) throw new RangeError('Salpicón: ruta vacía');
+    return new Soundscape(calls, clean(snapshot.taps ?? [], 'Toques'), ambience, splash);
   }
 
   /** Todas las rutas, para descargarlas por adelantado. */
   get urls(): readonly string[] {
-    return [...this.calls, ...this.taps, ...(this.ambience === null ? [] : [this.ambience])];
+    return [
+      ...this.calls,
+      ...this.taps,
+      ...(this.ambience === null ? [] : [this.ambience]),
+      ...(this.splash === null ? [] : [this.splash]),
+    ];
   }
 }
 

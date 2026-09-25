@@ -8,14 +8,16 @@ export interface AnimationStepSnapshot {
  * su clip. Es vocabulario, como `IconView`: el catálogo dice la palabra y la
  * capa de render sabe dibujarla.
  *
- *   'breach'  salta fuera del agua, gira y cae con un salpicón (ballena).
- *             El giro y la subida vienen del propio clip del diseñador.
- *   'dive'    da una vuelta, se hunde y vuelve a salir (tortuga).
+ *   'breach'  salta fuera del agua, cae, se sumerge y vuelve a salir
+ *             (ballena). Todo el movimiento viene del propio clip del
+ *             animador; solo se reescala su trayectoria para que quepa.
+ *   'leap'    nadando, salta fuera del agua, cae con un salpicón, se
+ *             sumerge un poco y vuelve a flote (tortuga).
  *   'scuttle' corretea de lado a lado a saltitos (cangrejo).
  *   'none'    solo el clip (pava: su canto ya salta y mueve la cabeza).
  */
-export type TapMove = 'none' | 'breach' | 'dive' | 'scuttle';
-const TAP_MOVES: readonly TapMove[] = ['none', 'breach', 'dive', 'scuttle'];
+export type TapMove = 'none' | 'breach' | 'leap' | 'scuttle';
+const TAP_MOVES: readonly TapMove[] = ['none', 'breach', 'leap', 'scuttle'];
 
 export interface AnimationSequenceSnapshot {
   /** Bucle ambiental: lo que el animal hace siempre, sin que nadie lo toque. */
@@ -28,7 +30,11 @@ export interface AnimationSequenceSnapshot {
    * `steps`: el salto de la ballena solo tiene sentido como respuesta.
    */
   readonly tapClip?: string;
-  /** Velocidad del clip de toque: el mismo paso, pero con prisa. */
+  /**
+   * Velocidad del clip de toque. Por defecto 1, la del animador: acelerarlo
+   * (hubo 1.8 en la ballena y 2.4 en el cangrejo) rompe su timing, y los
+   * animadores lo notaron enseguida.
+   */
   readonly tapSpeed?: number;
   /** Cuántas vueltas da el clip de toque antes de volver al bucle ambiental. */
   readonly tapLoops?: number;

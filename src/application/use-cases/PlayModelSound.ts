@@ -35,11 +35,12 @@ export class PlayModelSound {
     const model = await this.models.findById(ModelId.of(rawModelId));
     if (model === null) return;
 
+    // A mitad de su gesto, tocarlo otra vez no hace nada: ni lo reinicia
+    // ni suena, que un sonido sin su gesto no tiene sentido.
+    if (!this.scene.pulse(model.id)) return;
     // Su grabación de toque (un soplido, un chapuzón…); sin grabaciones,
     // el timbre sintetizado de siempre.
     this.sounds.tapped(model);
-    this.scene.setHighlightedModel(model.id);
-    this.scene.pulse(model.id);
     this.analytics.track('model_tapped', { modelId: model.id.value });
   }
 }

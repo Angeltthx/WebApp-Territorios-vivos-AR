@@ -88,6 +88,18 @@ export class AnimalSoundscape {
     this.audio.playClip(url);
   }
 
+  /**
+   * El chapuzón, en el instante en que el animal toca el agua. `strength`
+   * (0–1) es la del salpicón que se ve: la ballena cae con 1, la tortuga
+   * sale del agua con poco y cae con más. El volumen la sigue, con un
+   * mínimo para que un salpicón pequeño no quede mudo.
+   */
+  splashed(model: ArModel, strength: number): void {
+    const url = model.soundscape?.splash ?? null;
+    if (url === null) return;
+    this.audio.playClip(url, Math.min(1, Math.max(0.3, strength)));
+  }
+
   private scheduleCall(model: ArModel, ms: number): void {
     this.timer = this.timers.set(() => {
       this.timer = null;
@@ -119,6 +131,9 @@ export function soundPreloadOrder(models: readonly ArModel[]): readonly string[]
     const soundscape = model.soundscape;
     if (soundscape === null) continue;
     if (soundscape.ambience !== null) first.push(soundscape.ambience);
+    // El chapuzón suena segundos después del toque, a una hora exacta: si
+    // no está ya descargado, llega tarde y se descarta.
+    if (soundscape.splash !== null) first.push(soundscape.splash);
     const [call, ...others] = soundscape.calls;
     if (call !== undefined) first.push(call);
     rest.push(...soundscape.taps, ...others);

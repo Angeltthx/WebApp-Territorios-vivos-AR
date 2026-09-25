@@ -151,7 +151,7 @@ export class WebAudioAdapter implements AudioPort {
     void urls.reduce<Promise<unknown>>((chain, url) => chain.then(() => this.load(url)), Promise.resolve());
   }
 
-  playClip(url: string): void {
+  playClip(url: string, volume = 1): void {
     const context = this.ensureRunning();
     if (context === null) return;
     const requested = context.currentTime;
@@ -161,8 +161,19 @@ export class WebAudioAdapter implements AudioPort {
       if (context.currentTime - requested > CLIP_MAX_DELAY_S) return;
       const source = context.createBufferSource();
       source.buffer = buffer;
-      source.connect(this.bus(context, 'clips'));
-      source.onended = () => source.disconnect();
+      const bus = this.bus(context, 'clips');
+      if (volume >= 1) {
+        source.connect(bus);
+        source.onended = () => source.disconnect();
+      } else {
+        const gain = context.createGain();
+        gain.gain.value = Math.max(0, volume);
+        source.connect(gain).connect(bus);
+        source.onended = () => {
+          source.disconnect();
+          gain.disconnect();
+        };
+      }
       source.start();
     });
   }

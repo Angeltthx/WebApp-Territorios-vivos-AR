@@ -161,6 +161,13 @@ export class IconAnimator {
     this.current = index;
     this.completedLoops = 0;
     this.mode = mode;
+    // Tocar al cangrejo mientras camina, o a la tortuga mientras nada, pide
+    // el MISMO clip que ya suena: se sigue desde donde va. Reiniciarlo
+    // desde el fotograma 0 hacía saltar la pose de golpe.
+    if (previous !== undefined && previous.action === next.action && next.action.isRunning()) {
+      next.action.setEffectiveTimeScale(mode === 'tap' ? this.sequence?.tapSpeed ?? 1 : 1);
+      return;
+    }
     next.action
       .stopFading()
       .reset()

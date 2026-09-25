@@ -119,22 +119,25 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       taps: [
         '/audio/whale/tap-1.mp3',
         '/audio/whale/tap-2.mp3',
-        '/audio/whale/tap-3.mp3',
       ],
       ambience: '/audio/whale/ambience.mp3',
+      // Suena al caer al agua, no al tocarla: antes era uno de sus toques y
+      // sonaba antes de saltar.
+      splash: '/audio/whale/splash.mp3',
     },
     source: ModelSource.gltf('/models/Ballena_Ani.glb'),
     animation: {
-      // Nada siempre. Al tocarla salta fuera del agua, gira sobre el lomo y
-      // cae con un salpicón: es el `Jump` del diseñador, domado por
-      // `tameBreach` para que quepa en el mapa, y a casi el doble de
-      // velocidad —el original tarda diez segundos—.
+      // Nada siempre. Al tocarla salta fuera del agua, gira sobre el lomo,
+      // cae con un salpicón, se sumerge y vuelve a flote: es el `Jump` del
+      // animador, a SU velocidad (sus diez segundos) y con todos sus giros.
+      // `tameBreach` solo reescala la trayectoria para que quepa en el mapa
+      // y rehace la caída para que entre en el agua en vez de chocar.
+      // Estuvo a 1.8× y los animadores lo notaron: se sentía cortado.
       steps: [
         { name: 'Swin', loops: 1 },
       ],
       entranceClip: 'Swin',
       tapClip: 'Jump',
-      tapSpeed: 1.8,
       tapMove: 'breach',
     },
     // El punto queda dentro del dibujo de la ballena; un poco más abajo que
@@ -225,8 +228,8 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         { name: 'Idle', loops: 1 },
       ],
       entranceClip: 'Idle',
+      // A la velocidad del animador (estuvo a 1.2×).
       tapClip: 'Sing',
-      tapSpeed: 1.2,
     },
     spot: { u: 0.9075, v: 0.5098 },
     // Dibujo: 0.121 x 0.098. Se mantiene menor que la ballena, pero con
@@ -286,16 +289,16 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     },
     source: ModelSource.gltf('/models/Cangrejo_Ani.glb'),
     animation: {
-      // Ratos quieto y ratos caminando. Al tocarlo, el mismo Walk pero a
-      // más del doble de velocidad y correteando de lado a saltitos.
+      // Ratos quieto y ratos caminando. Al tocarlo, dos vueltas de Walk a
+      // la velocidad del animador mientras corretea de lado. Estuvo a 2.4×
+      // y los animadores lo notaron: se veía acelerado.
       steps: [
         { name: 'Idle', loops: 4 },
         { name: 'Walk', loops: 2 },
       ],
       entranceClip: 'Walk',
       tapClip: 'Walk',
-      tapSpeed: 2.4,
-      tapLoops: 4,
+      tapLoops: 2,
       tapMove: 'scuttle',
     },
     spot: { u: 0.618, v: 0.4022 },
@@ -362,20 +365,22 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         '/audio/turtle/tap-2.mp3',
       ],
       ambience: '/audio/turtle/ambience.mp3',
+      // El mismo chapuzón que la ballena, más corto y agudo: cuerpo pequeño.
+      splash: '/audio/turtle/splash.mp3',
     },
     source: ModelSource.gltf('/models/Tortuga_Ani.glb'),
     animation: {
-      // Nada y descansa. Al tocarla da una vuelta, se sumerge y vuelve a
-      // salir, braceando al doble mientras tanto.
+      // Nada y descansa. Al tocarla, sin dejar de nadar (dos vueltas de
+      // Swin a la velocidad del animador), salta fuera del agua, cae con un
+      // salpicón, se sumerge un poco y vuelve a flote.
       steps: [
         { name: 'Swin', loops: 3 },
         { name: 'Idle', loops: 4 },
       ],
       entranceClip: 'Swin',
       tapClip: 'Swin',
-      tapSpeed: 2,
-      tapLoops: 3,
-      tapMove: 'dive',
+      tapLoops: 2,
+      tapMove: 'leap',
     },
     spot: { u: 0.3375, v: 0.5335 },
     // De frente es una silueta baja y ancha —una tortuga lo es—, así que

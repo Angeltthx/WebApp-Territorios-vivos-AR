@@ -20,8 +20,6 @@ export interface ScenePort {
    */
   preload(models: readonly ArModel[]): Promise<void>;
 
-  /** Destaca uno de los iconos. El resto sigue visible, solo atenuado. */
-  setHighlightedModel(id: ModelId): void;
 
   applyPlacement(placement: Placement): void;
 
@@ -51,8 +49,18 @@ export interface ScenePort {
    */
   onNearbyModel(listener: (modelId: string | null) => void): void;
 
-  /** Realimentación visual breve sobre un icono concreto. */
-  pulse(id: ModelId): void;
+  /**
+   * Avisa cada vez que un animal salpica al tocar el agua, con la fuerza
+   * del salpicón (0–1). Es un fotograma exacto de la animación y solo la
+   * escena lo sabe, igual que la cercanía.
+   */
+  onSplash(listener: (modelId: string, strength: number) => void): void;
+
+  /**
+   * Lanza el gesto de toque de un animal. Devuelve false si ya estaba a
+   * mitad de uno: el gesto no se reinicia hasta que acaba.
+   */
+  pulse(id: ModelId): boolean;
 
   clear(): void;
 

@@ -14,7 +14,7 @@
  * −44 a −4 dB y sin esto una ballena taparía a la pava— y se comprime a MP3,
  * el único formato que todos los Safari de iPhone decodifican sin sorpresas:
  *
- *   - llamadas y toques: 64 kbps, −16 LUFS, con fundidos cortos;
+ *   - llamadas, toques y salpicones: 64 kbps, −16 LUFS, con fundidos cortos;
  *   - ambientes: 48 kbps a 32 kHz, −24 LUFS y SIN fundidos —el
  *     reproductor los encadena con un fundido cruzado para que el bucle no
  *     tenga costura—.
@@ -93,6 +93,29 @@ for (const [animal, set] of Object.entries(clips)) {
       used.set(clip.src, [...(used.get(clip.src) ?? []), out]);
       report.push(out);
     }
+  }
+
+  // Salpicón: suena en el MISMO fotograma en que el animal cae al agua,
+  // así que el golpe tiene que estar en el primer milisegundo: fundido de
+  // entrada de 5 ms, no de 50. `rate` acelera y agudiza a la vez (un
+  // cuerpo pequeño salpica más corto y más agudo): la tortuga usa el mismo
+  // chapuzón que la ballena, a 1.25.
+  if (set.splash !== undefined) {
+    const clip = set.splash;
+    const file = await cached(clip.src);
+    const out = `${OUT}/${animal}/splash.mp3`;
+    const rate = clip.rate ?? 1;
+    const dur = clip.dur / rate;
+    const pitch = rate === 1 ? '' : `aresample=44100,asetrate=${Math.round(44100 * rate)},aresample=44100,`;
+    encode(
+      [{ file, start: clip.start, dur: clip.dur }],
+      `[0:a]${pitch}highpass=f=60,loudnorm=I=-16:TP=-1.5:LRA=11,` +
+        `afade=t=in:d=0.005,afade=t=out:st=${Math.max(0, dur - 0.5).toFixed(2)}:d=0.5[out]`,
+      out,
+      false,
+    );
+    used.set(clip.src, [...(used.get(clip.src) ?? []), out]);
+    report.push(out);
   }
 
   // Ambiente: una o varias capas mezcladas (el cangrejo es playa + manglar).
