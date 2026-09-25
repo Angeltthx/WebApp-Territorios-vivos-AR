@@ -20,13 +20,10 @@ import {
   type SilhouettePoint,
 } from './IconSilhouette';
 import { SmokePuff } from './SmokePuff';
-import { ICON_TARGET_SIZE, type LoadedIcon } from './IconLoader';
+import { ICON_TARGET_SIZE, type ClipSplash, type LoadedIcon } from './IconLoader';
 import { IconAnimator } from './IconAnimator';
 import { TapChoreography } from './TapChoreography';
 import { WaterSplash } from './WaterSplash';
-
-const PULSE_DURATION_S = 0.45;
-const PULSE_AMPLITUDE = 0.3;
 
 /**
  * Los iconos se modelan a tamaño cómodo de leer en PrimitiveFactory y se
@@ -45,8 +42,13 @@ const ICON_SCALE = 0.72;
 const MAP_EDGE_OVERHANG = 0.03;
 /** Holgura para poses de animación que sobresalen de la caja en reposo. */
 const ANIMATION_EXTENT_MARGIN = 1.15;
-/** Dónde rompe el agua respecto al centro del animal, en tamaños de animal. */
-const WATERLINE = -0.12;
+/**
+ * Cuánta agua tienen encima la ballena y la tortuga, que nadan SUMERGIDAS:
+ * la superficie está a esta distancia por encima de su lomo, en tamaños de
+ * animal. Por eso su salpicón no sale a su altura sino más arriba, donde
+ * rompen el agua al saltar y al volver a caer.
+ */
+const SUBMERGED_DEPTH = 0.05;
 /** El salpicón va algo por delante del animal, para que no lo tape su cuerpo. */
 const WATER_FRONT = 0.12;
 
@@ -57,9 +59,6 @@ const CLEARANCE = 0.02;
 const BOB_AMPLITUDE = 0.016;
 const BOB_SPEED = 1.7;
 
-/** Cuánto crece el icono destacado. */
-const EMPHASIS_SCALE = 0.2;
-const EMPHASIS_SPEED = 6;
 
 /**
  * La zona de toque del animal es su propia huella —lo que ocupa de ancho y
@@ -196,8 +195,10 @@ function applyView(lift: Group, view: IconView): void {
  * señalaba cuál era el último animal tocado. Se quitó: sobre la
  * ilustración se leía como un circulito translúcido pegado a cada animal y
  * ensuciaba el dibujo, que es exactamente lo que esta capa no debe hacer.
- * El destacado no se pierde, se mueve al propio icono: el elegido se queda
- * un 20% más grande (EMPHASIS_SCALE), y el toque sigue dando su pulso.
+ * Después el destacado pasó al propio icono (el último tocado quedaba un
+ * 20 % mayor, y cada toque lo inflaba un 30 %); también se quitó: un
+ * animal que cambia de tamaño al tocarlo rompía su animación. La respuesta
+ * al toque es el gesto del animal y su sonido.
  *
  * Vive aparte de ThreeSceneAdapter a propósito: no depende de MindAR ni del
  * runtime, así que la página de verificación (`verify.html`) puede montar
@@ -215,9 +216,16 @@ export class MarkerPin {
   private readonly icon: Object3D;
   private readonly animator: IconAnimator;
   private readonly choreography: TapChoreography;
-  /** Segundo del clip de toque en que cae al agua (la ballena), o null. */
-  private readonly splashAt: number | null;
+  /** Segundos del clip de toque en que salpica (la ballena), con su fuerza. */
+  private readonly clipSplashes: readonly ClipSplash[];
   private lastTapClipTime: number | null = null;
+  /**
+   * Altura de la superficie del agua respecto al centro del animal, a
+   * escala 1: un poco por encima de su lomo, porque los dos nadan debajo.
+   */
+  private readonly waterSurface: number;
+  /** Avisa cuando salpica, con su fuerza: ahí suena el chapuzón. */
+  onSplash: ((strength: number) => void) | null = null;
   /** Lo que mide el icono a escala 1, para convertir "tamaños de animal" en distancia. */
   private readonly reach: number;
   /** Desfase del vaivén, para que los iconos no floten todos al unísono. */
@@ -234,9 +242,6 @@ export class MarkerPin {
   /** 0 = escondido del todo, 1 = materializado. Lo anima `advance`. */
   private revealProgress = 0;
 
-  private pulseRemaining = 0;
-  private emphasis = 0;
-  private emphasisTarget = 0;
   private scale = 1;
   private spin = 0;
   private bob = 0;
@@ -272,14 +277,13 @@ export class MarkerPin {
     this.animator = new IconAnimator(this.icon, loaded.animations, model.animation);
     this.phase = index * 1.7;
     const tapMove = model.animation?.tapMove ?? 'none';
-    this.choreography = new TapChoreography(tapMove);
-    this.splashAt = loaded.splashAt;
+    this.clipSplashes = loaded.splashes;
     this.reach = ICON_TARGET_SIZE * model.pose.size;
     // Un balanceo leve y continuo, por encima del clip ambiental: el Idle
     // de la pava apenas mueve huesos y, sin esto, parecía una figura quieta.
     this.idleTilt = model.id.value === 'bird' ? 0.05 : model.id.value === 'crab' ? 0.02 : 0.03;
     // Solo salpica lo que vive en el agua y hace algo con ella al tocarlo.
-    this.splash = tapMove === 'breach' || tapMove === 'dive' ? new WaterSplash() : null;
+    this.splash = tapMove === 'breach' || tapMove === 'leap' ? new WaterSplash() : null;
 
     const { x, y } = anchorPositionOf(model.spot, targetAspect);
     this.group.position.set(x, y, 0);
@@ -315,6 +319,14 @@ export class MarkerPin {
 
     const bounds = measureIconBounds(this.group, this.lift, this.icon);
     this.halfDepth = bounds.halfDepth;
+    this.waterSurface = bounds.top + SUBMERGED_DEPTH * this.reach;
+    // El gesto sabe dónde está la superficie (en tamaños de animal) para
+    // salpicar justo al cruzarla.
+    this.choreography = new TapChoreography(
+      tapMove,
+      tapDurationOf(model, loaded),
+      this.waterSurface / this.reach,
+    );
     this.footprint = { x: bounds.horizontalRadius, y: bounds.verticalRadius };
     const horizontalRoom = Math.min(model.spot.u, 1 - model.spot.u) + MAP_EDGE_OVERHANG;
     const verticalRoom = Math.min(model.spot.v, 1 - model.spot.v) * targetAspect + MAP_EDGE_OVERHANG;
@@ -344,7 +356,9 @@ export class MarkerPin {
     this.group.add(this.outline);
 
     this.group.add(this.smoke.group);
-    if (this.splash !== null) this.group.add(this.splash.group);
+    if (this.splash !== null) {
+      this.group.add(this.splash.group);
+    }
 
     // Los efectos no se tocan. El raycaster de three NO se salta lo
     // invisible: el humo (que acaba midiendo ~0.16 anchos de mapa), el
@@ -360,15 +374,24 @@ export class MarkerPin {
     this.sync();
   }
 
-  highlight(on: boolean): void {
-    this.emphasisTarget = on ? 1 : 0;
-  }
-
-  pulse(): void {
-    this.pulseRemaining = PULSE_DURATION_S;
+  /**
+   * Lanza el gesto de toque. Devuelve false, sin hacer nada, si el animal
+   * ya está a mitad de uno: tocarlo otra vez lo reiniciaba y cortaba la
+   * animación a medias. Ya no cambia su tamaño —hubo un "pulso" que lo
+   * agrandaba un 30 % y un destacado que lo dejaba un 20 % mayor; se pidió
+   * quitarlos—.
+   */
+  pulse(): boolean {
+    if (this.isGesturing) return false;
     this.animator.react();
     this.choreography.start();
     this.lastTapClipTime = null;
+    return true;
+  }
+
+  /** Si está a mitad del gesto de toque (su clip o su movimiento). */
+  get isGesturing(): boolean {
+    return this.animator.isReacting || this.choreography.isPlaying;
   }
 
   /** El salpicón, para que el primer plano lo cuelgue junto al icono prestado. */
@@ -385,7 +408,7 @@ export class MarkerPin {
    * Coloca el icono con el gesto de toque encima: lo usan este pin sobre el
    * mapa y el adaptador en el primer plano, así que el animal hace lo mismo
    * en los dos sitios. Quien llama ya ha puesto la escala base; aquí se le
-   * suman desplazamiento, giros y profundidad.
+   * suman desplazamiento y giros.
    *
    * Los desplazamientos van en el eje Y del padre, que es "arriba" en
    * pantalla tanto de frente como de perfil (`applyView` solo gira en Y) y
@@ -396,14 +419,16 @@ export class MarkerPin {
     const size = this.reach * this.icon.scale.x;
     this.icon.position.set(move.sway * size, move.rise * size, 0);
     this.icon.rotation.set(move.pitch, yaw + move.yaw, roll + move.roll);
-    this.icon.scale.multiplyScalar(move.depth);
   }
 
-  /** Pone el salpicón en la línea de agua del icono. `baseZ`: el frente del icono. */
+  /**
+   * Pone el salpicón en la superficie del agua (ver `waterSurface`), por
+   * encima del animal. `baseZ`: el frente del icono.
+   */
   placeWater(baseZ: number): void {
     if (this.splash === null) return;
-    const size = (this.reach * this.icon.scale.x) / this.choreography.pose.depth;
-    this.splash.group.position.set(0, WATERLINE * size, baseZ + WATER_FRONT * size);
+    const size = this.reach * this.icon.scale.x;
+    this.splash.group.position.set(0, this.waterSurface * this.icon.scale.x, baseZ + WATER_FRONT * size);
     this.splash.group.scale.setScalar(size);
   }
 
@@ -479,15 +504,20 @@ export class MarkerPin {
   advance(deltaSeconds: number, elapsed: number): void {
     this.animator.update(deltaSeconds);
     let splash = this.choreography.advance(deltaSeconds);
-    // La ballena salpica cuando SU CLIP la hace caer, no a un tiempo fijo:
-    // así sigue cuadrando aunque cambie `tapSpeed`.
+    // La ballena salpica cuando SU CLIP cruza la superficie, no a un tiempo
+    // fijo: así sigue cuadrando aunque cambie `tapSpeed`.
     const clipTime = this.animator.tapClipTime;
-    if (this.splashAt !== null && clipTime !== null) {
+    if (clipTime !== null) {
       const before = this.lastTapClipTime ?? -1;
-      if (before < this.splashAt && clipTime >= this.splashAt) splash = 1;
+      for (const { at, strength } of this.clipSplashes) {
+        if (before < at && clipTime >= at) splash = Math.max(splash ?? 0, strength);
+      }
     }
     this.lastTapClipTime = clipTime;
-    if (splash !== null) this.splash?.burst(splash);
+    if (splash !== null && this.splash !== null) {
+      this.splash.burst(splash);
+      this.onSplash?.(splash);
+    }
     // Aparecer cuesta mas que desaparecer: la entrada tiene que dar tiempo
     // a mirarla, la salida solo tiene que no dar un tiron.
     const step = deltaSeconds / (this.revealed ? REVEAL_TIME_S : CONCEAL_TIME_S);
@@ -495,12 +525,6 @@ export class MarkerPin {
 
     this.smoke.advance(deltaSeconds);
     this.splash?.advance(deltaSeconds);
-
-    if (this.pulseRemaining > 0) {
-      this.pulseRemaining = Math.max(0, this.pulseRemaining - deltaSeconds);
-    }
-    this.emphasis +=
-      (this.emphasisTarget - this.emphasis) * Math.min(1, deltaSeconds * EMPHASIS_SPEED);
 
     // Vaivén suave: da sensación de que el icono flota sobre el papel.
     this.bob = Math.sin(elapsed * BOB_SPEED + this.phase) * BOB_AMPLITUDE;
@@ -536,10 +560,7 @@ export class MarkerPin {
   }
 
   private sync(): void {
-    const progress = this.pulseRemaining / PULSE_DURATION_S;
-    const bump = 1 + PULSE_AMPLITUDE * Math.sin(progress * Math.PI);
-    const emphasised = 1 + EMPHASIS_SCALE * this.emphasis;
-    const size = this.scale * emphasised * bump;
+    const size = this.scale;
 
     // La materializacion se aplica a la escala del icono: sale creciendo
     // desde el papel, con un pelin de rebote al final.
@@ -582,6 +603,18 @@ export class MarkerPin {
  * propiedades y soltarlas a mano o se filtran en cada `clear()`.
  */
 /**
+ * Cuánto dura el gesto de toque en segundos de reloj: el clip de toque, sus
+ * vueltas, a su velocidad. El movimiento del cuerpo (TapChoreography) dura
+ * exactamente eso, así que acaba a la vez que el clip vuelve al bucle.
+ */
+function tapDurationOf(model: ArModel, loaded: LoadedIcon): number {
+  const sequence = model.animation;
+  const clip = loaded.animations.find((candidate) => candidate.name === sequence?.tapClip);
+  if (sequence === null || clip === undefined) return 2;
+  return (clip.duration * sequence.tapLoops) / sequence.tapSpeed;
+}
+
+/**
  * Cuánto sobresale el icono hacia el papel, a escala 1 y ya orientado.
  *
  * Se mide sobre `lift` —no sobre el modelo suelto— porque es el giro de
@@ -592,7 +625,7 @@ function measureIconBounds(
   group: Group,
   lift: Group,
   icon: Object3D,
-): { halfDepth: number; horizontalRadius: number; verticalRadius: number } {
+): { halfDepth: number; horizontalRadius: number; verticalRadius: number; bottom: number; top: number } {
   const scale = icon.scale.clone();
   const z = lift.position.z;
 
@@ -615,7 +648,7 @@ function measureIconBounds(
   lift.position.z = z;
   group.updateMatrixWorld(true);
 
-  if (box.isEmpty()) return { halfDepth: 0, horizontalRadius: 0, verticalRadius: 0 };
+  if (box.isEmpty()) return { halfDepth: 0, horizontalRadius: 0, verticalRadius: 0, bottom: 0, top: 0 };
   const halfX = Math.max(Math.abs(box.min.x), Math.abs(box.max.x));
   const halfY = Math.max(Math.abs(box.min.y), Math.abs(box.max.y));
   const halfZ = Math.max(Math.abs(box.min.z), Math.abs(box.max.z));
@@ -627,6 +660,10 @@ function measureIconBounds(
     // vivir junto al borde. Si alguien la gira, asoma un poco: se acepta.
     horizontalRadius: halfX,
     verticalRadius: halfY,
+    // Lo más bajo del animal en reposo: la superficie del agua. `applyView`
+    // solo gira en Y para los que se sumergen, así que es su Y propia.
+    bottom: box.min.y,
+    top: box.max.y,
   };
 }
 

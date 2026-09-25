@@ -3,6 +3,7 @@ import { CloseFocus } from '@application/use-cases/CloseFocus';
 import { DiscoverNearbyModel } from '@application/use-cases/DiscoverNearbyModel';
 import { OpenMapText } from '@application/use-cases/OpenMapText';
 import { PlayModelSound } from '@application/use-cases/PlayModelSound';
+import { PlaySplashSound } from '@application/use-cases/PlaySplashSound';
 import { StartArExperience } from '@application/use-cases/StartArExperience';
 import { TransformPlacement } from '@application/use-cases/TransformPlacement';
 import type { ArSession } from '@domain/entities/ArSession';
@@ -82,6 +83,9 @@ export function buildContainer(config: ContainerConfig) {
 
   scene.setProximity(config.proximity);
   scene.onNearbyModel((modelId) => discoverNearbyModel.execute(modelId));
+  // El chapuzón suena en el fotograma en que se ve el salpicón.
+  const playSplashSound = new PlaySplashSound(sounds, models);
+  scene.onSplash((modelId, strength) => void playSplashSound.execute(modelId, strength));
 
   return {
     startArExperience,

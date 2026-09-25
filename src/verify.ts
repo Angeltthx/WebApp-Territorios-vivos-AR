@@ -100,8 +100,6 @@ void ready.then((loaded) => {
   // lo que se viene a verificar son las COORDENADAS, asi que se revelan los
   // cuatro a mano. El contorno punteado se sigue viendo durante la
   // animacion de entrada, que de paso deja comprobar que encuadra bien.
-  // Se destaca uno para comprobar de un vistazo que el resaltado funciona.
-  pins[0]?.highlight(true);
 
   // Los cuatro se revelan tras una pausa, no al instante: los primeros
   // segundos enseñan los CONTORNOS punteados —que es lo que ve el usuario

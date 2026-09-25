@@ -9,7 +9,7 @@ Generado por `npm run build-audio`. No editar a mano.
 - **Humpback whale wheezeblow** — U.S. National Park Service (Glacier Bay). Licencia: Dominio público. https://commons.wikimedia.org/wiki/File:Humpback_whale_wheezeblow.ogg
   - Usado en: whale/tap-1.mp3, whale/tap-2.mp3
 - **Big Water Splash** — qubodup. Licencia: CC0. https://freesound.org/s/442773/
-  - Usado en: whale/tap-3.mp3
+  - Usado en: whale/splash.mp3, turtle/splash.mp3
 - **Ocean Waves on a Tropical Beach** — Jarrod Stanley. Licencia: CC0. https://commons.wikimedia.org/wiki/File:Ocean_Waves_on_a_Tropical_Beach.ogg
   - Usado en: whale/ambience.mp3, crab/ambience.mp3, coast/ambience.mp3
 - **crab walking** — stuniverso. Licencia: CC0. https://freesound.org/s/761559/

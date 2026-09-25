@@ -28,6 +28,7 @@ import { MindArTrackingAdapter } from '../src/infrastructure/tracking/MindArTrac
 import { FrameLockedBackground } from '../src/infrastructure/mindar/FrameLockedBackground';
 import { CameraPermissionDeniedError } from '../src/application/ports/TrackingPort';
 import { PoseFilter } from '../src/infrastructure/rendering/PoseFilter';
+import { PlaySplashSound } from '../src/application/use-cases/PlaySplashSound';
 import { PointerInteractionAdapter } from '../src/infrastructure/interaction/PointerInteractionAdapter';
 import { Stabilization } from '../src/domain/value-objects/Stabilization';
 import { Scale } from '../src/domain/value-objects/Scale';
@@ -85,9 +86,9 @@ function harness() {
     },
   };
   const scene = {
-    preload: async () => { calls.loads++; }, setHighlightedModel() {},
+    preload: async () => { calls.loads++; },
     applyPlacement() {}, setStabilization() {}, setProximity() {},
-    applyDiscovery() {}, onNearbyModel() {}, pulse() {}, clear() {}, dispose() {},
+    applyDiscovery() {}, onNearbyModel() {}, pulse: () => true, clear() {}, dispose() {},
   };
   const audio = {
     unlock: async () => { calls.unlocks++; }, play() {}, dispose() {},
@@ -320,46 +321,126 @@ test('la secuencia rechaza gestos de toque imposibles', () => {
   assert.equal(ok.tapSpeed, 1);
 });
 
-test('el salto domado conserva el giro, acorta la trayectoria y marca el choque', () => {
-  const times = [0, 1, 2, 3, 4];
-  const original = new AnimationClip('Jump', 4, [
-    // Sube 20, avanza 20, choca (cae un cuarto) en t=3 y vuelve.
-    new VectorKeyframeTrack('RIg_BallenaHips.position', times, [
-      0, 2, 0, 0, 12, 10, 0, 22, 20, 0, 15, 20, 0, 2, 0,
-    ]),
-    new NumberKeyframeTrack('RIg_BallenaHips.rotation[z]', [0, 4], [0, 6]),
+test('el salto de la ballena conserva su tiempo y sus giros, cae en arco y se sumerge antes de volver', () => {
+  // Sube 20 y avanza 20 con la forma de una campana, del segundo 1 al 3;
+  // a partir de ahí el archivo hace lo que quiera (aquí, vuelve despacio).
+  const times: number[] = [];
+  const values: number[] = [];
+  for (let t = 0; t <= 10.0001; t += 0.1) {
+    const up = t <= 3 ? Math.sin((Math.PI / 2) * Math.max(0, (t - 1) / 2)) ** 2 : Math.max(0, 1 - (t - 3) / 7);
+    times.push(t);
+    values.push(0, 2 + 20 * up, 20 * up);
+  }
+  const original = new AnimationClip('Jump', 10, [
+    new VectorKeyframeTrack('RIg_BallenaHips.position', times, values),
+    new NumberKeyframeTrack('RIg_BallenaHips.rotation[z]', [0, 10], [0, 6]),
   ]);
-  const { clip, impactSeconds } = tameBreach(original);
-  assert.equal(impactSeconds, 3);
-  const values = Array.from(clip.tracks[0]!.values);
-  // La cima se conserva a una fracción de su altura…
-  assert.ok(values[7]! > 2 && values[7]! < 22 * 0.5);
-  // …el avance casi desaparece…
-  assert.ok(values[8]! < 20 * 0.2);
-  // …y en el choque la cadera está de vuelta en el agua.
-  assert.ok(Math.abs(values[10]! - 2) < 1e-6);
+  const { clip, splashes } = tameBreach(original);
+  const y = (index: number) => clip.tracks[0]!.values[index * 3 + 1]!;
+  const z = (index: number) => clip.tracks[0]!.values[index * 3 + 2]!;
+  // El tiempo no cambia (se reproduce a velocidad 1) y los giros tampoco.
+  assert.equal(clip.duration, 10);
   assert.deepEqual(Array.from(clip.tracks[1]!.values), [0, 6]);
+  // La cima, a escala; y el avance, a LA MISMA escala: el arco conserva su forma.
+  const peak = 30;
+  assert.ok(y(peak) > 2 && y(peak) < 2 + 20 * 0.5);
+  assert.ok(Math.abs((y(peak) - 2) / 20 - z(peak) / 20) < 1e-6);
+  // Salpica dos veces, como la tortuga: suave al romper la superficie
+  // subiendo y fuerte al volver a cruzarla cayendo.
+  assert.equal(splashes.length, 2);
+  const [exit, entry] = splashes;
+  assert.ok(exit!.at > 1 && exit!.at < 3, `sale del agua en ${exit!.at}`);
+  assert.ok(entry!.at > 3 && entry!.at < 5.5, `cae al agua en ${entry!.at}`);
+  assert.ok(exit!.strength < entry!.strength);
+  // La superficie está POR ENCIMA de donde nada: en los dos cruces la
+  // cadera va a la misma altura, y esa altura está sobre la de reposo.
+  const hipsAt = (seconds: number) => y(Math.round(seconds * 10));
+  assert.ok(hipsAt(exit!.at) > 2.5 && Math.abs(hipsAt(exit!.at) - hipsAt(entry!.at)) < 0.8);
+  // La caída dura lo que duró la subida: nada de caer de golpe.
+  assert.ok(entry!.at - 3 > 1, 'cae demasiado deprisa');
+  // Tras el choque se sumerge por debajo de donde nada, y al final vuelve.
+  const lowest = Math.min(...times.map((_, index) => y(index)));
+  // Se mete de verdad: baja casi tanto como saltó.
+  assert.ok(lowest < 2 - (y(peak) - 2) * 0.75, `solo baja hasta ${lowest.toFixed(2)}`);
+  assert.ok(Math.abs(y(times.length - 1) - 2) < 1e-3);
+  // Sin golpes: la VELOCIDAD de la cadera no cambia de golpe. Al tocar el
+  // agua sigue bajando con la que traía; un suelo la pararía en seco.
+  for (let index = 2; index < times.length; index += 1) {
+    const before = y(index - 1) - y(index - 2);
+    const after = y(index) - y(index - 1);
+    assert.ok(Math.abs(after - before) < 0.35, `golpe en t=${times[index]!.toFixed(1)}: ${before.toFixed(2)} → ${after.toFixed(2)}`);
+  }
   // El original no se toca: IconLoader lo comparte con la caché de GLTFLoader.
-  assert.deepEqual(Array.from(original.tracks[0]!.values).slice(6, 9), [0, 22, 20]);
+  assert.equal(original.tracks[0]!.values[peak * 3 + 1], 22);
 });
 
-test('la tortuga se sumerge, salpica al entrar y vuelve exactamente a su sitio', () => {
-  const dive = new TapChoreography('dive');
-  dive.start();
-  const splashes: number[] = [];
-  let deepest = 1;
-  for (let t = 0; t < 3.2; t += 1 / 60) {
-    const splash = dive.advance(1 / 60);
-    if (splash !== null) splashes.push(splash);
-    deepest = Math.min(deepest, dive.pose.depth);
+test('la tortuga nada bajo el agua, salpica poco al salir y más al caer, y vuelve a su sitio sin tirones', () => {
+  // La superficie, 0.2 tamaños por encima de su centro: nada sumergida.
+  const leap = new TapChoreography('leap', 4.8, 0.2);
+  leap.start();
+  const splashes: { at: number; strength: number }[] = [];
+  let highest = 0;
+  let deepest = 0;
+  let previous = { ...leap.pose };
+  let lastSpeed = 0;
+  for (let t = 1 / 60; t < 5; t += 1 / 60) {
+    const splash = leap.advance(1 / 60);
+    if (splash !== null) splashes.push({ at: t, strength: splash });
+    const pose = leap.pose;
+    highest = Math.max(highest, pose.rise);
+    if (splashes.length > 0) deepest = Math.min(deepest, pose.rise);
+    // Fluido: la VELOCIDAD de subida y bajada no cambia de golpe, y el
+    // cabeceo tampoco salta entre fotogramas.
+    const speed = pose.rise - previous.rise;
+    assert.ok(Math.abs(speed - lastSpeed) < 0.005, `tirón de altura en t=${t.toFixed(2)}`);
+    lastSpeed = speed;
+    assert.ok(Math.abs(pose.pitch - previous.pitch) < 0.06, `tirón de cabeceo en t=${t.toFixed(2)}`);
+    previous = { ...pose };
   }
+  // Dos salpicones, los dos al cruzar la superficie: uno pequeño al salir y
+  // otro mayor al volver a caer.
   assert.equal(splashes.length, 2);
-  assert.ok(deepest < 0.7);
-  assert.deepEqual({ ...dive.pose }, { rise: 0, sway: 0, yaw: 0, pitch: 0, roll: 0, depth: 1 });
+  const [exit, entry] = splashes;
+  assert.ok(exit!.strength < entry!.strength);
+  // Asoma bien por encima del agua, no solo la roza.
+  assert.ok(highest > 0.2 + 0.35, `solo sube a ${highest.toFixed(2)}`);
+  assert.ok(deepest < -0.1);
+  assert.equal(leap.isPlaying, false);
+  assert.deepEqual({ ...leap.pose }, { rise: 0, sway: 0, yaw: 0, pitch: 0, roll: 0 });
   // Sin movimiento definido ('none') no hay nada que avanzar ni salpicar.
-  const none = new TapChoreography('none');
+  const none = new TapChoreography('none', 2);
   none.start();
   assert.equal(none.advance(1), null);
+  assert.equal(none.isPlaying, false);
+});
+
+test('tocar a un animal a mitad de su gesto no lo reinicia; al acabar, sí responde', () => {
+  globalThis.document = { createElement: () => ({ getContext: () => null }) } as unknown as Document;
+  const turtle = ArModel.fromSnapshot({
+    id: 'turtle', name: 'Tortuga', description: 'Ficha',
+    source: ModelSource.primitive('turtle', 0x224466), spot: { u: 0.5, v: 0.5 },
+    animation: { steps: [{ name: 'Swin', loops: 1 }], tapClip: 'Swin', tapLoops: 2, tapMove: 'leap', crossFadeSeconds: 0 },
+    outlineShape: [{ u: 0.4, v: 0.4 }, { u: 0.6, v: 0.4 }, { u: 0.5, v: 0.6 }],
+    sound: { waveform: 'sine', rootFrequencyHz: 90, overtoneRatios: [1], durationMs: 1800 },
+  });
+  const icon = new Group();
+  icon.add(new Mesh(new BoxGeometry(0.1, 0.05, 0.1), new MeshBasicMaterial()));
+  const swim = new AnimationClip('Swin', 1, [new NumberKeyframeTrack('.position[x]', [0, 1], [0, 0])]);
+  const pin = new MarkerPin(turtle, { object: fitToIconSize(icon), animations: [swim], splashes: [] }, 0, 1.432);
+  pin.setRevealed(true);
+  pin.advance(1, 1);
+  const scale = icon.scale.x;
+  assert.equal(pin.pulse(), true);
+  pin.advance(1, 2);
+  // A mitad del gesto (dura 2 s: dos vueltas de un clip de 1 s).
+  assert.equal(pin.isGesturing, true);
+  assert.equal(pin.pulse(), false);
+  assert.equal(icon.scale.x, scale, 'el toque no cambia su tamaño');
+  pin.advance(0.6, 2.6);
+  pin.advance(0.6, 3.2);
+  assert.equal(pin.isGesturing, false);
+  assert.equal(pin.pulse(), true);
+  pin.dispose();
 });
 
 test('la ballena salpica en el fotograma del choque de su clip, no antes', () => {
@@ -376,16 +457,21 @@ test('la ballena salpica en el fotograma del choque de su clip, no antes', () =>
   icon.add(new Mesh(new BoxGeometry(0.1, 0.1, 0.1), new MeshBasicMaterial()));
   const swim = new AnimationClip('Swin', 1, [new NumberKeyframeTrack('.position[x]', [0, 1], [0, 0])]);
   const jump = new AnimationClip('Jump', 1, [new NumberKeyframeTrack('.position[x]', [0, 1], [0, 0])]);
-  const pin = new MarkerPin(whale, { object: fitToIconSize(icon), animations: [swim, jump], splashAt: 0.5 }, 0, 1.432);
+  const pin = new MarkerPin(whale, { object: fitToIconSize(icon), animations: [swim, jump], splashes: [{ at: 0.5, strength: 1 }] }, 0, 1.432);
   const water = pin.waterGroup;
   assert.ok(water);
+  const heard: number[] = [];
+  pin.onSplash = (strength) => heard.push(strength);
   pin.setRevealed(true);
   pin.advance(0.1, 0.1);
   pin.pulse();
   pin.advance(0.4, 0.5);
   assert.equal(water.visible, false);
+  assert.deepEqual(heard, []);
   pin.advance(0.15, 0.65);
   assert.equal(water.visible, true);
+  // El chapuzón se oye en el MISMO fotograma en que se ve el salpicón.
+  assert.deepEqual(heard, [1]);
   pin.dispose();
 });
 
@@ -447,7 +533,8 @@ test('pin real conserva ID en primer plano, permite raycast, pulsa y libera geom
   const scale = icon.scale.x;
   adapter.pulse(ModelId.of('whale'));
   advance(0.1);
-  assert.ok(icon.scale.x > scale);
+  // Tocarlo ya no lo agranda: la respuesta es su gesto, no un cambio de tamaño.
+  assert.equal(icon.scale.x, scale);
   let disposed = false;
   icon.traverse((object) => {
     if (object instanceof Mesh) object.geometry.addEventListener('dispose', () => { disposed = true; });
@@ -863,7 +950,7 @@ test('la zona de toque de un animal es su huella, no un disco que tape lo de al 
   const icon = new Group();
   // Un cangrejo de 0.1 x 0.03 en su tamaño natural.
   icon.add(new Mesh(new BoxGeometry(0.1, 0.03, 0.05), new MeshBasicMaterial()));
-  const pin = new MarkerPin(crab, { object: fitToIconSize(icon, 0.1), animations: [], splashAt: null }, 0, 1.432);
+  const pin = new MarkerPin(crab, { object: fitToIconSize(icon, 0.1), animations: [], splashes: [] }, 0, 1.432);
   pin.setRevealed(true);
   pin.advance(2, 2);
   pin.group.updateMatrixWorld(true);
@@ -1026,4 +1113,29 @@ test('tras tocar un animal, otro animal que se ha movido con su clip se sigue pu
   skeleton.update();
   const x = (new Vector3(1, 0, 0).project(camera).x + 1) * 50;
   assert.deepEqual(targetAt(x, 50), { kind: 'model', id: 'turtle' }, 'el toque se descarta por una caja vieja');
+});
+
+test('el chapuzón suena con el volumen del salpicón, y solo en quien cae al agua', async () => {
+  const played: { url: string; volume: number | undefined }[] = [];
+  const audio = {
+    unlock: async () => {}, dispose() {}, preload() {}, play() {},
+    playClip: (url: string, volume?: number) => { played.push({ url, volume }); },
+    startAmbience() {}, stopAmbience() {},
+  };
+  const sounds = new AnimalSoundscape(audio as never, () => ArSession.idle());
+  const catalog = NUQUI_CATALOG.map((entry) => ArModel.fromSnapshot(entry));
+  const byId = (id: string) => catalog.find((entry) => entry.id.value === id)!;
+  const splash = new PlaySplashSound(sounds, { findAll: async () => catalog, findById: async (id: ModelId) => byId(id.value) });
+  await splash.execute('whale', 1);
+  await splash.execute('turtle', 0.3);
+  await splash.execute('crab', 1);
+  assert.deepEqual(played, [
+    { url: '/audio/whale/splash.mp3', volume: 1 },
+    { url: '/audio/turtle/splash.mp3', volume: 0.3 },
+  ]);
+  // El chapuzón ya no es uno de los toques de la ballena: sonaba ANTES de saltar.
+  assert.ok(!byId('whale').soundscape!.taps.some((url) => url.includes('splash')));
+  // Suena a una hora exacta: se descarga entre lo primero.
+  const order = soundPreloadOrder(catalog);
+  assert.ok(order.indexOf('/audio/whale/splash.mp3') < order.indexOf('/audio/whale/tap-1.mp3'));
 });

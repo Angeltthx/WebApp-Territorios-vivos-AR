@@ -44,8 +44,16 @@ export const ICON_TARGET_SIZE = 0.21;
 export interface LoadedIcon {
   readonly object: Object3D;
   readonly animations: readonly AnimationClip[];
-  /** Segundo del clip de toque en que el animal cae al agua, si cae. */
-  readonly splashAt: number | null;
+  /**
+   * Segundos DEL CLIP de toque en que salpica, y con qué fuerza: la ballena
+   * al romper la superficie subiendo y al volver a cruzarla cayendo.
+   */
+  readonly splashes: readonly ClipSplash[];
+}
+
+export interface ClipSplash {
+  readonly at: number;
+  readonly strength: number;
 }
 
 /**
@@ -84,7 +92,7 @@ export class IconLoader {
       return {
         object: wrapScaled(createPrimitive(model.source.shape, model.source.colorHex), model.pose.size),
         animations: [],
-        splashAt: null,
+        splashes: [],
       };
     }
 
@@ -97,13 +105,13 @@ export class IconLoader {
       gltf.scene.traverse((node) => { node.frustumCulled = false; });
 
       let animations = gltf.animations;
-      let splashAt: number | null = null;
+      let splashes: readonly ClipSplash[] = [];
       const tapClip = model.animation?.tapClip ?? null;
       if (model.animation?.tapMove === 'breach' && tapClip !== null) {
         animations = animations.map((clip) => {
           if (clip.name !== tapClip) return clip;
           const tamed = tameBreach(clip);
-          splashAt = tamed.impactSeconds;
+          splashes = tamed.splashes;
           return tamed.clip;
         });
       }
@@ -118,13 +126,13 @@ export class IconLoader {
       return {
         object: fitToIconSize(gltf.scene, targetSize, ambient),
         animations,
-        splashAt,
+        splashes,
       };
     } catch (error) {
       // Respaldo deliberado: si un .glb falta o falla, el resto del
       // catálogo sigue funcionando en vez de tumbar toda la sesión.
       console.warn(`[IconLoader] No se pudo cargar ${model.source.url}`, error);
-      return { object: buildMissingMarker(), animations: [], splashAt: null };
+      return { object: buildMissingMarker(), animations: [], splashes: [] };
     }
   }
 
@@ -134,31 +142,63 @@ export class IconLoader {
   }
 }
 
-/** Cuánto de la altura original del salto se conserva, y cuánto del avance. */
-const BREACH_HEIGHT = 0.42;
-const BREACH_TRAVEL = 0.12;
-/** Lo que se hunde tras caer, en proporción a la altura del salto. */
-const BREACH_SINK = 0.18;
+/**
+ * A qué escala se reproduce la trayectoria de la cadera: la MISMA para la
+ * altura y para el avance, así el arco conserva la forma que le dio el
+ * animador. En el archivo sube 19 unidades y avanza 20 —casi el largo del
+ * animal—, que en un mapa es cruzarlo.
+ */
+const BREACH_SCALE = 0.42;
+/**
+ * Lo que se hunde tras caer, en proporción a la altura del salto: tanto
+ * como saltó. Con la mitad apenas se mojaba —se pidió que se viera meterse
+ * de verdad en el agua—; así queda casi entera por debajo de la superficie,
+ * que la recorta (ver MarkerPin).
+ */
+const BREACH_SINK = 1;
+/**
+ * Dónde está la superficie del agua, en fracción de la altura del salto
+ * sobre la cadera en reposo: la ballena nada justo por debajo, y al saltar
+ * la rompe algo antes de llegar a esa altura.
+ */
+const BREACH_SURFACE = 0.3;
+/** Fuerza de cada salpicón: suave al salir, pleno al caer. */
+const BREACH_EXIT_SPLASH = 0.45;
+const BREACH_ENTRY_SPLASH = 1;
 
 /**
- * Doma el `Jump` de la ballena para que quepa en un mapa.
+ * Adapta el `Jump` de la ballena al mapa tocando lo mínimo.
  *
- * En el archivo la cadera sube 19 unidades y avanza 20 —casi el largo del
- * animal— y tarda 6 segundos en volver del agua. Se conservan intactos el
- * cabeceo y el giro de 180° sobre el lomo (eso ES el salto) y se rehace la
- * trayectoria de la cadera con la misma cadencia:
+ * Del archivo se conserva TODO el tiempo (se reproduce a velocidad 1: la
+ * versión anterior lo ponía a 1.8× y los animadores lo notaron) y todos
+ * los giros: sube con el morro hacia arriba, se pone de espaldas en la
+ * cima, cae y pica de morro, y se endereza. Se conserva también la subida
+ * de la cadera, con la forma de su curva, a BREACH_SCALE.
  *
- *   - subida: la curva original, a BREACH_HEIGHT de su altura;
- *   - caída: una parábola que llega al agua en el mismo fotograma en que
- *     el original frena al chocar (`impactSeconds`, donde va el salpicón);
- *   - después: se hunde un poco y sale despacio, en vez de quedarse flotando
- *     a media altura como hacía el original.
+ * Lo único que se reescribe es la cadera DESPUÉS de la cima:
  *
- * El avance se reduce a BREACH_TRAVEL: de perfil, avanzar es cruzar el mapa.
+ *   - la caída es un arco que dura lo mismo que tardó en subir, así que
+ *     arranca suave en la cima y va cogiendo velocidad. La versión anterior
+ *     caía en un cuarto de segundo lo que había subido en dos y medio, y
+ *     paraba en seco: parecía chocar contra un suelo;
+ *   - al llegar a su profundidad de nado sigue bajando con la velocidad
+ *     que traía, el agua la frena poco a poco
+ *     —misma pendiente a los dos lados del impacto, sin golpe— y, ya
+ *     sumergida, vuelve a flote con entrada y salida suaves. Coincide con el
+ *     tramo en que el propio clip la pone de morro hacia abajo y luego la
+ *     endereza.
+ *
+ * El avance también va a BREACH_SCALE, incluida la vuelta al punto de
+ * partida que el clip ya trae (mientras está bajo el agua).
+ *
+ * Salpica DOS veces, como la tortuga: al romper la superficie subiendo
+ * (suave) y al volver a cruzarla cayendo (fuerte). La superficie está por
+ * encima de la ballena (BREACH_SURFACE): con el salpicón a la altura de su
+ * vientre, al caer parecía que chocaba contra un suelo.
  */
-export function tameBreach(clip: AnimationClip): { clip: AnimationClip; impactSeconds: number | null } {
+export function tameBreach(clip: AnimationClip): { clip: AnimationClip; splashes: readonly ClipSplash[] } {
   const tamed = clip.clone();
-  let impactSeconds: number | null = null;
+  let splashes: ClipSplash[] = [];
 
   for (const track of tamed.tracks) {
     if (!/Hips\.position$/.test(track.name)) continue;
@@ -174,35 +214,68 @@ export function tameBreach(clip: AnimationClip): { clip: AnimationClip; impactSe
     const rise = values[peak * 3 + 1]! - y0;
     if (rise <= 0) continue;
 
-    // El choque: el primer fotograma tras la cima en que ya ha caído un
-    // cuarto. Ahí el original pasa de caer en picado a casi pararse.
-    let impact = count - 1;
-    for (let i = peak; i < count; i += 1) {
-      if (values[i * 3 + 1]! < y0 + rise * 0.75) { impact = i; break; }
+    // Cuánto tardó en subir: desde que despega (un 10 % de la altura) hasta
+    // la cima. La caída dura lo mismo.
+    let takeoff = 0;
+    for (let i = 0; i <= peak; i += 1) {
+      if (values[i * 3 + 1]! >= y0 + rise * 0.1) { takeoff = i; break; }
     }
-    impactSeconds = times[impact]!;
     const tPeak = times[peak]!;
     const tEnd = times[count - 1]!;
-    const height = rise * BREACH_HEIGHT;
+    const fall = Math.max(tPeak - times[takeoff]!, 1e-3);
+    const impact = Math.min(tPeak + fall, tEnd - 1e-3);
+
+    const height = rise * BREACH_SCALE;
+    const sink = height * BREACH_SINK;
+    // Velocidad al llegar al agua; el agua la frena con esta constante.
+    const entrySpeed = (2 * height) / fall;
+    const tau = sink / entrySpeed;
+    // Empieza a volver cuando ya ha bajado un 86 % (dos constantes de
+    // tiempo): con más profundidad, esperar a tres dejaba muy poco para subir.
+    const surfacing = Math.min(impact + 2 * tau, tEnd);
 
     for (let i = 0; i < count; i += 1) {
       const t = times[i]!;
       let y: number;
       if (i <= peak) {
-        y = y0 + (values[i * 3 + 1]! - y0) * BREACH_HEIGHT;
-      } else if (t <= impactSeconds) {
-        const fall = (t - tPeak) / Math.max(impactSeconds - tPeak, 1e-6);
-        y = y0 + height * (1 - fall * fall);
+        y = y0 + (values[i * 3 + 1]! - y0) * BREACH_SCALE;
+      } else if (t <= impact) {
+        const x = (t - tPeak) / fall;
+        y = y0 + height * (1 - x * x);
       } else {
-        const after = (t - impactSeconds) / Math.max(tEnd - impactSeconds, 1e-6);
-        y = y0 - height * BREACH_SINK * Math.sin(Math.PI * after);
+        const back = smoothstep((t - surfacing) / Math.max(tEnd - surfacing, 1e-3));
+        y = y0 - sink * (1 - Math.exp(-(t - impact) / tau)) * (1 - back);
       }
       values[i * 3 + 1] = y;
-      values[i * 3 + 2] = z0 + (values[i * 3 + 2]! - z0) * BREACH_TRAVEL;
+      values[i * 3 + 2] = z0 + (values[i * 3 + 2]! - z0) * BREACH_SCALE;
     }
+
+    // Los dos salpicones, donde la cadera cruza la superficie: subiendo
+    // (sobre la curva original, interpolando entre fotogramas) y cayendo
+    // (sobre la parábola, que se sabe resolver).
+    const surface = y0 + height * BREACH_SURFACE;
+    let exit = times[takeoff]!;
+    for (let i = 1; i <= peak; i += 1) {
+      const a = values[(i - 1) * 3 + 1]!;
+      const b = values[i * 3 + 1]!;
+      if (a < surface && b >= surface) {
+        exit = times[i - 1]! + ((surface - a) / (b - a)) * (times[i]! - times[i - 1]!);
+        break;
+      }
+    }
+    const entry = tPeak + fall * Math.sqrt(1 - BREACH_SURFACE);
+    splashes = [
+      { at: exit, strength: BREACH_EXIT_SPLASH },
+      { at: entry, strength: BREACH_ENTRY_SPLASH },
+    ];
   }
 
-  return { clip: tamed, impactSeconds };
+  return { clip: tamed, splashes };
+}
+
+function smoothstep(t: number): number {
+  const c = Math.min(1, Math.max(0, t));
+  return c * c * (3 - 2 * c);
 }
 
 /**

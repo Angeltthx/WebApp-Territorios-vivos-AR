@@ -14,8 +14,11 @@ export interface AudioPort {
    * no llegue a tiempo se descarga al reproducirlo.
    */
   preload(urls: readonly string[]): void;
-  /** Una grabación, una vez. Si tarda demasiado en llegar, no suena: tarde confunde. */
-  playClip(url: string): void;
+  /**
+   * Una grabación, una vez, a `volume` (0–1, por defecto 1). Si tarda
+   * demasiado en llegar, no suena: tarde confunde.
+   */
+  playClip(url: string, volume?: number): void;
   /**
    * Ambiente en bucle y sin costuras. Sustituye con un fundido al que
    * estuviera sonando; con la misma ruta, no hace nada.

@@ -97,6 +97,7 @@ export class ThreeSceneAdapter implements ScenePort {
   /** Qué animal está dentro del alcance de la cámara ahora mismo. */
   private nearbyId: string | null = null;
   private nearbyListener: ((modelId: string | null) => void) | null = null;
+  private splashListener: ((modelId: string, strength: number) => void) | null = null;
 
   /** El animal en primer plano: su id, su icono prestado y sus medidas naturales. */
   private focusedId: string | null = null;
@@ -105,7 +106,6 @@ export class ThreeSceneAdapter implements ScenePort {
   /** Giro que el usuario imprime con el dedo. */
   private spin = 0;
   private scale = 1;
-  private stagePulse = 0;
   /**
    * Cuánto mide un ancho de mapa en unidades de mundo, del último fotograma
    * con marcador a la vista. Se guarda para que el primer plano siga
@@ -151,6 +151,7 @@ export class ThreeSceneAdapter implements ScenePort {
 
     icons.forEach(([model, icon], index) => {
       const pin = new MarkerPin(model, icon, index, this.targetAspect);
+      pin.onSplash = (strength) => this.splashListener?.(model.id.value, strength);
       this.overlay.add(pin.group);
       this.pins.set(model.id.value, pin);
     });
@@ -171,10 +172,6 @@ export class ThreeSceneAdapter implements ScenePort {
       this.clear();
       throw error;
     }
-  }
-
-  setHighlightedModel(id: ModelId): void {
-    for (const [key, pin] of this.pins) pin.highlight(key === id.value);
   }
 
   applyPlacement(placement: Placement): void {
@@ -288,8 +285,6 @@ export class ThreeSceneAdapter implements ScenePort {
       .set(0, visibleHeight * STAGE_LIFT, -distance)
       .applyQuaternion(camera.quaternion)
       .add(camera.position);
-    this.stagePulse = Math.max(0, this.stagePulse - deltaSeconds);
-    const bump = 1 + 0.3 * Math.sin((this.stagePulse / 0.45) * Math.PI);
 
     // Sin giro automático: no es un producto en un expositor. Solo gira
     // cuando el usuario lo arrastra con el dedo.
@@ -317,7 +312,7 @@ export class ThreeSceneAdapter implements ScenePort {
       availableWidth / Math.max(projectedWidth, this.stagedNaturalSize.z * 0.6),
       perspectiveCap,
     );
-    icon.scale.setScalar(fittedScale * (pin?.focusSize ?? 1) * this.scale * bump);
+    icon.scale.setScalar(fittedScale * (pin?.focusSize ?? 1) * this.scale);
     // El gesto de toque (salto, buceo, correteo) y su salpicón, igual que
     // sobre el mapa: lo aplica el propio pin, que es quien lo lleva.
     if (pin !== undefined) {
@@ -335,9 +330,12 @@ export class ThreeSceneAdapter implements ScenePort {
     this.nearbyListener = listener;
   }
 
-  pulse(id: ModelId): void {
-    if (this.focusedId === id.value) this.stagePulse = 0.45;
-    this.pins.get(id.value)?.pulse();
+  onSplash(listener: (modelId: string, strength: number) => void): void {
+    this.splashListener = listener;
+  }
+
+  pulse(id: ModelId): boolean {
+    return this.pins.get(id.value)?.pulse() ?? false;
   }
 
   clear(): void {
