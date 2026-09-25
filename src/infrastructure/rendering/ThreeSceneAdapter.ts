@@ -2,10 +2,8 @@ import {
   ACESFilmicToneMapping,
   Box3,
   CircleGeometry,
-  DirectionalLight,
   DoubleSide,
   Group,
-  HemisphereLight,
   Mesh,
   MeshBasicMaterial,
   Object3D,
@@ -23,6 +21,7 @@ import type { MindArRuntime } from '../mindar/MindArRuntime';
 import { IconLoader } from './IconLoader';
 import { MarkerPin } from './MarkerPin';
 import { PoseFilter } from './PoseFilter';
+import { addThreePointLighting } from './ThreePointLighting';
 import { MapTextHotspot } from './MapTextHotspot';
 import type { MapText } from '@domain/value-objects/MapText';
 
@@ -98,6 +97,7 @@ export class ThreeSceneAdapter implements ScenePort {
   private nearbyId: string | null = null;
   private nearbyListener: ((modelId: string | null) => void) | null = null;
   private splashListener: ((modelId: string, strength: number) => void) | null = null;
+  private tapSoundListener: ((modelId: string) => void) | null = null;
 
   /** El animal en primer plano: su id, su icono prestado y sus medidas naturales. */
   private focusedId: string | null = null;
@@ -152,6 +152,7 @@ export class ThreeSceneAdapter implements ScenePort {
     icons.forEach(([model, icon], index) => {
       const pin = new MarkerPin(model, icon, index, this.targetAspect);
       pin.onSplash = (strength) => this.splashListener?.(model.id.value, strength);
+      pin.onTapSound = () => this.tapSoundListener?.(model.id.value);
       this.overlay.add(pin.group);
       this.pins.set(model.id.value, pin);
     });
@@ -334,6 +335,10 @@ export class ThreeSceneAdapter implements ScenePort {
     this.splashListener = listener;
   }
 
+  onTapSound(listener: (modelId: string) => void): void {
+    this.tapSoundListener = listener;
+  }
+
   pulse(id: ModelId): boolean {
     return this.pins.get(id.value)?.pulse() ?? false;
   }
@@ -404,7 +409,7 @@ export class ThreeSceneAdapter implements ScenePort {
 
     const mindar = this.runtime.init();
     this.configureRendering();
-    addLights(mindar.scene);
+    addThreePointLighting(mindar.scene);
 
     this.follower.add(this.overlay);
     this.follower.visible = false;
@@ -583,22 +588,4 @@ export class ThreeSceneAdapter implements ScenePort {
     renderer.toneMapping = ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
   }
-}
-
-/**
- * Iluminación compartida con la página de verificación, para que los
- * iconos se vean allí igual que sobre la cámara.
- */
-export function addLights(scene: Object3D): void {
-  // Hemisférica: simula rebote del suelo y del techo. Integra mucho mejor
-  // el objeto con la escena real que una ambiental plana.
-  scene.add(new HemisphereLight(0xffffff, 0x404050, 1.6));
-
-  const key = new DirectionalLight(0xffffff, 1.8);
-  key.position.set(1, 2.5, 1.5);
-  scene.add(key);
-
-  const fill = new DirectionalLight(0xdfe8ff, 0.5);
-  fill.position.set(-1.5, 0.5, -1);
-  scene.add(fill);
 }

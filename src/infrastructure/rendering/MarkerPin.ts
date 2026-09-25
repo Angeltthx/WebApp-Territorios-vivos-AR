@@ -226,6 +226,13 @@ export class MarkerPin {
   private readonly waterSurface: number;
   /** Avisa cuando salpica, con su fuerza: ahí suena el chapuzón. */
   onSplash: ((strength: number) => void) | null = null;
+  /** Avisa en el instante del gesto en que suena el toque (ver `tapSoundAt`). */
+  onTapSound: (() => void) | null = null;
+  /** Segundos tras el toque en que suena (catálogo). */
+  private readonly tapSoundAt: number;
+  /** Segundos desde el último toque, o null si no hay gesto en marcha. */
+  private gestureTime: number | null = null;
+  private tapSoundPending = false;
   /** Lo que mide el icono a escala 1, para convertir "tamaños de animal" en distancia. */
   private readonly reach: number;
   /** Desfase del vaivén, para que los iconos no floten todos al unísono. */
@@ -278,6 +285,7 @@ export class MarkerPin {
     this.phase = index * 1.7;
     const tapMove = model.animation?.tapMove ?? 'none';
     this.clipSplashes = loaded.splashes;
+    this.tapSoundAt = model.animation?.tapSoundAt ?? 0;
     this.reach = ICON_TARGET_SIZE * model.pose.size;
     // Un balanceo leve y continuo, por encima del clip ambiental: el Idle
     // de la pava apenas mueve huesos y, sin esto, parecía una figura quieta.
@@ -386,6 +394,8 @@ export class MarkerPin {
     this.animator.react();
     this.choreography.start();
     this.lastTapClipTime = null;
+    this.gestureTime = null;
+    this.tapSoundPending = true;
     return true;
   }
 
@@ -517,6 +527,16 @@ export class MarkerPin {
     if (splash !== null && this.splash !== null) {
       this.splash.burst(splash);
       this.onSplash?.(splash);
+    }
+    // El sonido del toque, en SU momento del gesto. Se cuenta desde el
+    // toque y no por el tiempo del clip: al tocar al cangrejo mientras
+    // camina, su Walk sigue desde donde iba y su reloj no empieza en 0.
+    if (this.tapSoundPending) {
+      this.gestureTime = this.gestureTime === null ? 0 : this.gestureTime + deltaSeconds;
+      if (this.gestureTime >= this.tapSoundAt) {
+        this.tapSoundPending = false;
+        this.onTapSound?.();
+      }
     }
     // Aparecer cuesta mas que desaparecer: la entrada tiene que dar tiempo
     // a mirarla, la salida solo tiene que no dar un tiron.

@@ -2,8 +2,8 @@ import { AnimalSoundscape } from '@application/use-cases/AnimalSoundscape';
 import { CloseFocus } from '@application/use-cases/CloseFocus';
 import { DiscoverNearbyModel } from '@application/use-cases/DiscoverNearbyModel';
 import { OpenMapText } from '@application/use-cases/OpenMapText';
-import { PlayModelSound } from '@application/use-cases/PlayModelSound';
-import { PlaySplashSound } from '@application/use-cases/PlaySplashSound';
+import { TapModel } from '@application/use-cases/TapModel';
+import { PlayGestureSound } from '@application/use-cases/PlayGestureSound';
 import { StartArExperience } from '@application/use-cases/StartArExperience';
 import { TransformPlacement } from '@application/use-cases/TransformPlacement';
 import type { ArSession } from '@domain/entities/ArSession';
@@ -64,7 +64,7 @@ export function buildContainer(config: ContainerConfig) {
   );
 
   const sounds = new AnimalSoundscape(audio, getSession);
-  const playModelSound = new PlayModelSound(sounds, scene, models, analytics, getSession);
+  const tapModel = new TapModel(scene, models, analytics, getSession);
 
   // Los animales no se regalan por apuntar al mapa: hay que acercarse. La
   // medida la hace el adaptador de escena, que es el unico que sabe donde
@@ -83,14 +83,16 @@ export function buildContainer(config: ContainerConfig) {
 
   scene.setProximity(config.proximity);
   scene.onNearbyModel((modelId) => discoverNearbyModel.execute(modelId));
-  // El chapuzón suena en el fotograma en que se ve el salpicón.
-  const playSplashSound = new PlaySplashSound(sounds, models);
-  scene.onSplash((modelId, strength) => void playSplashSound.execute(modelId, strength));
+  // Cada sonido de un gesto suena en su fotograma: el del toque cuando la
+  // animación llega a él, el chapuzón cuando se ve el salpicón.
+  const gestureSound = new PlayGestureSound(sounds, models);
+  scene.onTapSound((modelId) => void gestureSound.tapped(modelId));
+  scene.onSplash((modelId, strength) => void gestureSound.splashed(modelId, strength));
 
   return {
     startArExperience,
     transformPlacement,
-    playModelSound,
+    tapModel,
     closeFocus,
     openMapText,
     mapTexts: mapTexts.all,

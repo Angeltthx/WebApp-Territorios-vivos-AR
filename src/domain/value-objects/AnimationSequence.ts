@@ -39,6 +39,13 @@ export interface AnimationSequenceSnapshot {
   /** Cuántas vueltas da el clip de toque antes de volver al bucle ambiental. */
   readonly tapLoops?: number;
   readonly tapMove?: TapMove;
+  /**
+   * Cuántos segundos DESPUÉS del toque suena su sonido de toque: en el
+   * instante de la animación que lo produce (la pava canta al estirar el
+   * cuello; la ballena resopla al volver a la superficie). Por defecto 0,
+   * al tocar.
+   */
+  readonly tapSoundAt?: number;
 }
 
 export interface AnimationStep {
@@ -56,6 +63,7 @@ export class AnimationSequence {
     readonly tapSpeed: number,
     readonly tapLoops: number,
     readonly tapMove: TapMove,
+    readonly tapSoundAt: number,
   ) {
     Object.freeze(this.steps);
     Object.freeze(this);
@@ -103,6 +111,10 @@ export class AnimationSequence {
       throw new RangeError(`Movimiento de toque desconocido: ${String(tapMove)}`);
     }
 
+    const tapSoundAt = snapshot.tapSoundAt ?? 0;
+    if (!Number.isFinite(tapSoundAt) || tapSoundAt < 0 || tapSoundAt > 30) {
+      throw new RangeError(`Momento del sonido de toque inválido: ${tapSoundAt}`);
+    }
     return new AnimationSequence(
       steps,
       crossFadeSeconds,
@@ -111,6 +123,7 @@ export class AnimationSequence {
       tapSpeed,
       tapLoops,
       tapMove,
+      tapSoundAt,
     );
   }
 }

@@ -30,7 +30,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import { ArModel } from '@domain/entities/ArModel';
-import { addLights } from '@infrastructure/rendering/ThreeSceneAdapter';
+import { addThreePointLighting } from '@infrastructure/rendering/ThreePointLighting';
 import { IconLoader } from '@infrastructure/rendering/IconLoader';
 import { MarkerPin } from '@infrastructure/rendering/MarkerPin';
 import { NUQUI_CATALOG } from '@infrastructure/repositories/StaticModelRepository';
@@ -54,7 +54,7 @@ const REVEAL_DELAY_MS = Number(
 );
 
 const scene = new Scene();
-addLights(scene);
+addThreePointLighting(scene);
 scene.add(new AmbientLight(0xffffff, 0.35));
 
 // El mapa, exactamente como lo ve MindAR: centrado en el origen, de 1
@@ -159,6 +159,9 @@ document.querySelector<HTMLCanvasElement>('#flat')?.addEventListener('click', (e
 // consola, `measureIcons()` da lo que ocupa cada animal en la vista
 // ortográfica, en anchos de mapa, para compararlo con su dibujo.
 Object.assign(window, {
+  // Para afinar la iluminación desde la consola sin recargar:
+  // `verifyScene.getObjectByName('contraluz').intensity = 3; stepVerify(0)`.
+  verifyScene: scene,
   measureIcons: () => pins.map((pin, index) => {
     let icon: Object3D | null = null;
     pin.group.traverse((node) => {

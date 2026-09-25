@@ -20,13 +20,31 @@
     />
     <title>Territorios Vivos AR · Nuquí, Chocó</title>
 
-    <!-- Tipografía del sistema: sin CSS ni fuentes externas que retrasen el primer dibujo. -->
+    <!-- Las tipografías DEL PÓSTER: Arvo (los nombres de lugar, JURUBIDÁ,
+         TRIBUGÁ…), Oswald (las etiquetas de especie, BALLENA JOROBADA) y
+         Merriweather (los párrafos, y su cursiva para los nombres
+         científicos). La interfaz usa las mismas para que se lea como parte
+         del mapa. `media="print"` + onload: la hoja no bloquea el primer
+         dibujo —la portada es una imagen y no las necesita—, y `swap` pinta
+         con Georgia hasta que llegan. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Arvo:wght@700&family=Merriweather:ital,wght@0,400;0,700;1,400&family=Oswald:wght@500&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
     <style>
       :root {
         color-scheme: dark;
         --surface: rgba(18, 18, 20, 0.72);
         --border: rgba(255, 255, 255, 0.14);
         --accent: #e8442f;
+        /* Las tres familias del póster (ver el <link> de arriba). */
+        --font-title: "Arvo", Rockwell, Georgia, serif;
+        --font-label: "Oswald", "Arial Narrow", sans-serif;
+        --font-text: "Merriweather", Georgia, serif;
 
         /* Proporcion EXACTA de public/splash/inicio.webp (720x1600). Es lo
            que permite colocar el boton sobre el que viene dibujado en la
@@ -47,7 +65,8 @@
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
       body {
-        font: 500 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+        /* Texto corrido como los párrafos del póster. */
+        font: 400 15px/1.45 var(--font-text);
         color: #fff;
         overscroll-behavior: none;
       }
@@ -163,8 +182,11 @@
          bienvenida. Este solo aparece si algo fallo, y es la unica forma de
          reintentar sin recargar la pagina. */
       #retry {
+        font-family: var(--font-label);
         font-size: 17px;
-        font-weight: 600;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
         padding: 17px 44px;
         background: var(--accent);
         border-color: transparent;
@@ -526,12 +548,34 @@
 
       #approach-title {
         margin: 0;
-        font-family: "Fraunces", Georgia, "Times New Roman", serif;
-        font-weight: 600;
+        /* Títulos como los nombres de lugar del póster (JURUBIDÁ, TRIBUGÁ). */
+        font-family: var(--font-title);
+        font-weight: 700;
         font-size: clamp(21px, 5.8vw, 31px);
         line-height: 1.2;
         text-shadow: 0 2px 22px rgba(0, 0, 0, 0.95);
       }
+      #guide-mission {
+        margin: calc(clamp(10px, 3vh, 24px) * -0.6) 0 0;
+        max-width: 26ch;
+        text-align: center;
+        font-family: var(--font-text);
+        font-style: italic;
+        font-size: clamp(14px, 4vw, 17px);
+        line-height: 1.4;
+        color: rgba(255, 255, 255, 0.92);
+        text-shadow: 0 1px 14px rgba(0, 0, 0, 0.95);
+      }
+      #guide-mission strong {
+        font-family: var(--font-label);
+        font-style: normal;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        /* El dorado de los contornos que marcan dónde hay un animal. */
+        color: #ffc53d;
+      }
+
       #approach-sub {
         margin: 0;
         font-size: 13.5px;
@@ -579,7 +623,11 @@
         flex-shrink: 0;
         position: relative;
         aspect-ratio: 1000 / 1432;
-        height: min(calc(var(--vh) * 0.52), 112vw);
+        /* El tercer término deja sitio al texto de debajo (instrucción,
+           misión, enlace y la píldora de estado) en pantallas bajas: sin él,
+           a 375×560 el enlace se montaba sobre la píldora. En las altas
+           manda el 52 %. */
+        height: min(calc(var(--vh) * 0.52), 112vw, calc(var(--vh) - 330px));
         max-width: 74vw;
         border: 2px dashed rgba(255, 255, 255, 0.5);
         border-radius: 16px;
@@ -616,9 +664,9 @@
       #guide-title {
         margin: 0;
         text-align: center;
-        font-family: "Fraunces", Georgia, "Times New Roman", serif;
-        font-weight: 600;
-        font-size: clamp(23px, 6.4vw, 34px);
+        font-family: var(--font-title);
+        font-weight: 700;
+        font-size: clamp(22px, 6.2vw, 33px);
         line-height: 1.2;
         text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
       }
@@ -675,14 +723,18 @@
 
       #focus-name {
         margin: 0;
-        font-family: "Fraunces", Georgia, "Times New Roman", serif;
-        font-weight: 600;
-        font-size: clamp(24px, 6.6vw, 34px);
-        line-height: 1.15;
+        /* Como las etiquetas de especie del póster: BALLENA JOROBADA. */
+        font-family: var(--font-label);
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-size: clamp(26px, 7.4vw, 38px);
+        line-height: 1.1;
         text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
       }
       #focus-species {
         margin: -6px 0 0;
+        font-family: var(--font-text);
         font-size: 13px;
         font-style: italic;
         letter-spacing: 0.01em;
@@ -695,8 +747,9 @@
       #focus-info {
         margin: 0;
         max-width: 34ch;
-        font-size: 14.5px;
-        line-height: 1.5;
+        font-family: var(--font-text);
+        font-size: 14px;
+        line-height: 1.55;
         color: rgba(255, 255, 255, 0.88);
         text-shadow: 0 1px 14px rgba(0, 0, 0, 0.95);
       }
@@ -811,8 +864,11 @@
       #menu button {
         width: 100%;
         text-align: left;
-        font-size: 14.5px;
+        font-family: var(--font-label);
+        font-size: 16px;
         font-weight: 500;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
         min-width: 0;
         min-height: 44px;
         padding: 12px 14px;
@@ -923,7 +979,7 @@
       }
       .rt-paragraph {
         margin: 0;
-        font-family: "Merriweather", Georgia, serif;
+        font-family: var(--font-text);
         font-size: clamp(18px, 4.9vw, 22px);
         line-height: 1.6;
         /* Justificado, con guiones en español para que no abra ríos. */
@@ -935,7 +991,7 @@
       .rt-paragraph + .rt-paragraph { margin-top: 1.1em; }
       .rt-directory { list-style: none; margin: 0; padding: 0; }
       .rt-directory li {
-        font-family: "Merriweather", Georgia, serif;
+        font-family: var(--font-text);
         font-size: clamp(17px, 4.6vw, 20px);
         line-height: 1.3;
       }
@@ -953,7 +1009,7 @@
         display: flex;
         align-items: center;
         gap: 12px;
-        font-family: "Arvo", Rockwell, Georgia, serif;
+        font-family: var(--font-title);
         font-weight: 700;
         font-size: clamp(19px, 5.2vw, 24px);
         line-height: 1.25;
@@ -978,7 +1034,7 @@
         border-radius: 999px;
         background: #fffdf5;
         color: #1d3b2a;
-        font-family: "Arvo", Rockwell, Georgia, serif;
+        font-family: var(--font-title);
         font-weight: 700;
         font-size: clamp(30px, 9vw, 44px);
         letter-spacing: 0.08em;
@@ -986,7 +1042,8 @@
       }
       .rt-sea {
         margin: 0;
-        font-family: "Fraunces", Georgia, serif;
+        /* «Océano Pacífico» va en cursiva de texto, como en el póster. */
+        font-family: var(--font-text);
         font-style: italic;
         font-size: clamp(40px, 12vw, 60px);
         line-height: 1.1;
@@ -1006,7 +1063,7 @@
         padding: 6px 18px;
         border-radius: 10px 10px 0 0;
         background: #7f9fce;
-        font-family: "Oswald", "Arial Narrow", sans-serif;
+        font-family: var(--font-label);
         font-weight: 500;
         font-size: clamp(24px, 7vw, 32px);
         text-transform: uppercase;
@@ -1023,7 +1080,7 @@
 
       /* Invitación a tocar los puntos, al encontrar a los cuatro animales.
          Mismo lenguaje que el visor de «Apunta al mapa»: transparente,
-         borde blanco punteado, esquinas de visor y Fraunces con sombra. No
+         borde blanco punteado, esquinas de visor y Arvo con sombra. No
          es un botón: los puntos ya están en el mapa, esto solo lo cuenta. */
       #explore {
         position: fixed;
@@ -1081,8 +1138,8 @@
       }
       #explore-title {
         margin: 0;
-        font-family: "Fraunces", Georgia, serif;
-        font-weight: 600;
+        font-family: var(--font-title);
+        font-weight: 700;
         font-size: clamp(20px, 5.4vw, 25px);
         line-height: 1.2;
         text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
@@ -1113,8 +1170,9 @@
       }
       @media (max-height: 500px) and (orientation: landscape) {
         #guide { padding: 12px 70px; gap: 8px; }
-        #guide-frame { height: calc(var(--vh) * 0.43); }
+        #guide-frame { height: calc(var(--vh) * 0.34); }
         #guide-title, #approach-title { font-size: 21px; }
+        #guide-mission { font-size: 13px; }
         #approach { padding-top: calc(64px + env(safe-area-inset-top)); }
         #focus { gap: 4px; }
         #focus-name { font-size: 22px; }
@@ -1165,6 +1223,9 @@
           <span></span><span></span><span></span><span></span>
         </div>
         <p id="guide-title">Apunta al mapa de Nuquí</p>
+        <!-- El llamado a la acción: la instrucción sola decía QUÉ hacer,
+             no PARA QUÉ. La misión es lo que hace querer hacerlo. -->
+        <p id="guide-mission">y descubre los <strong>4 animales</strong> que se esconden en él</p>
         <!-- Sin el mapa delante de la cámara no aparece ningún icono:
              la app rastrea esa imagen concreta, no el entorno. -->
         <a id="guide-link" href="/targets/map.jpg" target="_blank" rel="noopener"

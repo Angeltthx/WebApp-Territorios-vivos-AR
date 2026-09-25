@@ -4,7 +4,7 @@ import { NUQUI_CATALOG } from '../src/infrastructure/repositories/StaticModelRep
 import { RecurringNudge } from '../src/ui/RecurringNudge';
 import assert from 'node:assert/strict';
 import { StartArExperience } from '../src/application/use-cases/StartArExperience';
-import { PlayModelSound } from '../src/application/use-cases/PlayModelSound';
+import { TapModel } from '../src/application/use-cases/TapModel';
 import { AnimalSoundscape, soundPreloadOrder } from '../src/application/use-cases/AnimalSoundscape';
 import { DiscoverNearbyModel } from '../src/application/use-cases/DiscoverNearbyModel';
 import { CloseFocus } from '../src/application/use-cases/CloseFocus';
@@ -28,7 +28,8 @@ import { MindArTrackingAdapter } from '../src/infrastructure/tracking/MindArTrac
 import { FrameLockedBackground } from '../src/infrastructure/mindar/FrameLockedBackground';
 import { CameraPermissionDeniedError } from '../src/application/ports/TrackingPort';
 import { PoseFilter } from '../src/infrastructure/rendering/PoseFilter';
-import { PlaySplashSound } from '../src/application/use-cases/PlaySplashSound';
+import { addRimShading, addThreePointLighting } from '../src/infrastructure/rendering/ThreePointLighting';
+import { PlayGestureSound } from '../src/application/use-cases/PlayGestureSound';
 import { PointerInteractionAdapter } from '../src/infrastructure/interaction/PointerInteractionAdapter';
 import { Stabilization } from '../src/domain/value-objects/Stabilization';
 import { Scale } from '../src/domain/value-objects/Scale';
@@ -41,6 +42,7 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  MeshStandardMaterial,
   NumberKeyframeTrack,
   Object3D,
   PerspectiveCamera,
@@ -53,6 +55,7 @@ import {
   SkinnedMesh,
   Uint16BufferAttribute,
   Scene,
+  ShaderLib,
   Vector2,
   Vector3,
   VectorKeyframeTrack,
@@ -188,22 +191,57 @@ test('adaptador conserva denegación de cámara, silencia antes de await y resta
   await tracking.stop(); // Sin controlador ni stream también debe funcionar.
 });
 
-test('primer plano suena sin mapa; animal bloqueado o perdido sin ficha no suena', async () => {
+test('el primer plano responde al toque sin mapa; un animal bloqueado o perdido sin ficha, no', async () => {
   const h = harness();
   let count = 0;
-  h.audio.play = () => { count++; };
+  const scene = { ...h.scene, pulse: () => { count++; return true; } };
   let state = ArSession.idle().searching(Placement.initial(model.id, model.defaultScale)).tracking();
-  const play = new PlayModelSound(new AnimalSoundscape(h.audio as never, () => state), h.scene, models, analytics, () => state);
-  await play.execute('whale');
+  const tap = new TapModel(scene as never, models, analytics, () => state);
+  await tap.execute('whale');
   assert.equal(count, 0);
   state = state.withDiscovery(state.discovery.unlock(model.id)).lost();
-  await play.execute('whale');
+  await tap.execute('whale');
   assert.equal(count, 1);
-  await play.execute('whale');
-  assert.equal(count, 2); // cada toque vuelve a sonar aunque ya esté enfocado
+  await tap.execute('whale');
+  assert.equal(count, 2); // cada toque vuelve a responder aunque ya esté enfocado
   state = state.withDiscovery(state.discovery.focus(null));
-  await play.execute('whale');
+  await tap.execute('whale');
   assert.equal(count, 2);
+});
+
+test('el sonido del toque suena en SU momento del gesto, no al tocar', () => {
+  globalThis.document = { createElement: () => ({ getContext: () => null }) } as unknown as Document;
+  const bird = ArModel.fromSnapshot({
+    id: 'bird', name: 'Pava', description: 'Ficha',
+    source: ModelSource.primitive('bird', 0x224466), spot: { u: 0.5, v: 0.5 },
+    animation: { steps: [{ name: 'Idle', loops: 1 }], tapClip: 'Sing', tapSoundAt: 1.3, crossFadeSeconds: 0 },
+    outlineShape: [{ u: 0.4, v: 0.4 }, { u: 0.6, v: 0.4 }, { u: 0.5, v: 0.6 }],
+    sound: { waveform: 'sine', rootFrequencyHz: 90, overtoneRatios: [1], durationMs: 1800 },
+  });
+  const icon = new Group();
+  icon.add(new Mesh(new BoxGeometry(0.1, 0.1, 0.1), new MeshBasicMaterial()));
+  const idle = new AnimationClip('Idle', 1, [new NumberKeyframeTrack('.position[x]', [0, 1], [0, 0])]);
+  const sing = new AnimationClip('Sing', 4.6, [new NumberKeyframeTrack('.position[x]', [0, 4.6], [0, 0])]);
+  const pin = new MarkerPin(bird, { object: fitToIconSize(icon), animations: [idle, sing], splashes: [] }, 0, 1.432);
+  let sounded: number[] = [];
+  let clock = 0;
+  pin.onTapSound = () => sounded.push(clock);
+  pin.setRevealed(true);
+  pin.advance(1, 1);
+  pin.pulse();
+  for (let frame = 0; frame < 180; frame += 1) {
+    clock += 1 / 60;
+    pin.advance(1 / 60, 1 + clock);
+  }
+  // Una sola vez, al estirar el cuello (1.3 s), no en el instante del toque.
+  assert.equal(sounded.length, 1);
+  assert.ok(Math.abs(sounded[0]! - 1.3) < 0.05, `sonó a los ${sounded[0]!.toFixed(2)} s`);
+  // Un toque ignorado (a mitad del gesto) no vuelve a sonar.
+  pin.pulse();
+  for (let frame = 0; frame < 60; frame += 1) pin.advance(1 / 60, 5);
+  assert.equal(sounded.length, 1);
+  sounded = [];
+  pin.dispose();
 });
 
 test('animador respeta los bucles antes de pasar al siguiente clip', () => {
@@ -1115,7 +1153,7 @@ test('tras tocar un animal, otro animal que se ha movido con su clip se sigue pu
   assert.deepEqual(targetAt(x, 50), { kind: 'model', id: 'turtle' }, 'el toque se descarta por una caja vieja');
 });
 
-test('el chapuzón suena con el volumen del salpicón, y solo en quien cae al agua', async () => {
+test('el chapuzón suena con el volumen del salpicón, y solo en quien cae al agua; cada toque tiene su momento', async () => {
   const played: { url: string; volume: number | undefined }[] = [];
   const audio = {
     unlock: async () => {}, dispose() {}, preload() {}, play() {},
@@ -1125,17 +1163,68 @@ test('el chapuzón suena con el volumen del salpicón, y solo en quien cae al ag
   const sounds = new AnimalSoundscape(audio as never, () => ArSession.idle());
   const catalog = NUQUI_CATALOG.map((entry) => ArModel.fromSnapshot(entry));
   const byId = (id: string) => catalog.find((entry) => entry.id.value === id)!;
-  const splash = new PlaySplashSound(sounds, { findAll: async () => catalog, findById: async (id: ModelId) => byId(id.value) });
-  await splash.execute('whale', 1);
-  await splash.execute('turtle', 0.3);
-  await splash.execute('crab', 1);
+  const gesture = new PlayGestureSound(sounds, { findAll: async () => catalog, findById: async (id: ModelId) => byId(id.value) });
+  await gesture.splashed('whale', 1);
+  await gesture.splashed('turtle', 0.3);
+  await gesture.splashed('crab', 1);
   assert.deepEqual(played, [
     { url: '/audio/whale/splash.mp3', volume: 1 },
     { url: '/audio/turtle/splash.mp3', volume: 0.3 },
   ]);
   // El chapuzón ya no es uno de los toques de la ballena: sonaba ANTES de saltar.
   assert.ok(!byId('whale').soundscape!.taps.some((url) => url.includes('splash')));
+  // Cada animal suena en el instante de su gesto que lo produce: el
+  // cangrejo al echar a andar, la pava al estirar el cuello, la tortuga al
+  // hundirse tras caer, la ballena al volver a respirar.
+  const at = (id: string) => byId(id).animation!.tapSoundAt;
+  assert.equal(at('crab'), 0);
+  assert.ok(at('bird') > 1 && at('bird') < 2);
+  assert.ok(at('turtle') > 2 && at('turtle') < 3);
+  assert.ok(at('whale') > 8);
   // Suena a una hora exacta: se descarga entre lo primero.
   const order = soundPreloadOrder(catalog);
   assert.ok(order.indexOf('/audio/whale/splash.mp3') < order.indexOf('/audio/whale/tap-1.mp3'));
+});
+
+test('los animales se iluminan con tres puntos: principal, relleno y contraluz', () => {
+  const scene = new Scene();
+  addThreePointLighting(scene);
+  const light = (name: string) => scene.getObjectByName(name) as unknown as { intensity: number; position: Vector3 };
+  const key = light('luz-principal');
+  const fill = light('luz-relleno');
+  const rim = light('contraluz');
+  // La cámara mira hacia −Z: la principal y el relleno vienen de delante
+  // (+Z) y de lados opuestos; el contraluz, de DETRÁS del animal.
+  assert.ok(key.position.z > 0 && fill.position.z > 0);
+  assert.ok(Math.sign(key.position.x) !== Math.sign(fill.position.x));
+  assert.ok(rim.position.z < 0 && rim.position.y > 0);
+  // El relleno abre la sombra sin borrarla: un contraste de retrato, entre
+  // 2.5:1 y 4:1 (la primera versión, casi 2:1, no se notaba).
+  const ratio = key.intensity / fill.intensity;
+  assert.ok(ratio >= 2.5 && ratio <= 4, `principal:relleno = ${ratio.toFixed(1)}:1`);
+  // El contraluz, en diagonal opuesta a la principal.
+  assert.ok(Math.sign(rim.position.x) !== Math.sign(key.position.x));
+});
+
+test('el filo del contraluz se inyecta en el shader PBR de los animales, y solo en ellos', () => {
+  const animal = new Mesh(new BoxGeometry(1, 1, 1), new MeshStandardMaterial());
+  const outline = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial());
+  const root = new Group();
+  root.add(animal, outline);
+  addRimShading(root);
+  const material = animal.material as MeshStandardMaterial;
+  // Se inyecta en el shader REAL de three: si una versión futura cambia
+  // estos trozos, el reemplazo no haría nada sin avisar.
+  const shader = {
+    uniforms: {} as Record<string, unknown>,
+    fragmentShader: ShaderLib.physical.fragmentShader,
+    vertexShader: ShaderLib.physical.vertexShader,
+  };
+  material.onBeforeCompile(shader as never, undefined as never);
+  assert.ok(shader.fragmentShader.includes('totalEmissiveRadiance += rimColour'));
+  assert.ok(shader.fragmentShader.includes('uniform vec3 rimFrom;'));
+  assert.ok('rimStrength' in shader.uniforms);
+  // Con su propia clave de programa: no se mezcla con los materiales normales.
+  assert.notEqual(material.customProgramCacheKey(), new MeshStandardMaterial().customProgramCacheKey());
+  assert.equal((outline.material as MeshBasicMaterial).customProgramCacheKey(), new MeshBasicMaterial().customProgramCacheKey());
 });

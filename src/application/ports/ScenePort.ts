@@ -57,6 +57,13 @@ export interface ScenePort {
   onSplash(listener: (modelId: string, strength: number) => void): void;
 
   /**
+   * Avisa cuando el gesto de toque de un animal llega al instante en que
+   * suena (su `tapSoundAt`): el canto de la pava al estirar el cuello, el
+   * soplido de la ballena al volver a respirar.
+   */
+  onTapSound(listener: (modelId: string) => void): void;
+
+  /**
    * Lanza el gesto de toque de un animal. Devuelve false si ya estaba a
    * mitad de uno: el gesto no se reinicia hasta que acaba.
    */

@@ -16,10 +16,14 @@ interface Ambience {
   timer: number | null;
 }
 
-/** Volumen de las voces y los toques, sobre archivos ya igualados a −16 LUFS. */
-const CLIPS_GAIN = 0.9;
+/**
+ * Volumen de las voces, los toques y los chapuzones, sobre archivos ya
+ * igualados a −16 LUFS. Era 0.9 y los clientes lo encontraron muy alto:
+ * 0.5 son unos 5 dB menos. El ambiente baja en la misma proporción.
+ */
+const CLIPS_GAIN = 0.5;
 /** El ambiente acompaña, no compite: bastante por debajo de la voz. */
-const AMBIENCE_GAIN = 0.55;
+const AMBIENCE_GAIN = 0.32;
 const AMBIENCE_FADE_S = 1.2;
 const AMBIENCE_CROSSFADE_S = 3;
 const CLIP_MAX_DELAY_S = 1.5;

@@ -106,7 +106,7 @@ function buildBird(colorHex: number): Object3D {
   head.position.set(0.056, 0.104, 0);
   group.add(head);
 
-  // Papada roja: la marca de la pava del Chocó.
+  // Papada roja: la marca de la pava del Baudó.
   const wattle = blob(0.014, [0.9, 1.3, 0.9], throat);
   wattle.position.set(0.06, 0.076, 0);
   group.add(wattle);
