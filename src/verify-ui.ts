@@ -56,7 +56,7 @@ function check(mode: 'splash' | 'guide' | 'focus' | 'reading' | 'explore' | 'app
       }
     }
     for (const id of mode === 'splash' ? ['#start'] : mode === 'guide'
-      ? ['#guide-frame', '#guide-title', '#guide-link'] : mode === 'reading' ? ['#reading-card', '#reading-close']
+      ? ['#guide-frame', '#guide-title', '#guide-mission', '#guide-link'] : mode === 'reading' ? ['#reading-card', '#reading-close']
       : mode === 'explore' ? ['#explore', '#explore-title'] : mode === 'approach' ? ['#approach-title', '#approach-hands']
       : ['#focus-name', '#focus-species', '#focus-info', '#focus-close']) {
       const r = rect(id);

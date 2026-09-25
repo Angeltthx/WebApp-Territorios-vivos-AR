@@ -538,7 +538,6 @@ export class ArView {
   private syncUnlock(session: ArSession): void {
     const discovery = session.discovery;
     const unlocked = this.mapTexts.length > 0 && discovery.hasFoundAll(this.catalog.length);
-    if (unlocked) loadReadingFonts();
     // Tiene sentido con el mapa libre: nada abierto. Abrir un texto —lo que
     // la invitación pide— la aparta al instante.
     this.exploreNudge.update(unlocked && !discovery.isBusy);
@@ -611,19 +610,4 @@ function renderBlock(block: MapTextBlock): HTMLElement {
       return list;
     }
   }
-}
-
-/**
- * Pide las tipografías de lectura, una sola vez. No van en el <head>: la
- * portada se pinta sin fuentes externas y estas solo hacen falta al final
- * de la experiencia. Si no llegan (sin red), quedan Georgia y compañía.
- */
-function loadReadingFonts(): void {
-  if (document.getElementById('reading-fonts') !== null) return;
-  const link = document.createElement('link');
-  link.id = 'reading-fonts';
-  link.rel = 'stylesheet';
-  link.href =
-    'https://fonts.googleapis.com/css2?family=Arvo:wght@700&family=Merriweather:wght@400&family=Oswald:wght@500&display=swap';
-  document.head.append(link);
 }

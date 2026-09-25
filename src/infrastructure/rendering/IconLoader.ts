@@ -13,6 +13,7 @@ import {
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { ArModel } from '@domain/entities/ArModel';
+import { addRimShading } from './ThreePointLighting';
 
 /**
  * De un ArModel a un Object3D listo para colgar de un MarkerPin.
@@ -103,6 +104,10 @@ export class IconLoader {
       // deja de dibujarla. Así "desaparecía" la ballena a mitad de salto.
       // Son cuatro modelos; recortarlos no ahorra nada que se note.
       gltf.scene.traverse((node) => { node.frustumCulled = false; });
+      // El filo del contraluz (ver ThreePointLighting): aquí, y no en la
+      // escena, porque este es el único sitio por el que pasan TODOS los
+      // modelos —también los de verify.html—.
+      addRimShading(gltf.scene);
 
       let animations = gltf.animations;
       let splashes: readonly ClipSplash[] = [];

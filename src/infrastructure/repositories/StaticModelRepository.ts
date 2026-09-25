@@ -139,6 +139,9 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       entranceClip: 'Swin',
       tapClip: 'Jump',
       tapMove: 'breach',
+      // El soplido, al volver a respirar tras la zambullida: salpica al
+      // salir (2.2 s), al caer (5.5 s) y resopla ya de vuelta (9.2 s).
+      tapSoundAt: 9.2,
     },
     // El punto queda dentro del dibujo de la ballena; un poco más abajo que
     // su centro para que la silueta 3D no rebase el borde en perspectiva.
@@ -192,8 +195,10 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   },
   {
     id: 'bird',
-    name: 'Pava',
-    species: 'Penelope ortoni / Pava del Chocó',
+    // Nombre y especie, los del PÓSTER: es la referencia (etiqueta «PAVA DEL
+    // BAUDÓ / Penelope ortoni»).
+    name: 'Pava del Baudó',
+    species: 'Penelope ortoni / Pava del Baudó',
     description: [
       'Endémica del Chocó biogeográfico: no existe en ningún otro lugar del planeta. ' +
         'Su canto anuncia que el bosque está sano.',
@@ -230,6 +235,9 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       entranceClip: 'Idle',
       // A la velocidad del animador (estuvo a 1.2×).
       tapClip: 'Sing',
+      // Canta cuando estira el cuello hacia arriba (entre 1.2 y 1.9 s del
+      // clip), no al tocarla: antes de eso solo levanta la cabeza.
+      tapSoundAt: 1.3,
     },
     spot: { u: 0.9075, v: 0.5098 },
     // Dibujo: 0.121 x 0.098. Se mantiene menor que la ballena, pero con
@@ -265,8 +273,13 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   },
   {
     id: 'crab',
-    name: 'Cangrejo',
-    species: 'Gecarcinus quadratus / Cangrejo',
+    // Nombre y especie, los del PÓSTER («CANGREJO FANTASMA ROJO / Ocypode
+    // gaudichaudii»). Antes decía Gecarcinus quadratus, y los párrafos de
+    // abajo siguen describiendo a ESE cangrejo —el de tierra, que vive en la
+    // selva—; el fantasma vive en la arena de la playa. Pendiente de que el
+    // equipo los reescriba: el texto es suyo.
+    name: 'Cangrejo fantasma rojo',
+    species: 'Ocypode gaudichaudii / Cangrejo fantasma rojo',
     description: [
       'Naranja fuego sobre patas de tierra: nace en el mar pero vive en la selva. ' +
         'Baja a la orilla solo para dejar su descendencia en las olas.',
@@ -300,6 +313,8 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       tapClip: 'Walk',
       tapLoops: 2,
       tapMove: 'scuttle',
+      // Las patitas suenan desde el primer paso y duran lo que el correteo.
+      tapSoundAt: 0,
     },
     spot: { u: 0.618, v: 0.4022 },
     // Ya se veía de frente; 'front' es exactamente la misma orientación
@@ -339,8 +354,13 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   },
   {
     id: 'turtle',
-    name: 'Tortuga carey',
-    species: 'Eretmochelys imbricata / Tortuga carey',
+    // Nombre y especie, los del PÓSTER («TORTUGA GOLFINA / Lepidochelys
+    // olivacea»). Antes decía tortuga carey, y los párrafos de abajo siguen
+    // hablando de la CAREY (escamas como tejas, pico curvo, come esponjas),
+    // nada de eso es de la golfina. Pendiente de que el equipo los
+    // reescriba: el texto es suyo.
+    name: 'Tortuga golfina',
+    species: 'Lepidochelys olivacea / Tortuga golfina',
     description: [
       'Navega los océanos por 50 años y siempre recuerda el camino de vuelta. ' +
         'Su caparazón, de escamas que se montan como tejas, es único: no hay dos ' +
@@ -381,6 +401,9 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       tapClip: 'Swin',
       tapLoops: 2,
       tapMove: 'leap',
+      // Burbujas de inmersión justo después de caer (el chapuzón suena a
+      // los 2 s), mientras vuelve a hundirse.
+      tapSoundAt: 2.15,
     },
     spot: { u: 0.3375, v: 0.5335 },
     // De frente es una silueta baja y ancha —una tortuga lo es—, así que

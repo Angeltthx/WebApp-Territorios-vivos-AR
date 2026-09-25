@@ -61,7 +61,7 @@ let gesturesAttached = false;
 const {
   startArExperience,
   transformPlacement,
-  playModelSound,
+  tapModel,
   closeFocus,
   openMapText,
   mapTexts,
@@ -120,7 +120,7 @@ view = new ArView(root, {
     gesturesAttached = true;
 
     interaction.attach({
-      onTapModel: (modelId) => void playModelSound.execute(modelId),
+      onTapModel: (modelId) => void tapModel.execute(modelId),
       onTapText: (textId) => void openMapText.execute(textId),
       onRotate: (delta) => transformPlacement.rotateBy(delta),
     });
