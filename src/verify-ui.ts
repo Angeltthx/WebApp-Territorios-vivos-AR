@@ -50,7 +50,7 @@ await Promise.all(sizes.map(async ([width, height]) => {
   fixtures.push({ frame, view, width, height });
 }));
 
-function check(mode: 'splash' | 'guide' | 'focus' | 'reading' | 'approach'): void {
+function check(mode: 'splash' | 'guide' | 'focus' | 'reading' | 'approach', extra?: string): void {
   const failures: string[] = [];
   for (const { frame, width, height } of fixtures) {
     const doc = frame.contentDocument!;
@@ -64,7 +64,7 @@ function check(mode: 'splash' | 'guide' | 'focus' | 'reading' | 'approach'): voi
     for (const id of mode === 'splash' ? ['#start'] : mode === 'guide'
       ? ['#guide-frame', '#guide-title', '#guide-mission'] : mode === 'reading' ? ['#reading-card', '#reading-close']
       : mode === 'approach' ? ['#approach-title', '#approach-sub']
-      : ['#focus-name', '#focus-species', '#focus-narration', '#focus-info', '#focus-close', '#close-hint-label']) {
+      : ['#focus-name', '#focus-species', '#focus-narration', '#focus-info', '#focus-close', ...(extra === undefined ? [] : [extra])]) {
       const r = rect(id);
       if (r.left < -1 || r.top < -1 || r.right > width + 1 || r.bottom > height + 1) {
         failures.push(`${width}×${height}: ${id} fuera de pantalla`);
@@ -94,7 +94,6 @@ document.querySelector('#approach')!.addEventListener('click', () => {
   const steps = [
     { step: 'tapAnimal', urgent: false, remaining: 4, returning: false },
     { step: 'tapAnimal', urgent: true, remaining: 4, returning: false },
-    { step: 'doubleTap', urgent: false, remaining: 4, returning: false },
     { step: 'tapAnimal', urgent: false, remaining: 3, returning: true },
     { step: 'tapAnimal', urgent: false, remaining: 1, returning: true },
     { step: 'tapText', urgent: true, remaining: 0, returning: true },
@@ -107,14 +106,19 @@ document.querySelector('#approach')!.addEventListener('click', () => {
   }, index * 2500));
 });
 document.querySelector('#focus')!.addEventListener('click', () => {
-  // Como la primera vez: la narración suena y el botón ofrece detenerla.
-  // …y como al acabar de narrar: la mano del tutorial señala la ✕.
+  // Como la primera vez: la narración suena, el botón ofrece detenerla y
+  // una mano toca al animal; a los 2 s, como al acabar de narrar: la mano
+  // señala la ✕.
   for (const { view } of fixtures) {
     view.cameraReady();
     view.render(focused);
     view.setNarration({ available: true, playing: true });
-    view.setTutorial({ step: 'closeFocus', urgent: false, remaining: 3, returning: true });
+    view.setTutorial({ step: 'tapFocused', urgent: false, remaining: 3, returning: true });
   }
-  check('focus');
+  check('focus', '#focus-tap-hint-label');
+  window.setTimeout(() => {
+    for (const { view } of fixtures) view.setTutorial({ step: 'closeFocus', urgent: false, remaining: 3, returning: true });
+    check('focus', '#close-hint-label');
+  }, 2000);
 });
 check('splash');

@@ -6,12 +6,10 @@ import type { Stabilization } from '@domain/value-objects/Stabilization';
 
 /**
  * La mano del tutorial (ver `setHint`): sobre qué clase de cosa se posa,
- * qué gesto enseña, si insiste, a cuál prefiere y entre cuáles puede elegir.
+ * si insiste, a cuál prefiere y entre cuáles puede elegir.
  */
 export interface HintSpec {
   readonly kind: 'animal' | 'text';
-  /** Un toque, o dos seguidos (el que abre un animal). */
-  readonly gesture: 'tap' | 'double';
   readonly urgent: boolean;
   /** Dónde ponerla si está a la vista (la ballena la primera vez), o null. */
   readonly preferred: string | null;

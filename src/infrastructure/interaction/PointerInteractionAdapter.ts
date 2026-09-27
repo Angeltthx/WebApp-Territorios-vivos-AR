@@ -23,14 +23,6 @@ const ROTATION_PER_PIXEL = 0.008;
  */
 const TILT_PER_PIXEL = 0.006;
 /**
- * El doble toque que abre un animal: el segundo, a menos de esto del
- * primero, en tiempo y en pantalla, y sobre el MISMO animal. Algo más
- * holgado que el de un sistema operativo (~300 ms): el teléfono está en
- * una mano y el mapa se mueve bajo el dedo.
- */
-const DOUBLE_TAP_MS = 450;
-const DOUBLE_TAP_PX = 45;
-/**
  * TOLERANCIA DEL DEDO. Si el rayo del toque no da en nada, se prueba a
  * estas distancias alrededor (en px, ocho direcciones cada una) antes de
  * darlo por fallado: en algunos teléfonos un toque en el borde de un
@@ -78,8 +70,6 @@ export class PointerInteractionAdapter implements InteractionPort {
    * el arrastre giraba a los cuatro a la vez.
    */
   private dragTarget: string | null = null;
-  /** El último toque sobre un animal, para reconocer el segundo de un doble toque. */
-  private lastTap: { readonly id: string; readonly at: number; readonly x: number; readonly y: number } | null = null;
 
   private readonly onPointerDown = (event: PointerEvent) => this.handleDown(event);
   private readonly onPointerMove = (event: PointerEvent) => this.handleMove(event);
@@ -171,28 +161,11 @@ export class PointerInteractionAdapter implements InteractionPort {
     const elapsed = performance.now() - this.startedAt;
     if (elapsed > TAP_MAX_DURATION_MS) return;
 
-    const target = this.forgivingTargetAt(event.clientX, event.clientY) ?? this.secondTapNear(event);
+    const target = this.forgivingTargetAt(event.clientX, event.clientY);
     if (target === null) return;
 
-    if (target.kind === 'text') {
-      this.lastTap = null;
-      this.handlers.onTapText(target.id);
-      return;
-    }
-    const now = performance.now();
-    const previous = this.lastTap;
-    if (
-      previous !== null &&
-      previous.id === target.id &&
-      now - previous.at <= DOUBLE_TAP_MS &&
-      Math.hypot(event.clientX - previous.x, event.clientY - previous.y) <= DOUBLE_TAP_PX
-    ) {
-      this.lastTap = null;
-      this.handlers.onDoubleTapModel(target.id);
-      return;
-    }
-    this.lastTap = { id: target.id, at: now, x: event.clientX, y: event.clientY };
-    this.handlers.onTapModel(target.id);
+    if (target.kind === 'text') this.handlers.onTapText(target.id);
+    else this.handlers.onTapModel(target.id);
   }
 
   /** Qué animal hay bajo el dedo (los textos no se giran), o null. */
@@ -223,17 +196,6 @@ export class PointerInteractionAdapter implements InteractionPort {
     return null;
   }
 
-  /**
-   * El segundo toque de un doble toque que ha caído un poco fuera del
-   * animal: si llega a tiempo y cerca del primero, cuenta para él.
-   */
-  private secondTapNear(event: PointerEvent): TapTarget | null {
-    const previous = this.lastTap;
-    if (previous === null) return null;
-    if (performance.now() - previous.at > DOUBLE_TAP_MS) return null;
-    if (Math.hypot(event.clientX - previous.x, event.clientY - previous.y) > DOUBLE_TAP_PX) return null;
-    return { kind: 'model', id: previous.id };
-  }
 
   /**
    * Qué icono hay bajo el dedo, o null si se tocó el fondo.

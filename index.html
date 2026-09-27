@@ -820,6 +820,59 @@
         #focus-narration, .narration-badge::before, .narration-badge::after { animation: none !important; }
       }
 
+      /* TÓCALO. La primera vez que se abre cada animal (`#focus[data-tap-hint]`),
+         una mano lo toca desde abajo, justo donde está plantado (arriba y
+         en el centro: `STAGE_LIFT` sube el animal un 13 % sobre el centro),
+         y una píldora arriba dice para qué. Se va al tocarlo. */
+      #focus-tap-hint {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.4s ease, visibility 0.4s;
+      }
+      #focus[data-tap-hint="true"] #focus-tap-hint { opacity: 1; visibility: visible; }
+      /* La mano, con la punta del dedo en la parte alta del animal (31 %):
+         más abajo, en pantallas bajas (320×568) se montaba sobre el nombre
+         de la ficha. */
+      .focus-tap-hand {
+        position: absolute;
+        left: 50%;
+        top: 31%;
+        width: 58px;
+        height: 58px;
+        margin: -7px 0 0 -26px;
+        transform-origin: 45% 12%;
+        animation: focus-tap 1.6s ease-in-out infinite;
+        filter: drop-shadow(0 0 10px rgba(255, 197, 61, 0.35));
+      }
+      @keyframes focus-tap {
+        0%, 100% { transform: translateY(12px) scale(1); }
+        45%, 58% { transform: translateY(0) scale(0.9); }
+      }
+      /* El texto, arriba, bajo los botones: ahí no tapa ni al animal ni la
+         ficha, en ningún tamaño de pantalla. */
+      #focus-tap-hint-label {
+        position: absolute;
+        left: 50%;
+        top: calc(74px + env(safe-area-inset-top));
+        transform: translateX(-50%);
+        margin: 0;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: rgba(16, 18, 20, 0.62);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        font: 700 13px/1.1 var(--font-text);
+        color: #fff;
+        white-space: nowrap;
+      }
+      #focus[data-tap-hint="true"][data-urgent="true"] .focus-tap-hand { animation-duration: 1s; }
+      @media (prefers-reduced-motion: reduce) {
+        .focus-tap-hand { animation: none; }
+      }
+
       /* LA ✕ DEL TUTORIAL. Al callar la primera narración de un animal
          (`#focus[data-close-hint]`), una mano toca la ✕ desde abajo, un
          anillo dorado late alrededor de ella y una píldora dice qué hacer.
@@ -1339,12 +1392,48 @@
       <div id="approach" data-visible="false" aria-hidden="true">
         <!-- Lo reescribe ArView en cada paso del tutorial. -->
         <p id="approach-title">Toca un animal</p>
-        <p id="approach-sub">Toca la <strong>silueta dorada</strong> para verlo moverse</p>
+        <p id="approach-sub">Toca la <strong>silueta dorada</strong> para conocerlo</p>
       </div>
 
       <!-- Primer plano de un animal descubierto. -->
       <div id="focus" data-visible="false" aria-hidden="true">
         <button type="button" id="focus-close" aria-label="Cerrar la ficha">✕</button>
+        <!-- Tutorial: la primera vez que se abre cada animal, una mano lo toca
+             —está plantado arriba y en el centro, `STAGE_LIFT` en
+             ThreeSceneAdapter—: tocarlo es ver su animación. -->
+        <div id="focus-tap-hint" aria-hidden="true">
+          <svg class="focus-tap-hand" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+          <defs>
+          <linearGradient id="focus-tap-hand-skin" gradientUnits="userSpaceOnUse" x1="40" y1="8" x2="70" y2="94">
+          <stop offset="0" stop-color="#ffffff"/>
+          <stop offset="1" stop-color="#efe9dc"/>
+          </linearGradient>
+          <filter id="focus-tap-hand-shadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="2.2" stdDeviation="2.4" flood-color="#000" flood-opacity="0.45"/>
+          </filter>
+          <radialGradient id="focus-tap-hand-glow">
+          <stop offset="0" stop-color="#ffe7a3" stop-opacity="0.95"/>
+          <stop offset="0.45" stop-color="#ffc53d" stop-opacity="0.55"/>
+          <stop offset="1" stop-color="#ffc53d" stop-opacity="0"/>
+          </radialGradient>
+          </defs>
+          <circle cx="45" cy="13" r="12" fill="url(#focus-tap-hand-glow)"/>
+          <g filter="url(#focus-tap-hand-shadow)" fill="url(#focus-tap-hand-skin)">
+          <rect x="38" y="8" width="14" height="56" rx="7"/>
+          <rect x="51" y="33" width="13" height="32" rx="6.5"/>
+          <rect x="63" y="39" width="12" height="28" rx="6"/>
+          <rect x="74" y="46" width="10.5" height="24" rx="5.25"/>
+          <path d="M38 52 H84.5 V70 C84.5 84 76 93 64 93 H55 C47 93 42 89 37 83 L24 66 C21 62 22 57 26 55 C29.5 53.3 33 54.5 35.5 57.5 L38 61 Z"/>
+          </g>
+          <g fill="none" stroke="#d9cfbb" stroke-width="1.1" stroke-linecap="round">
+          <path d="M51.6 40 V58"/>
+          <path d="M63.4 46 V60"/>
+          <path d="M74.3 52 V63"/>
+          <path d="M38.4 61.5 C40.5 66 43.5 69 47 70.5"/>
+          </g>
+          </svg>
+          <p id="focus-tap-hint-label">Tócalo para ver su animación</p>
+        </div>
         <!-- Tutorial: al callar la narración, una mano señala la ✕. La misma
              mano que la del mapa (TapHint): si cambia una, cambia la otra. -->
         <div id="close-hint" aria-hidden="true">

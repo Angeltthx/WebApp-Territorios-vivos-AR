@@ -82,14 +82,13 @@ const hotspots = NUQUI_MAP_TEXTS.map((snapshot, index) => {
 });
 
 // La mano del tutorial, sobre el animal que diga `?hint=crab` (por
-// defecto la ballena), en calma; `?urgent` la pone con prisa y `?double`
-// enseña el doble toque.
+// defecto la ballena), en calma; `?urgent` la pone con prisa.
 const hintParams = new URLSearchParams(window.location.search);
 const tapHint = new TapHint();
 const hinted = NUQUI_CATALOG.find((entry) => entry.id === (hintParams.get('hint') ?? 'whale')) ?? NUQUI_CATALOG[0]!;
 const hintAt = anchorPositionOf(hinted.spot, TARGET_ASPECT);
 tapHint.group.position.set(hintAt.x, hintAt.y, 0);
-tapHint.setHint({ gesture: hintParams.has('double') ? 'double' : 'tap', urgent: hintParams.has('urgent') });
+tapHint.setHint({ urgent: hintParams.has('urgent') });
 scene.add(tapHint.group);
 
 const icons = new IconLoader();
