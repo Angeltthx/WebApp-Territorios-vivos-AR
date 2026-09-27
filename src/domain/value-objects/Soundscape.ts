@@ -10,6 +10,7 @@
  *   - `splash`: el chapuzón de los que caen al agua (ballena, tortuga).
  *     Suena en el fotograma exacto en que el salpicón toca el agua, con
  *     más o menos volumen según lo fuerte que sea.
+ *   - `narration`: la voz que lo cuenta al abrir su ficha (ver Narration).
  *   - `ambience`: el lugar donde vive (el mar, el manglar, la selva), en
  *     bucle y bajito mientras está en primer plano.
  *
@@ -20,6 +21,68 @@ export interface SoundscapeSnapshot {
   readonly taps?: readonly string[];
   readonly ambience?: string;
   readonly splash?: string;
+  readonly narration?: NarrationSnapshot;
+}
+
+/**
+ * Lo que hace el animal en una pausa de la narración:
+ *   - 'gesture': su gesto de toque (canta, corretea, salta), con su sonido
+ *     en su momento, igual que si lo hubieran tocado;
+ *   - 'call': suena una de sus llamadas (o `clip`, si se dice cuál), sin
+ *     gesto. La ballena canta así: su gesto es un salto, no un canto.
+ */
+export type NarrationCueAction = 'gesture' | 'call';
+
+export interface NarrationCueSnapshot {
+  readonly action: NarrationCueAction;
+  /** Cuánto espera la narración antes de seguir, en segundos. */
+  readonly holdSeconds: number;
+  readonly clip?: string;
+}
+
+export interface NarrationSnapshot {
+  /** La narración, cortada en trozos por los momentos en que el animal actúa. */
+  readonly parts: readonly string[];
+  /** Lo que pasa ENTRE un trozo y el siguiente: uno menos que trozos. */
+  readonly cues: readonly NarrationCueSnapshot[];
+}
+
+/**
+ * La voz que cuenta al animal, sincronizada con él: cuando dice «el macho
+ * puede pasar horas cantando», la narración calla, la ballena canta, y
+ * sigue. Va en trozos —cortados en los silencios entre frases por
+ * `build-audio`— en vez de pausar y reanudar un solo audio: encadenar
+ * archivos es lo fiable en Safari de iPhone.
+ */
+export class Narration {
+  private constructor(
+    readonly parts: readonly string[],
+    readonly cues: readonly Readonly<NarrationCueSnapshot>[],
+  ) {
+    Object.freeze(this.parts);
+    Object.freeze(this.cues);
+    Object.freeze(this);
+  }
+
+  static of(snapshot: NarrationSnapshot): Narration {
+    const parts = snapshot.parts.map((url) => url.trim());
+    if (parts.length === 0 || parts.some((url) => url.length === 0)) {
+      throw new RangeError('Narración: hace falta al menos un trozo, sin rutas vacías');
+    }
+    if (snapshot.cues.length !== parts.length - 1) {
+      throw new RangeError(`Narración: ${parts.length} trozos necesitan ${parts.length - 1} pausas, no ${snapshot.cues.length}`);
+    }
+    const cues = snapshot.cues.map((cue) => {
+      if (cue.action !== 'gesture' && cue.action !== 'call') {
+        throw new RangeError(`Narración: acción desconocida ${String(cue.action)}`);
+      }
+      if (!Number.isFinite(cue.holdSeconds) || cue.holdSeconds < 0 || cue.holdSeconds > 20) {
+        throw new RangeError(`Narración: pausa inválida ${cue.holdSeconds}`);
+      }
+      return Object.freeze({ ...cue });
+    });
+    return new Narration(parts, cues);
+  }
 }
 
 const MAX_VARIANTS = 5;
@@ -30,6 +93,7 @@ export class Soundscape {
     readonly taps: readonly string[],
     readonly ambience: string | null,
     readonly splash: string | null,
+    readonly narration: Narration | null,
   ) {
     Object.freeze(this.calls);
     Object.freeze(this.taps);
@@ -51,7 +115,8 @@ export class Soundscape {
     if (ambience !== null && ambience.length === 0) throw new RangeError('Ambiente: ruta vacía');
     const splash = snapshot.splash?.trim() ?? null;
     if (splash !== null && splash.length === 0) throw new RangeError('Salpicón: ruta vacía');
-    return new Soundscape(calls, clean(snapshot.taps ?? [], 'Toques'), ambience, splash);
+    const narration = snapshot.narration === undefined ? null : Narration.of(snapshot.narration);
+    return new Soundscape(calls, clean(snapshot.taps ?? [], 'Toques'), ambience, splash, narration);
   }
 
   /** Todas las rutas, para descargarlas por adelantado. */
@@ -61,6 +126,7 @@ export class Soundscape {
       ...this.taps,
       ...(this.ambience === null ? [] : [this.ambience]),
       ...(this.splash === null ? [] : [this.splash]),
+      ...(this.narration?.parts ?? []),
     ];
   }
 }

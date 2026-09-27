@@ -52,6 +52,16 @@ const SUBMERGED_DEPTH = 0.05;
 /** El salpicón va algo por delante del animal, para que no lo tape su cuerpo. */
 const WATER_FRONT = 0.12;
 
+/**
+ * En primer plano el animal no se planta de frente sino en TRES CUARTOS:
+ * girado unos 35° y visto un poco desde arriba. De frente, la ballena
+ * apuntaba el morro a la cámara y se leía como una cara plana con aletas;
+ * en tres cuartos se ve a la vez la cara, el costado y el lomo, que es como
+ * se retrata a un animal (y como lo miraría alguien que lo tuviera delante).
+ */
+const STAGE_THREE_QUARTER_YAW = -0.6;
+export const STAGE_LOOK_DOWN = 0.22;
+
 /** Altura MÍNIMA a la que flota el icono sobre el papel, en anchos de mapa. */
 const HOVER_HEIGHT = 0.11;
 /** Holgura entre lo más bajo del icono y el papel, cuando hay que subirlo. */
@@ -250,7 +260,9 @@ export class MarkerPin {
   private revealProgress = 0;
 
   private scale = 1;
+  /** Giro del usuario sobre ESTE animal: de lado y hacia arriba o abajo. */
   private spin = 0;
+  private tilt = 0;
   private bob = 0;
   private idleSway = 0;
   /** 0 en reposo, 1 en la cima del latido. Lo calcula `advance`. */
@@ -423,12 +435,17 @@ export class MarkerPin {
    * Los desplazamientos van en el eje Y del padre, que es "arriba" en
    * pantalla tanto de frente como de perfil (`applyView` solo gira en Y) y
    * en el escenario del primer plano.
+   *
+   * `pitch` inclina sobre el eje X del PADRE —el horizontal de la pantalla—
+   * y no sobre el del animal ya girado: con el orden de Euler XYZ de three
+   * la X se aplica la última. Así arrastrar hacia abajo siempre lo inclina
+   * hacia abajo, esté de frente, de perfil o de espaldas.
    */
-  poseIcon(yaw: number, roll = 0): void {
+  poseIcon(yaw: number, roll = 0, pitch = 0): void {
     const move = this.choreography.pose;
     const size = this.reach * this.icon.scale.x;
     this.icon.position.set(move.sway * size, move.rise * size, 0);
-    this.icon.rotation.set(move.pitch, yaw + move.yaw, roll + move.roll);
+    this.icon.rotation.set(pitch + move.pitch, yaw + move.yaw, roll + move.roll);
   }
 
   /**
@@ -485,18 +502,27 @@ export class MarkerPin {
     this.sync();
   }
 
-  /**
-   * Con qué giro empieza en el primer plano para enseñar la MISMA cara que
-   * en el mapa. Allí el escenario no aplica `applyView`, así que la ballena
-   * —de perfil sobre el mapa— salía de morro hacia la cámara.
-   */
   /** Factor del catálogo para el tamaño en primer plano (ver IconPose.focusSize). */
   get focusSize(): number {
     return this.focusFactor;
   }
 
+  /**
+   * Con qué giro empieza en el primer plano: la cara que enseña en el mapa
+   * (el escenario no aplica `applyView`, así que sin esto un animal de
+   * perfil salía de morro) y, encima, el TRES CUARTOS del escenario.
+   */
   get stageYaw(): number {
-    return this.facing + (this.view === 'side' ? -Math.PI / 2 : 0);
+    return this.facing + (this.view === 'side' ? -Math.PI / 2 : 0) + STAGE_THREE_QUARTER_YAW;
+  }
+
+  /** El giro que el usuario le ha dado a este animal, para el primer plano. */
+  get userSpin(): number {
+    return this.spin;
+  }
+
+  get userTilt(): number {
+    return this.tilt;
   }
 
   get isFocused(): boolean {
@@ -505,9 +531,10 @@ export class MarkerPin {
 
   /** Rotación y escala se aplican al icono SOBRE SÍ MISMO, nunca a su
    *  posición: debe seguir señalando a su animal pase lo que pase. */
-  applyTransform(scale: number, spin: number): void {
+  applyTransform(scale: number, spin: number, tilt = 0): void {
     this.scale = scale;
     this.spin = spin;
+    this.tilt = tilt;
     this.sync();
   }
 
@@ -606,7 +633,7 @@ export class MarkerPin {
     // Giro propio del animal (catálogo) MÁS el del usuario, sobre el mismo
     // eje: el Y local del icono, que `applyView` ya dejó donde toca.
     if (!this.focused) {
-      this.poseIcon(this.facing + this.spin, this.idleSway);
+      this.poseIcon(this.facing + this.spin, this.idleSway, this.tilt);
       this.placeWater(this.lift.position.z);
     }
   }

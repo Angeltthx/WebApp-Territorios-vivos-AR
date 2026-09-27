@@ -124,6 +124,13 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       // Suena al caer al agua, no al tocarla: antes era uno de sus toques y
       // sonaba antes de saltar.
       splash: '/audio/whale/splash.mp3',
+      // «…El macho puede pasar horas cantando bajo el agua.» → la narración
+      // calla y la ballena CANTA (su canto, no su gesto: su gesto es un
+      // salto) → «Su canto es largo, profundo…». Corte a los 25.21 s.
+      narration: {
+        parts: ['/audio/whale/narration-1.mp3', '/audio/whale/narration-2.mp3'],
+        cues: [{ action: 'call', clip: '/audio/whale/call-1.mp3', holdSeconds: 6 }],
+      },
     },
     source: ModelSource.gltf('/models/Ballena_Ani.glb'),
     animation: {
@@ -150,13 +157,15 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     // teléfono. Se probó de perfil porque de frente su largo apunta a la
     // cámara, pero lo que se veía "demasiado grande" era el PRIMER PLANO, no
     // el mapa: allí el tamaño lo acota ahora `STAGE_MAX_WIDTH` contando la
-    // perspectiva, y `focusSize` la deja bastante por debajo de ese tope:
-    // los clientes la seguían viendo salirse del encuadre en primer plano.
+    // perspectiva. Tuvo `focusSize` 0.7 porque los clientes la veían salirse
+    // del encuadre; la causa real era que el primer plano la medía con una
+    // caja caducada (casi un cubo) y no sabía lo larga que es. Medida bien,
+    // y en tres cuartos, cabe entera a tamaño 1.
     // Sobre el mapa, en cambio, se pidió MÁS grande: es el animal más grande
     // del mapa y tiene que leerse así junto a los otros tres.
     view: 'front',
     iconSize: 2.1,
-    focusSize: 0.7,
+    focusSize: 1,
     facing: 0,
     // La primera que se calcó, y la que dejó claro que había que calcarlas
     // todas: en el mapa está buceando, con la cola alzada y la aleta
@@ -222,6 +231,14 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         '/audio/bird/tap-2.mp3',
       ],
       ambience: '/audio/bird/ambience.mp3',
+      // «Su canto es una de esas señales que indican que el bosque todavía
+      // conserva su equilibrio.» → la pava CANTA: su gesto Sing, con el canto
+      // a los 1.3 s (dura ~4) → «Además, cumple una función…». Corte a los
+      // 18.10 s.
+      narration: {
+        parts: ['/audio/bird/narration-1.mp3', '/audio/bird/narration-2.mp3'],
+        cues: [{ action: 'gesture', holdSeconds: 5.4 }],
+      },
     },
     source: ModelSource.gltf('/models/Pava_Ani.glb'),
     animation: {
@@ -299,6 +316,13 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         '/audio/crab/tap-2.mp3',
       ],
       ambience: '/audio/crab/ambience.mp3',
+      // «…unas patas que se confunden con la tierra.» → el cangrejo
+      // CORRETEA con sus patitas (2.7 s) → «Aunque nace en el mar…». Corte
+      // a los 8.91 s.
+      narration: {
+        parts: ['/audio/crab/narration-1.mp3', '/audio/crab/narration-2.mp3'],
+        cues: [{ action: 'gesture', holdSeconds: 3.1 }],
+      },
     },
     source: ModelSource.gltf('/models/Cangrejo_Ani.glb'),
     animation: {
@@ -322,6 +346,9 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     view: 'front',
     // Algo mayor que su dibujo (0.08), que en pantalla se quedaba en nada.
     iconSize: 0.95,
+    // En primer plano, algo menor: con las pinzas abiertas en tres cuartos
+    // ocupaba más ancho que la ballena.
+    focusSize: 0.85,
     facing: 0,
     // Dibujado en planta, como se ve un cangrejo en la arena, con los ojos
     // y las pinzas hacia ARRIBA del mapa. Visto desde arriba el modelo mira
@@ -387,6 +414,13 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       ambience: '/audio/turtle/ambience.mp3',
       // El mismo chapuzón que la ballena, más corto y agudo: cuerpo pequeño.
       splash: '/audio/turtle/splash.mp3',
+      // «…puede pasar décadas recorriendo el océano y, aun así, recordar el
+      // camino de regreso.» → la tortuga SALTA fuera del agua y cae, con sus
+      // dos chapuzones (4.8 s) → «Su caparazón también…». Corte a los 11.38 s.
+      narration: {
+        parts: ['/audio/turtle/narration-1.mp3', '/audio/turtle/narration-2.mp3'],
+        cues: [{ action: 'gesture', holdSeconds: 5 }],
+      },
     },
     source: ModelSource.gltf('/models/Tortuga_Ani.glb'),
     animation: {
@@ -410,6 +444,9 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     // se agranda por encima de su dibujo para que no quede como una raya.
     view: 'front',
     iconSize: 1.23,
+    // En primer plano, algo menor: con las aletas extendidas en tres cuartos
+    // ocupaba más ancho que la ballena.
+    focusSize: 0.8,
     facing: 0,
     // Dibujada nadando, vista desde arriba y con la cabeza hacia la
     // IZQUIERDA del mapa; desde arriba el modelo mira hacia abajo.

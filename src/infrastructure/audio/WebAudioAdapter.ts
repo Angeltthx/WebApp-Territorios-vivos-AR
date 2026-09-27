@@ -17,16 +17,57 @@ interface Ambience {
 }
 
 /**
- * Volumen de las voces, los toques y los chapuzones, sobre archivos ya
- * igualados a −16 LUFS. Era 0.9 y los clientes lo encontraron muy alto:
- * 0.5 son unos 5 dB menos. El ambiente baja en la misma proporción.
+ * NIVELES, sobre archivos ya igualados en build-audio (−16 LUFS voces,
+ * llamadas, toques y chapuzones; −24 LUFS ambientes).
+ *
+ * Segunda bajada ("el sonido está algo alto, que sea estándar: ni muy bajo
+ * ni ensordecedor"). La referencia es la de la voz hablada en el móvil: la
+ * narración, que es lo más alto que suena de forma sostenida, queda en
+ * torno a −22 LUFS (0.55 del bus × 0.9 del maestro ≈ −6 dB sobre −16), y
+ * todo lo demás se ordena por debajo de ella. Antes estaba a 0.9 sin
+ * maestro (≈ −17 LUFS), casi a nivel de anuncio.
+ *
+ *   - voz        0.55  → ≈ −22 LUFS: se entiende con el teléfono en la mano.
+ *   - animales   0.4   → ≈ −25 LUFS: presentes, 3 dB por debajo de la voz.
+ *   - ambiente   0.3   → ≈ −35 LUFS: se nota si se escucha, no se impone.
+ *
+ * Lo que de verdad ensordecía no era el nivel medio sino los PICOS: el
+ * chapuzón de la ballena encima de la voz y el ambiente sumados. El bus
+ * maestro lleva un compresor que los frena (`MASTER_*`).
+ *
+ * Cambiar el volumen se hace AQUÍ, no en build-audio: así todos los archivos
+ * siguen igualados a la misma referencia.
  */
-const CLIPS_GAIN = 0.5;
+const CLIPS_GAIN = 0.4;
 /** El ambiente acompaña, no compite: bastante por debajo de la voz. */
-const AMBIENCE_GAIN = 0.32;
+const AMBIENCE_GAIN = 0.3;
+/**
+ * La narración va por delante de todo: es lo que hay que entender. Y
+ * mientras habla, el ambiente baja a un 40 % para que no la tape.
+ */
+const VOICE_GAIN = 0.55;
+/**
+ * Bus maestro: una ganancia general y un compresor suave que actúa de
+ * limitador. Por debajo de −18 dBFS no toca nada; por encima, comprime 4:1,
+ * así que un chapuzón que llega de golpe no salta por encima del resto.
+ */
+const MASTER_GAIN = 0.9;
+const MASTER_THRESHOLD_DB = -18;
+const MASTER_KNEE_DB = 8;
+const MASTER_RATIO = 4;
+const AMBIENCE_UNDER_VOICE = 0.4;
+const DUCK_S = 0.4;
+const VOICE_STOP_S = 0.25;
 const AMBIENCE_FADE_S = 1.2;
 const AMBIENCE_CROSSFADE_S = 3;
 const CLIP_MAX_DELAY_S = 1.5;
+
+interface Voice {
+  /** null mientras el trozo se descarga. */
+  source: AudioBufferSourceNode | null;
+  readonly gain: GainNode;
+  readonly finish: (ended: boolean) => void;
+}
 
 /** Curvas de potencia constante para el fundido cruzado del ambiente. */
 const FADE_IN = Float32Array.from({ length: 32 }, (_, i) => Math.sin((i / 31) * Math.PI / 2));
@@ -37,6 +78,10 @@ export class WebAudioAdapter implements AudioPort {
   private readonly buffers = new Map<string, Promise<AudioBuffer | null>>();
   private readonly buses = new Map<string, GainNode>();
   private ambience: Ambience | null = null;
+  /** El trozo de narración que suena, y cómo avisar de que se cortó. */
+  private voice: Voice | null = null;
+  /** Volumen general que ha elegido el usuario (menú), 0–1. */
+  private volume = 1;
 
   async unlock(): Promise<void> {
     this.claimPlaybackSession();
@@ -77,7 +122,7 @@ export class WebAudioAdapter implements AudioPort {
     const duration = profile.durationSeconds;
 
     const master = context.createGain();
-    master.connect(context.destination);
+    master.connect(this.output(context));
 
     // Envolvente percusiva: ataque muy corto y caída exponencial.
     // Una caída lineal suena artificial; la exponencial imita cómo se
@@ -182,6 +227,92 @@ export class WebAudioAdapter implements AudioPort {
     });
   }
 
+  playVoice(url: string): Promise<boolean> {
+    this.stopVoice();
+    const context = this.ensureRunning();
+    if (context === null) return Promise.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      let settled = false;
+      const finish = (ended: boolean): void => {
+        if (settled) return;
+        settled = true;
+        resolve(ended);
+      };
+      // Se registra ya, antes de cargar: así se sabe si, mientras cargaba,
+      // otra voz o un stop la dejaron fuera.
+      const pending: Voice = { source: null, gain: context.createGain(), finish };
+      this.voice = pending;
+      void this.load(url).then((buffer) => {
+        if (this.voice !== pending || this.context !== context) return finish(false);
+        if (buffer === null) {
+          this.voice = null;
+          return finish(false);
+        }
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        pending.source = source;
+        source.connect(pending.gain).connect(this.bus(context, 'voice'));
+        this.duckAmbience(context, true);
+        source.onended = () => {
+          source.disconnect();
+          pending.gain.disconnect();
+          if (this.voice === pending) {
+            this.voice = null;
+            this.duckAmbience(context, false);
+          }
+          finish(true);
+        };
+        source.start();
+      });
+    });
+  }
+
+  setVolume(level: number): void {
+    this.volume = Math.min(1, Math.max(0, Number.isFinite(level) ? level : 1));
+    const master = this.buses.get('master');
+    const context = this.context;
+    if (master === undefined || context === null) return;
+    master.gain.cancelScheduledValues(context.currentTime);
+    // Con el audio dormido su reloj no avanza y un fundido no llegaría nunca:
+    // se fija directamente, que no suena nada que pueda chasquear.
+    if (context.state !== 'running') {
+      master.gain.value = MASTER_GAIN * this.volume;
+      return;
+    }
+    // Un fundido de unas centésimas: un salto seco de ganancia chasquea.
+    master.gain.setTargetAtTime(MASTER_GAIN * this.volume, context.currentTime, 0.03);
+  }
+
+  stopVoice(): void {
+    const voice = this.voice;
+    if (voice === null) return;
+    this.voice = null;
+    const context = this.context;
+    voice.finish(false);
+    if (context === null) return;
+    this.duckAmbience(context, false);
+    const source = voice.source;
+    // Todavía cargando: no hay nada que apagar.
+    if (source === null) return;
+    const now = context.currentTime;
+    source.onended = () => {
+      source.disconnect();
+      voice.gain.disconnect();
+    };
+    voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
+    voice.gain.gain.linearRampToValueAtTime(0, now + VOICE_STOP_S);
+    source.stop(now + VOICE_STOP_S + 0.02);
+  }
+
+  /** Baja el ambiente mientras habla la narración, y lo devuelve al acabar. */
+  private duckAmbience(context: AudioContext, under: boolean): void {
+    const bus = this.bus(context, 'ambience');
+    const now = context.currentTime;
+    bus.gain.cancelScheduledValues(now);
+    bus.gain.setValueAtTime(bus.gain.value, now);
+    bus.gain.linearRampToValueAtTime(AMBIENCE_GAIN * (under ? AMBIENCE_UNDER_VOICE : 1), now + (under ? DUCK_S : DUCK_S * 2));
+  }
+
   startAmbience(url: string): void {
     if (this.ambience?.url === url) return;
     this.stopAmbience();
@@ -223,6 +354,7 @@ export class WebAudioAdapter implements AudioPort {
   }
 
   dispose(): void {
+    this.stopVoice();
     this.stopAmbience();
     void this.context?.close();
     this.context = null;
@@ -296,18 +428,36 @@ export class WebAudioAdapter implements AudioPort {
   }
 
   /**
-   * Dos buses con su volumen: las voces por delante y el ambiente detrás.
+   * Tres buses con su volumen: la narración delante, los sonidos de los
+   * animales después y el ambiente detrás.
    * Los archivos ya vienen igualados en sonoridad (ver build-audio), así
    * que el equilibrio entre ambos se decide aquí y en ningún otro sitio.
    */
-  private bus(context: AudioContext, name: 'clips' | 'ambience'): GainNode {
+  private bus(context: AudioContext, name: 'clips' | 'ambience' | 'voice'): GainNode {
     const existing = this.buses.get(name);
     if (existing !== undefined) return existing;
     const bus = context.createGain();
-    bus.gain.value = name === 'clips' ? CLIPS_GAIN : AMBIENCE_GAIN;
-    bus.connect(context.destination);
+    bus.gain.value = name === 'clips' ? CLIPS_GAIN : name === 'voice' ? VOICE_GAIN : AMBIENCE_GAIN;
+    bus.connect(this.output(context));
     this.buses.set(name, bus);
     return bus;
+  }
+
+  /** La salida común de todo: ganancia general y compresor (ver MASTER_*). */
+  private output(context: AudioContext): AudioNode {
+    const existing = this.buses.get('master');
+    if (existing !== undefined) return existing;
+    const master = context.createGain();
+    master.gain.value = MASTER_GAIN * this.volume;
+    const limiter = context.createDynamicsCompressor();
+    limiter.threshold.value = MASTER_THRESHOLD_DB;
+    limiter.knee.value = MASTER_KNEE_DB;
+    limiter.ratio.value = MASTER_RATIO;
+    limiter.attack.value = 0.005;
+    limiter.release.value = 0.25;
+    master.connect(limiter).connect(context.destination);
+    this.buses.set('master', master);
+    return master;
   }
 
   private ensureRunning(): AudioContext | null {

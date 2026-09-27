@@ -64,6 +64,7 @@ const {
   tapModel,
   closeFocus,
   openMapText,
+  narration,
   mapTexts,
   interaction,
   audio,
@@ -102,6 +103,12 @@ view = new ArView(root, {
 
   onCloseFocus: () => closeFocus.execute(),
 
+  onToggleNarration: () => narration.toggleNarration(),
+
+  // El volumen del menú. No necesita gesto: solo mueve una ganancia, y si el
+  // audio aún no arrancó, se guarda para cuando lo haga.
+  onVolumeChange: (level) => audio.setVolume(level),
+
   onStart: async () => {
     const session = await startArExperience.execute('whale');
 
@@ -122,10 +129,13 @@ view = new ArView(root, {
     interaction.attach({
       onTapModel: (modelId) => void tapModel.execute(modelId),
       onTapText: (textId) => void openMapText.execute(textId),
-      onRotate: (delta) => transformPlacement.rotateBy(delta),
+      onRotate: (modelId, yaw, pitch) => transformPlacement.rotateBy(modelId, yaw, pitch),
     });
   },
 });
+
+// El botón de la narración sigue a lo que suena: se detiene solo al acabar.
+narration.onNarrationChange((state) => view.setNarration(state));
 
 // Los textos del mapa para componerlos en grande al tocarlos.
 view.setMapTexts(mapTexts);

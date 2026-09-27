@@ -4,9 +4,13 @@ import {
   HemisphereLight,
   Mesh,
   MeshStandardMaterial,
+  PMREMGenerator,
+  Scene,
   Vector3,
+  WebGLRenderer,
   type Object3D,
 } from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 /**
  * Iluminación de tres puntos para los cuatro animales, la de un plató:
@@ -35,6 +39,28 @@ import {
  * de 3.5:1, la de un retrato con volumen sin llegar a ser dramático, y en
  * el perfilado del contraluz (`addRimShading`).
  *
+ * LA SEGUNDA VERSIÓN (principal 3.4, relleno 1.0, contraluz 5.5 desde
+ * arriba a la izquierda, hemisférica 0.3) tenía volumen pero "la dirección
+ * de la luz se veía mal puesta", y la razón era medible: el contraluz, más
+ * fuerte que la principal y con bastante altura, iluminaba el LOMO más que
+ * ella (0.52 × 5.5 ≈ 2.9 frente a 0.66 × 3.4 ≈ 2.2 en una cara que mira
+ * hacia arriba). Resultado: dos soles, uno a cada lado, con el lomo y la
+ * aleta dorsal lavados desde atrás a la izquierda y la cara, que es lo que
+ * se mira, en penumbra. Y con una hemisférica tan baja, la cara inferior de
+ * las aletas caía a negro, que en exteriores no pasa nunca: el cielo
+ * rellena. Ahora:
+ *
+ *   - UN sol que manda, arriba a la derecha y algo por delante, más alto que
+ *     antes: es la dirección de la luz de una escena real (el sol, una
+ *     lámpara de techo), y ninguna otra luz ilumina el lomo más que él
+ *     (`npm test` lo comprueba).
+ *   - El cielo como relleno: hemisférica más alta, azulada arriba y con el
+ *     rebote verdoso del agua abajo, más un mapa de entorno suave
+ *     (`addEnvironment`) que da a los materiales PBR los reflejos que sin
+ *     él no tienen y que son buena parte de por qué parecían de plástico.
+ *   - El contraluz se queda DETRÁS y bajo: dibuja el filo sin competir con
+ *     el sol por el lomo.
+ *
  * Las direcciones son relativas a la CÁMARA: en MindAR la cámara está fija
  * en el origen mirando hacia −Z (lo que se mueve es el mapa), así que el
  * mundo es el espacio de la cámara y el esquema se mantiene aunque el
@@ -43,32 +69,58 @@ import {
  */
 
 /** De dónde viene el contraluz. Lo comparten la luz y el perfilado. */
-const RIM_FROM = new Vector3(-1.3, 1.1, -1.3);
+const RIM_FROM = new Vector3(-0.9, 0.45, -1.7);
 const RIM_COLOUR = 0xfff4e6;
 
 export function addThreePointLighting(scene: Object3D): void {
-  // Base: cielo claro arriba, rebote verdoso del agua abajo.
-  scene.add(new HemisphereLight(0xffffff, 0x2f4a4a, 0.3));
+  // El cielo: claro y algo azul arriba, rebote verdoso del agua abajo.
+  const sky = new HemisphereLight(0xdfe9ff, 0x3d4a40, 1.05);
+  sky.name = 'cielo';
+  scene.add(sky);
 
-  const key = new DirectionalLight(0xfff1dc, 3.4);
+  // El sol: arriba a la derecha, por delante, cálido.
+  const key = new DirectionalLight(0xfff0da, 2.7);
   key.name = 'luz-principal';
-  key.position.set(1.4, 1.6, 1.2);
+  key.position.set(1.2, 2.1, 1.3);
   scene.add(key);
 
-  const fill = new DirectionalLight(0xd8e6ff, 1);
+  const fill = new DirectionalLight(0xd8e6ff, 0.8);
   fill.name = 'luz-relleno';
-  fill.position.set(-1.6, 0.1, 0.9);
+  fill.position.set(-1.7, 0.2, 1.1);
   scene.add(fill);
 
-  const rim = new DirectionalLight(RIM_COLOUR, 5.5);
+  const rim = new DirectionalLight(RIM_COLOUR, 1.6);
   rim.name = 'contraluz';
   rim.position.copy(RIM_FROM);
   scene.add(rim);
 }
 
 /** Cuánto brilla el filo del contraluz, y lo fino que es (más alto = más fino). */
-const RIM_STRENGTH = 0.55;
-const RIM_POWER = 2.6;
+const RIM_STRENGTH = 0.38;
+const RIM_POWER = 3;
+/**
+ * Cuánto pesa el mapa de entorno en los animales. Lo justo para que el lomo
+ * mojado de la ballena o el caparazón de la tortuga tengan un reflejo; más
+ * alto aplana la luz, porque el entorno ilumina desde todas partes.
+ */
+const ENVIRONMENT_STRENGTH = 0.45;
+
+/**
+ * Un entorno de estudio neutro (el `RoomEnvironment` de three, filtrado con
+ * PMREM) como reflejo y luz de fondo de los materiales PBR. Se genera una
+ * vez, en la GPU, al montar la escena: unos milisegundos.
+ *
+ * Solo con un renderer WebGL de verdad: las pruebas montan la escena con
+ * uno de mentira.
+ */
+export function addEnvironment(renderer: unknown, scene: Scene): void {
+  if (!(renderer instanceof WebGLRenderer)) return;
+  const pmrem = new PMREMGenerator(renderer);
+  const room = new RoomEnvironment(renderer);
+  scene.environment = pmrem.fromScene(room, 0.04).texture;
+  room.dispose();
+  pmrem.dispose();
+}
 
 /**
  * El perfilado del contraluz: un filo de luz que sigue la SILUETA del
@@ -97,6 +149,7 @@ export function addRimShading(root: Object3D): void {
 }
 
 function applyRim(material: MeshStandardMaterial): void {
+  material.envMapIntensity = ENVIRONMENT_STRENGTH;
   material.onBeforeCompile = (shader) => {
     shader.uniforms['rimFrom'] = { value: RIM_FROM.clone().normalize() };
     shader.uniforms['rimColour'] = { value: new Color(RIM_COLOUR) };
@@ -121,6 +174,6 @@ function applyRim(material: MeshStandardMaterial): void {
         ].join('\n'),
       );
   };
-  material.customProgramCacheKey = () => 'perfilado-contraluz-1';
+  material.customProgramCacheKey = () => 'perfilado-contraluz-2';
   material.needsUpdate = true;
 }

@@ -11,7 +11,7 @@ import { CloseFocus } from '../src/application/use-cases/CloseFocus';
 import { OpenMapText } from '../src/application/use-cases/OpenMapText';
 import { MapText } from '../src/domain/value-objects/MapText';
 import { NUQUI_MAP_TEXTS, StaticMapTextRepository } from '../src/infrastructure/repositories/StaticMapTextRepository';
-import { pickDifferent } from '../src/domain/value-objects/Soundscape';
+import { pickDifferent, Soundscape } from '../src/domain/value-objects/Soundscape';
 import { ArSession } from '../src/domain/entities/ArSession';
 import { ArModel } from '../src/domain/entities/ArModel';
 import { ModelId } from '../src/domain/value-objects/ModelId';
@@ -96,6 +96,7 @@ function harness() {
   const audio = {
     unlock: async () => { calls.unlocks++; }, play() {}, dispose() {},
     preload() {}, playClip() {}, startAmbience() {}, stopAmbience() {},
+    playVoice: async () => true, stopVoice() {},
   };
   const app = new StartArExperience(tracking, scene, audio, models, analytics, () => {});
   return { app, tracking, scene, audio, calls, handlers };
@@ -702,9 +703,10 @@ test('en primer plano, un animal largo mirando a la cámara no se sale de la pan
   for (let frame = 0; frame < 20; frame += 1) advance(0.25);
   assert.equal(icon.rotation.y, still, 'el animal gira solo en primer plano');
   // Toda una vuelta arrastrando con el dedo: de lado, de morro, de espaldas.
+  // Y a la vez inclinándola arriba y abajo hasta el tope.
   let placement = Placement.initial(whale.id, Scale.default());
   for (let frame = 0; frame < 120; frame += 1) {
-    placement = placement.rotatedBy((Math.PI * 2) / 120);
+    placement = placement.rotatedBy(whale.id, (Math.PI * 2) / 120, frame < 60 ? 0.05 : -0.05);
     adapter.applyPlacement(placement);
     assert.equal(advance(0.25), true);
     scene.updateMatrixWorld(true);
@@ -730,6 +732,8 @@ function soundHarness() {
     playClip: (url: string) => { log.push(`clip ${url}`); },
     startAmbience: (url: string) => { log.push(`ambience ${url}`); },
     stopAmbience: () => { log.push('ambience off'); },
+    playVoice: async (url: string) => { log.push(`voice ${url}`); return true; },
+    stopVoice: () => { log.push('voice off'); },
   };
   let pending: { fn: () => void; ms: number } | null = null;
   const timers = {
@@ -1158,7 +1162,7 @@ test('el chapuzón suena con el volumen del salpicón, y solo en quien cae al ag
   const audio = {
     unlock: async () => {}, dispose() {}, preload() {}, play() {},
     playClip: (url: string, volume?: number) => { played.push({ url, volume }); },
-    startAmbience() {}, stopAmbience() {},
+    startAmbience() {}, stopAmbience() {}, playVoice: async () => true, stopVoice() {},
   };
   const sounds = new AnimalSoundscape(audio as never, () => ArSession.idle());
   const catalog = NUQUI_CATALOG.map((entry) => ArModel.fromSnapshot(entry));
@@ -1204,6 +1208,15 @@ test('los animales se iluminan con tres puntos: principal, relleno y contraluz',
   assert.ok(ratio >= 2.5 && ratio <= 4, `principal:relleno = ${ratio.toFixed(1)}:1`);
   // El contraluz, en diagonal opuesta a la principal.
   assert.ok(Math.sign(rim.position.x) !== Math.sign(key.position.x));
+  // UN sol: ninguna otra luz ilumina el lomo (una cara que mira hacia
+  // arriba) más que la principal. El contraluz lo hacía —0.52 × 5.5 frente a
+  // 0.66 × 3.4— y la luz parecía venir de dos sitios a la vez.
+  const onTop = (light: { intensity: number; position: Vector3 }) =>
+    light.intensity * Math.max(0, light.position.clone().normalize().y);
+  assert.ok(onTop(key) > 2 * onTop(rim), `lomo: principal ${onTop(key).toFixed(2)}, contraluz ${onTop(rim).toFixed(2)}`);
+  assert.ok(onTop(key) > 2 * onTop(fill));
+  // Y viene de arriba, como el sol o una lámpara: más alta que lateral.
+  assert.ok(key.position.y > Math.abs(key.position.x));
 });
 
 test('el filo del contraluz se inyecta en el shader PBR de los animales, y solo en ellos', () => {
@@ -1227,4 +1240,354 @@ test('el filo del contraluz se inyecta en el shader PBR de los animales, y solo 
   // Con su propia clave de programa: no se mezcla con los materiales normales.
   assert.notEqual(material.customProgramCacheKey(), new MeshStandardMaterial().customProgramCacheKey());
   assert.equal((outline.material as MeshBasicMaterial).customProgramCacheKey(), new MeshBasicMaterial().customProgramCacheKey());
+});
+
+test('la narración calla mientras el animal actúa, y sigue cuando acaba', async () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const bird = voiced('bird', {
+    soundscape: {
+      calls: ['/bird/c1', '/bird/c2'], ambience: '/bird/amb',
+      narration: { parts: ['/bird/n1', '/bird/n2'], cues: [{ action: 'gesture', holdSeconds: 5.4 }] },
+    },
+  });
+  let state = ArSession.idle().searching(Placement.initial(bird.id, bird.defaultScale)).tracking();
+  state = state.withDiscovery(state.discovery.unlock(bird.id));
+  const h = soundHarness();
+  const sounds = new AnimalSoundscape(h.audio as never, () => state, h.timers);
+  sounds.setPerformer((id) => { h.log.push(`gesto ${id.value}`); return true; });
+
+  sounds.focusOpened(bird);
+  // Ambiente al abrir; la voz, un momento después (no encima del humo).
+  assert.equal(h.log.at(-1), 'ambience /bird/amb');
+  assert.equal(h.pendingMs(), 700);
+  h.fire();
+  await flush();
+  // Primer trozo → el animal canta y la voz ESPERA lo que dura.
+  assert.deepEqual(h.log.slice(-2), ['voice /bird/n1', 'gesto bird']);
+  assert.equal(h.pendingMs(), 5400);
+  h.fire();
+  await flush();
+  // Segundo trozo, y hasta que no acaba la narración no hay llamadas sueltas.
+  assert.equal(h.log.at(-1), 'voice /bird/n2');
+  assert.ok(!h.log.some((line) => line.startsWith('clip')));
+  assert.equal(h.pendingMs(), 6000);
+  h.fire();
+  assert.ok(h.log.at(-1)!.startsWith('clip /bird/c'));
+});
+
+test('cerrar la ficha a mitad de la narración la corta y no la deja seguir', async () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const crab = voiced('crab', {
+    soundscape: {
+      calls: ['/crab/c1'],
+      narration: { parts: ['/crab/n1', '/crab/n2'], cues: [{ action: 'gesture', holdSeconds: 3 }] },
+    },
+  });
+  let state = ArSession.idle().searching(Placement.initial(crab.id, crab.defaultScale)).tracking();
+  state = state.withDiscovery(state.discovery.unlock(crab.id));
+  const h = soundHarness();
+  // El trozo acaba DESPUÉS de cerrar: la promesa llega tarde.
+  let finishPart: (ended: boolean) => void = () => {};
+  h.audio.playVoice = (url: string) => { h.log.push(`voice ${url}`); return new Promise((resolve) => { finishPart = resolve; }); };
+  const sounds = new AnimalSoundscape(h.audio as never, () => state, h.timers);
+  let gestures = 0;
+  sounds.setPerformer(() => { gestures += 1; return true; });
+  sounds.focusOpened(crab);
+  h.fire();
+  sounds.focusClosed();
+  assert.equal(h.log.at(-2), 'voice off');
+  finishPart(true);
+  await flush();
+  assert.equal(gestures, 0);
+  assert.equal(h.pendingMs(), null);
+});
+
+test('las cuatro narraciones del catálogo existen, van en trozos y cada pausa deja actuar al animal', () => {
+  for (const entry of NUQUI_CATALOG) {
+    const narration = ArModel.fromSnapshot(entry).soundscape?.narration;
+    assert.ok(narration, `${entry.id} no tiene narración`);
+    assert.equal(narration.parts.length, 2);
+    for (const part of narration.parts) assert.ok(existsSync(`public${part}`), `falta ${part}`);
+    const [cue] = narration.cues;
+    // La pausa cubre lo que tarda el animal: su gesto o su canto.
+    assert.ok(cue!.holdSeconds >= 3 && cue!.holdSeconds <= 7);
+  }
+  assert.throws(() => Soundscape.of({ calls: ['a'], narration: { parts: ['a', 'b'], cues: [] } }));
+});
+
+test('cada animal gira por su cuenta, de lado y arriba/abajo, con la inclinación topada', () => {
+  const whale = ModelId.of('whale');
+  const crab = ModelId.of('crab');
+  let placement = Placement.initial(whale, Scale.default()).rotatedBy(whale, 0.5, 0.3);
+  assert.deepEqual(placement.orientationOf(whale), { yaw: 0.5, pitch: 0.3 });
+  // Girar la ballena no mueve al cangrejo.
+  assert.deepEqual(placement.orientationOf(crab), { yaw: 0, pitch: 0 });
+  placement = placement.rotatedBy(crab, -0.2);
+  assert.ok(Math.abs(placement.orientationOf(crab).yaw - (Math.PI * 2 - 0.2)) < 1e-9);
+  assert.equal(placement.orientationOf(whale).yaw, 0.5);
+  // Por mucho que se arrastre hacia abajo, no queda patas arriba.
+  for (let i = 0; i < 50; i += 1) placement = placement.rotatedBy(whale, 0, 0.2);
+  assert.ok(placement.orientationOf(whale).pitch <= 1.25);
+});
+
+test('en la escena, arrastrar un animal gira solo ese; el primer plano sale en tres cuartos', async () => {
+  globalThis.document = { createElement: () => ({ getContext: () => null }) } as unknown as Document;
+  const scene = new Scene();
+  const camera = new PerspectiveCamera(60, 0.46, 0.01, 100);
+  let advance = (_delta: number): unknown => undefined;
+  const runtime = {
+    prepare: async () => {},
+    init: () => ({ scene, renderer: {} }),
+    mindar: { scene, camera, renderer: {} },
+    onFrame: (fn: (delta: number) => unknown) => { advance = fn; return () => {}; },
+    anchorVisible: false,
+  };
+  const make = (id: string, u: number) => ArModel.fromSnapshot({
+    id, name: id, description: 'Ficha',
+    source: ModelSource.primitive('whale', 0x224466), spot: { u, v: 0.5 },
+    outlineShape: [{ u: u - 0.05, v: 0.45 }, { u: u + 0.05, v: 0.45 }, { u, v: 0.55 }],
+    sound: { waveform: 'sine', rootFrequencyHz: 90, overtoneRatios: [1], durationMs: 1800 },
+  });
+  const whale = make('whale', 0.3);
+  const crab = make('crab', 0.7);
+  const adapter = new ThreeSceneAdapter(runtime as never, 1.432);
+  await adapter.preload([whale, crab]);
+  let discovery = ArSession.idle().discovery.unlock(whale.id).unlock(crab.id).focus(null);
+  adapter.applyDiscovery(discovery);
+  // El icono es el nodo que lleva el id y cuelga de algo que no lo lleva
+  // (el `lift` del pin, o el escenario del primer plano).
+  const iconOf = (id: string): Object3D => {
+    let icon: Object3D | undefined;
+    scene.traverse((node) => {
+      if (node.userData['modelId'] === id && node.parent !== null && node.parent.userData['modelId'] === undefined
+        && node.parent.parent?.userData['modelId'] === id) icon = node;
+    });
+    scene.traverse((node) => {
+      if (icon === undefined && node.userData['modelId'] === id && node.parent?.userData['modelId'] === id) icon = node;
+    });
+    assert.ok(icon, `no se encuentra el icono de ${id}`);
+    return icon;
+  };
+  advance(0.016);
+  const crabBefore = iconOf('crab').rotation.clone();
+  const whaleBefore = iconOf('whale').rotation.clone();
+  adapter.applyPlacement(Placement.initial(whale.id, Scale.default()).rotatedBy(whale.id, 0.8, 0.4));
+  // Sin avanzar el tiempo: así el vaivén no cambia nada.
+  assert.ok(Math.abs(iconOf('whale').rotation.y - whaleBefore.y - 0.8) < 1e-6);
+  assert.ok(Math.abs(iconOf('whale').rotation.x - whaleBefore.x - 0.4) < 1e-6);
+  assert.equal(iconOf('crab').rotation.y, crabBefore.y);
+  assert.equal(iconOf('crab').rotation.x, crabBefore.x);
+
+  // En primer plano: tres cuartos y algo desde arriba.
+  discovery = discovery.focus(crab.id);
+  adapter.applyDiscovery(discovery);
+  advance(0.016);
+  assert.equal(adapter.focusedModelId, 'crab');
+  const staged = adapter.pickables?.get('crab')?.children.find((child) => child.userData['modelId'] === 'crab');
+  assert.ok(staged);
+  assert.ok(Math.abs(staged.rotation.y) > 0.4 && Math.abs(staged.rotation.y) < 0.9, `giro ${staged.rotation.y}`);
+  assert.ok(staged.rotation.x > 0.1, 'se ve un poco desde arriba');
+  adapter.clear();
+});
+
+test('el arrastre gira el animal bajo el dedo, o el del primer plano; empezar en el vacío no gira nada', () => {
+  const camera = new PerspectiveCamera(45, 1, 0.01, 100);
+  camera.position.set(0, 0, 5);
+  camera.updateMatrixWorld(true);
+  const canvas = {
+    style: {} as Record<string, string>,
+    addEventListener() {}, removeEventListener() {}, setPointerCapture() {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }),
+  };
+  const pickables = new Map<string, Object3D>();
+  const source = { pickables, focusedModelId: null as string | null };
+  const runtime = { mindar: { camera, renderer: { domElement: canvas } } };
+  const adapter = new PointerInteractionAdapter(runtime as never, source);
+  const rotations: [string, number, number][] = [];
+  adapter.attach({ onTapModel() {}, onTapText() {}, onRotate: (id, yaw, pitch) => { rotations.push([id, yaw, pitch]); } });
+  const pointer = adapter as unknown as {
+    handleDown(e: unknown): void; handleMove(e: unknown): void; handleUp(e: unknown): void;
+  };
+  const drag = (fromX: number, fromY: number, dx: number, dy: number) => {
+    pointer.handleDown({ pointerId: 1, clientX: fromX, clientY: fromY });
+    for (let step = 1; step <= 10; step += 1) {
+      pointer.handleMove({ pointerId: 1, clientX: fromX + (dx * step) / 10, clientY: fromY + (dy * step) / 10 });
+    }
+    pointer.handleUp({ pointerId: 1, clientX: fromX + dx, clientY: fromY + dy });
+  };
+
+  const animal = new Group();
+  animal.userData['modelId'] = 'whale';
+  animal.add(new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial()));
+  animal.updateMatrixWorld(true);
+  pickables.set('whale', animal);
+
+  // Empieza sobre la ballena: la gira a ella, de lado y hacia abajo.
+  drag(50, 50, 40, 30);
+  assert.ok(rotations.length > 0 && rotations.every(([id]) => id === 'whale'));
+  assert.ok(rotations.some(([, yaw]) => yaw > 0) && rotations.some(([, , pitch]) => pitch > 0));
+  // Empieza en el vacío, lejos de cualquier animal: no gira a nadie.
+  rotations.length = 0;
+  drag(2, 2, 40, 0);
+  assert.equal(rotations.length, 0);
+  // Con un animal en primer plano, cualquier arrastre es para él.
+  source.focusedModelId = 'crab';
+  drag(2, 2, 40, 0);
+  assert.ok(rotations.length > 0 && rotations.every(([id]) => id === 'crab'));
+  adapter.detach();
+});
+
+test('la narración suena sola la primera vez; después, solo con el botón, y se puede detener', async () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const turtle = voiced('turtle', {
+    soundscape: {
+      calls: ['/turtle/c1', '/turtle/c2'], ambience: '/turtle/amb',
+      narration: { parts: ['/turtle/n1', '/turtle/n2'], cues: [{ action: 'gesture', holdSeconds: 5 }] },
+    },
+  });
+  let state = ArSession.idle().searching(Placement.initial(turtle.id, turtle.defaultScale)).tracking();
+  state = state.withDiscovery(state.discovery.unlock(turtle.id));
+  const h = soundHarness();
+  let finishPart: (ended: boolean) => void = () => {};
+  h.audio.playVoice = (url: string) => { h.log.push(`voice ${url}`); return new Promise((resolve) => { finishPart = resolve; }); };
+  h.audio.stopVoice = () => { h.log.push('voice off'); finishPart(false); };
+  const sounds = new AnimalSoundscape(h.audio as never, () => state, h.timers);
+  const states: string[] = [];
+  sounds.onNarrationChange(({ available, playing }) => states.push(`${available ? 'hay' : 'no hay'}${playing ? ', suena' : ''}`));
+
+  // Primera vez: arranca sola.
+  sounds.focusOpened(turtle);
+  assert.equal(states.at(-1), 'hay, suena');
+  h.fire();
+  assert.equal(h.log.at(-1), 'voice /turtle/n1');
+  // Detenerla corta la voz, deja el ambiente y el animal vuelve a llamar enseguida.
+  sounds.toggleNarration();
+  await flush();
+  assert.equal(h.log.at(-1), 'voice off');
+  assert.ok(!h.log.includes('ambience off'));
+  assert.equal(states.at(-1), 'hay');
+  assert.equal(h.pendingMs(), 1500);
+  h.fire();
+  assert.match(h.log.at(-1)!, /^clip \/turtle\/c/);
+
+  // Segunda vez: NO arranca sola; suenan sus llamadas y el botón la ofrece.
+  sounds.focusClosed();
+  assert.equal(states.at(-1), 'no hay');
+  sounds.focusOpened(turtle);
+  assert.equal(states.at(-1), 'hay');
+  assert.equal(h.pendingMs(), 400);
+  const voices = h.log.filter((line) => line.startsWith('voice /')).length;
+  // El botón la narra desde el principio, sin esperar.
+  sounds.toggleNarration();
+  assert.equal(states.at(-1), 'hay, suena');
+  assert.equal(h.pendingMs(), 0);
+  h.fire();
+  assert.equal(h.log.filter((line) => line.startsWith('voice /')).length, voices + 1);
+  assert.equal(h.log.at(-1), 'voice /turtle/n1');
+  // Al acabar la narración entera, el botón vuelve a ofrecerla.
+  finishPart(true);
+  await flush();
+  h.fire();
+  await flush();
+  finishPart(true);
+  await flush();
+  assert.equal(states.at(-1), 'hay');
+});
+
+const narratedTurtle = () => voiced('turtle', {
+  soundscape: {
+    calls: ['/turtle/c1', '/turtle/c2'], taps: ['/turtle/t1'], ambience: '/turtle/amb', splash: '/turtle/splash',
+    narration: { parts: ['/turtle/n1', '/turtle/n2'], cues: [{ action: 'gesture', holdSeconds: 5 }] },
+  },
+});
+
+test('mientras narra solo suena la voz: tocar anima sin sonar y no la corta; en su pausa, el animal sí suena', async () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const turtle = narratedTurtle();
+  let state = ArSession.idle().searching(Placement.initial(turtle.id, turtle.defaultScale)).tracking();
+  state = state.withDiscovery(state.discovery.unlock(turtle.id));
+  const h = soundHarness();
+  let finishPart: (ended: boolean) => void = () => {};
+  h.audio.playVoice = (url: string) => { h.log.push(`voice ${url}`); return new Promise((resolve) => { finishPart = resolve; }); };
+  const sounds = new AnimalSoundscape(h.audio as never, () => state, h.timers);
+  sounds.setPerformer(() => { sounds.tapped(turtle); return true; });
+
+  sounds.focusOpened(turtle);
+  h.fire();
+  assert.equal(h.log.at(-1), 'voice /turtle/n1');
+  // El usuario toca a la tortuga mientras habla: su gesto no suena, ni su chapuzón.
+  sounds.tapped(turtle);
+  sounds.splashed(turtle, 1);
+  assert.ok(!h.log.some((line) => line.startsWith('clip')), 'un sonido tapó la voz');
+  assert.ok(!h.log.includes('voice off'), 'tocar cortó la narración');
+  // En la pausa de la narración el animal actúa CON su sonido.
+  finishPart(true);
+  await flush();
+  assert.equal(h.log.at(-1), 'clip /turtle/t1');
+  sounds.splashed(turtle, 1);
+  assert.equal(h.log.at(-1), 'clip /turtle/splash');
+  // Vuelve a hablar: otra vez solo la voz.
+  h.fire();
+  assert.equal(h.log.at(-1), 'voice /turtle/n2');
+  sounds.splashed(turtle, 1);
+  assert.equal(h.log.at(-1), 'voice /turtle/n2');
+  // Detenida, el animal vuelve a sonar al tocarlo.
+  sounds.stopNarration();
+  sounds.tapped(turtle);
+  assert.equal(h.log.at(-1), 'clip /turtle/t1');
+});
+
+test('alejarse y volver a acercarse al animal abierto no reabre la ficha ni corta la narración', async () => {
+  const turtle = narratedTurtle();
+  const repo = { findAll: async () => [turtle], findById: async () => turtle };
+  let state = ArSession.idle().searching(Placement.initial(turtle.id, turtle.defaultScale)).tracking();
+  const h = soundHarness();
+  h.audio.playVoice = (url: string) => { h.log.push(`voice ${url}`); return new Promise(() => {}); };
+  const sounds = new AnimalSoundscape(h.audio as never, () => state, h.timers);
+  const scene = { applyDiscovery() {} };
+  const discover = new DiscoverNearbyModel(scene as never, repo as never, sounds, analytics, () => state, (next) => { state = next; });
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  discover.execute('turtle');
+  await flush();
+  h.fire();
+  assert.equal(h.log.at(-1), 'voice /turtle/n1');
+  // El pulso aleja la cámara un momento y la vuelve a acercar.
+  discover.execute(null);
+  discover.execute('turtle');
+  await flush();
+  assert.ok(!h.log.includes('voice off'), 'la narración se cortó al volver a acercarse');
+  assert.ok(!h.log.includes('ambience off'));
+  // Y aunque llegara otra vez el aviso de abrir, el paisaje sonoro no se reinicia.
+  sounds.focusOpened(turtle);
+  assert.ok(!h.log.includes('voice off'));
+});
+
+test('si la primera narración no llega a cargar, la próxima vez vuelve a sonar sola', async () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const turtle = narratedTurtle();
+  let state = ArSession.idle().searching(Placement.initial(turtle.id, turtle.defaultScale)).tracking();
+  state = state.withDiscovery(state.discovery.unlock(turtle.id));
+  const h = soundHarness();
+  let loads = true;
+  h.audio.playVoice = async (url: string) => { h.log.push(`voice ${url}`); return loads; };
+  const sounds = new AnimalSoundscape(h.audio as never, () => state, h.timers);
+  loads = false;
+  sounds.focusOpened(turtle);
+  h.fire();
+  await flush();
+  sounds.focusClosed();
+  loads = true;
+  sounds.focusOpened(turtle);
+  assert.equal(h.pendingMs(), 700, 'la segunda vez no volvió a narrar sola');
+});
+
+test('el primer trozo de cada narración se descarga antes que los toques', () => {
+  const order = soundPreloadOrder(NUQUI_CATALOG.map(ArModel.fromSnapshot));
+  const firstTap = order.findIndex((url) => url.includes('/tap-'));
+  for (const url of order.filter((candidate) => candidate.endsWith('narration-1.mp3'))) {
+    assert.ok(order.indexOf(url) < firstTap, `${url} llega tarde`);
+  }
+  const firstCall = order.findIndex((url) => url.includes('/call-'));
+  assert.ok(order.findIndex((url) => url.endsWith('narration-1.mp3')) > firstCall);
 });

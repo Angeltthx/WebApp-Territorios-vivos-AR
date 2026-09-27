@@ -16,10 +16,22 @@ import type { MindArRuntime } from '../mindar/MindArRuntime';
 const TAP_MAX_MOVE_PX = 20;
 const TAP_MAX_DURATION_MS = 650;
 const ROTATION_PER_PIXEL = 0.008;
+/**
+ * La inclinación responde algo más despacio que el giro lateral: un arrastre
+ * de lado nunca es perfectamente horizontal, y con la misma sensibilidad el
+ * animal cabeceaba a cada vuelta.
+ */
+const TILT_PER_PIXEL = 0.006;
 
 export interface InteractiveSource {
   /** Objetos tocables indexados por id, o null si no hay nada a la vista. */
   readonly pickables: ReadonlyMap<string, Object3D> | null;
+  /**
+   * El animal en primer plano, si lo hay. Con uno delante, arrastrar en
+   * cualquier parte de la pantalla lo gira a él: es lo único que se mira, y
+   * exigir que el dedo empiece justo sobre su cuerpo sería un castigo.
+   */
+  readonly focusedModelId?: string | null;
 }
 
 /**
@@ -39,7 +51,14 @@ export class PointerInteractionAdapter implements InteractionPort {
   private startY = 0;
   private startedAt = 0;
   private lastX = 0;
+  private lastY = 0;
   private moved = false;
+  /**
+   * El animal que gira este arrastre, decidido al apoyar el dedo. Sobre el
+   * mapa, el que había debajo; si el dedo empezó en el vacío, ninguno. Antes
+   * el arrastre giraba a los cuatro a la vez.
+   */
+  private dragTarget: string | null = null;
 
   private readonly onPointerDown = (event: PointerEvent) => this.handleDown(event);
   private readonly onPointerMove = (event: PointerEvent) => this.handleMove(event);
@@ -84,8 +103,10 @@ export class PointerInteractionAdapter implements InteractionPort {
       this.startX = event.clientX;
       this.startY = event.clientY;
       this.lastX = event.clientX;
+      this.lastY = event.clientY;
       this.startedAt = performance.now();
       this.moved = false;
+      this.dragTarget = this.source.focusedModelId ?? this.modelAt(event.clientX, event.clientY);
       return;
     }
 
@@ -106,9 +127,18 @@ export class PointerInteractionAdapter implements InteractionPort {
     const totalDelta = Math.hypot(event.clientX - this.startX, event.clientY - this.startY);
     if (totalDelta > TAP_MAX_MOVE_PX) {
       this.moved = true;
-      this.handlers.onRotate((event.clientX - this.lastX) * ROTATION_PER_PIXEL);
+      if (this.dragTarget !== null) {
+        // Arrastrar hacia abajo inclina hacia abajo lo que mira a la cámara,
+        // como si el dedo empujara la superficie del animal.
+        this.handlers.onRotate(
+          this.dragTarget,
+          (event.clientX - this.lastX) * ROTATION_PER_PIXEL,
+          (event.clientY - this.lastY) * TILT_PER_PIXEL,
+        );
+      }
     }
     this.lastX = event.clientX;
+    this.lastY = event.clientY;
   }
 
   private handleUp(event: PointerEvent): void {
@@ -125,6 +155,12 @@ export class PointerInteractionAdapter implements InteractionPort {
 
     if (target.kind === 'text') this.handlers.onTapText(target.id);
     else this.handlers.onTapModel(target.id);
+  }
+
+  /** Qué animal hay bajo el dedo (los textos no se giran), o null. */
+  private modelAt(clientX: number, clientY: number): string | null {
+    const target = this.targetAt(clientX, clientY);
+    return target?.kind === 'model' ? target.id : null;
   }
 
   /**

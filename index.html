@@ -661,6 +661,48 @@
         50% { transform: scale(1.022); opacity: 1; }
       }
 
+      /* EL LLAMADO A LA ACCIÓN. Si a los 5 s de guía no aparece el mapa
+         (`data-call`, lo pone ArView), el marco y el texto LATEN juntos:
+         crecen un poco con un brillo suave, vuelven, y descansan hasta el
+         siguiente latido —el mismo ritmo que los contornos dorados, cuyo
+         silencio es lo que hace que el siguiente se note—. Crecen desde su
+         centro y con una curva que frena al llegar, así que se lee como una
+         respiración, no como un rebote. */
+      #guide[data-call="true"] #guide-frame {
+        animation: guide-call-frame 2.6s cubic-bezier(0.33, 0, 0.2, 1) infinite;
+      }
+      #guide[data-call="true"] #guide-frame span { animation: guide-call-corners 2.6s ease-in-out infinite; }
+      #guide[data-call="true"] #guide-title {
+        animation: guide-call-text 2.6s cubic-bezier(0.33, 0, 0.2, 1) infinite;
+      }
+      #guide[data-call="true"] #guide-mission {
+        animation: guide-call-text-soft 2.6s cubic-bezier(0.33, 0, 0.2, 1) infinite;
+      }
+      #guide[data-call="true"] #guide-mission strong {
+        animation: guide-call-gold 2.6s ease-in-out infinite;
+      }
+      @keyframes guide-call-frame {
+        0%, 100% { transform: scale(1); border-color: rgba(255, 255, 255, 0.5); box-shadow: 0 0 0 rgba(255, 255, 255, 0); }
+        30% { transform: scale(1.05); border-color: rgba(255, 255, 255, 0.95); box-shadow: 0 0 34px rgba(255, 255, 255, 0.28); }
+        62% { transform: scale(1); border-color: rgba(255, 255, 255, 0.5); box-shadow: 0 0 0 rgba(255, 255, 255, 0); }
+      }
+      @keyframes guide-call-corners {
+        0%, 62%, 100% { filter: none; }
+        30% { filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.9)); }
+      }
+      @keyframes guide-call-text {
+        0%, 62%, 100% { transform: scale(1); text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9); }
+        30% { transform: scale(1.09); text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9), 0 0 22px rgba(255, 255, 255, 0.45); }
+      }
+      @keyframes guide-call-text-soft {
+        0%, 62%, 100% { transform: scale(1); }
+        30% { transform: scale(1.05); }
+      }
+      @keyframes guide-call-gold {
+        0%, 62%, 100% { text-shadow: none; }
+        30% { text-shadow: 0 0 14px rgba(255, 197, 61, 0.85); }
+      }
+
       #guide-title {
         margin: 0;
         text-align: center;
@@ -669,21 +711,6 @@
         font-size: clamp(22px, 6.2vw, 33px);
         line-height: 1.2;
         text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
-      }
-
-      /* El enlace al mapa vivía suelto en la pantalla. Aquí sigue estando
-         para quien no lo tenga impreso, pero solo cuando la guía se
-         muestra: el resto del tiempo no estorba. */
-      #guide-link {
-        pointer-events: auto;
-        font-size: 13px;
-        color: rgba(255, 255, 255, 0.82);
-        text-decoration: none;
-        padding: 9px 16px;
-        border-radius: 999px;
-        background: var(--surface);
-        backdrop-filter: blur(12px);
-        border: 1px dashed var(--border);
       }
 
       /* ------------------------------------------------------------------
@@ -752,6 +779,81 @@
         line-height: 1.55;
         color: rgba(255, 255, 255, 0.88);
         text-shadow: 0 1px 14px rgba(0, 0, 0, 0.95);
+      }
+
+      /* LA NARRACIÓN. Una píldora amable bajo el nombre científico: cristal
+         claro, texto en frase normal (no en mayúsculas de etiqueta) y un
+         círculo dorado con el símbolo, el mismo dorado que dice "aquí hay
+         algo" en toda la app. Dos estados y nada más: «Escuchar narración»
+         (triángulo) y «Detener narración» (cuadrado, con ondas suaves que
+         salen del círculo mientras habla). Sustituye a una versión con borde
+         dorado, mayúsculas estrechas, barras y halo, que se leía brusca. */
+      #focus-narration {
+        pointer-events: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 11px;
+        margin: 4px 0 6px;
+        min-width: 0;
+        min-height: 44px;
+        padding: 5px 18px 5px 5px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        background: rgba(255, 255, 255, 0.14);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        box-shadow: 0 6px 22px rgba(0, 0, 0, 0.28);
+        font: 700 14px/1 var(--font-text);
+        letter-spacing: 0.01em;
+        color: #fff;
+        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+        animation: narration-in 0.45s ease both;
+      }
+      #focus-narration[hidden] { display: none; }
+      @keyframes narration-in {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: none; }
+      }
+      .narration-badge {
+        position: relative;
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: #ffc53d;
+        box-shadow: 0 2px 10px rgba(255, 197, 61, 0.35);
+      }
+      .narration-badge svg {
+        grid-area: 1 / 1;
+        width: 16px;
+        height: 16px;
+        fill: #2a2c1c;
+        transition: opacity 0.2s ease, transform 0.25s ease;
+      }
+      .narration-play { transform: translateX(1px); }
+      .narration-stop { opacity: 0; transform: scale(0.6); }
+      #focus-narration[data-playing="true"] .narration-play { opacity: 0; transform: scale(0.6); }
+      #focus-narration[data-playing="true"] .narration-stop { opacity: 1; transform: none; }
+      /* Hablando: dos ondas suaves salen del círculo, como una voz. */
+      #focus-narration[data-playing="true"] .narration-badge::before,
+      #focus-narration[data-playing="true"] .narration-badge::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 197, 61, 0.55);
+        animation: narration-wave 2s ease-out infinite;
+        pointer-events: none;
+      }
+      #focus-narration[data-playing="true"] .narration-badge::after { animation-delay: 1s; }
+      @keyframes narration-wave {
+        from { transform: scale(1); opacity: 0.9; }
+        to { transform: scale(1.75); opacity: 0; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #focus-narration, .narration-badge::before, .narration-badge::after { animation: none !important; }
       }
 
       #focus-close {
@@ -878,6 +980,57 @@
         backdrop-filter: none;
       }
       #menu button + button { margin-top: 2px; }
+
+      /* EL VOLUMEN, primero en el menú. Un altavoz redondo que silencia y
+         una barra dorada; sin mayúsculas gritonas ni recuadros. */
+      #menu-sound {
+        padding: 10px 12px 12px 14px;
+        margin-bottom: 4px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      #menu-sound-title {
+        display: block;
+        margin-bottom: 6px;
+        font-family: var(--font-label);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.7);
+      }
+      #menu-sound-row { display: flex; align-items: center; gap: 12px; }
+      #menu #sound-toggle {
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: 40px;
+        min-width: 40px;
+        height: 40px;
+        min-height: 40px;
+        padding: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.12);
+      }
+      #sound-toggle svg {
+        width: 22px;
+        height: 22px;
+        fill: none;
+        stroke: #fff;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      #sound-toggle .speaker { fill: #fff; stroke: none; }
+      #sound-toggle .cross { display: none; }
+      #sound-toggle[aria-pressed="true"] .waves { display: none; }
+      #sound-toggle[aria-pressed="true"] .cross { display: inline; stroke: #ffc53d; }
+      #sound-level {
+        flex: 1;
+        min-width: 0;
+        height: 28px;
+        margin: 0;
+        accent-color: #ffc53d;
+        cursor: pointer;
+      }
       /* Una opción ancha encogiéndose entera queda raro; se marca con un
          fondo, que es como se marca una lista. */
       #menu button:active {
@@ -1179,7 +1332,12 @@
         #focus-info { max-width: 60ch; font-size: 13px; line-height: 1.3; }
       }
       @media (prefers-reduced-motion: reduce) {
-        #guide-frame { animation: none; }
+        #guide-frame,
+        #guide[data-call="true"] #guide-frame,
+        #guide[data-call="true"] #guide-frame span,
+        #guide[data-call="true"] #guide-title,
+        #guide[data-call="true"] #guide-mission,
+        #guide[data-call="true"] #guide-mission strong { animation: none; }
       }
     </style>
   </head>
@@ -1226,11 +1384,8 @@
         <!-- El llamado a la acción: la instrucción sola decía QUÉ hacer,
              no PARA QUÉ. La misión es lo que hace querer hacerlo. -->
         <p id="guide-mission">y descubre los <strong>4 animales</strong> que se esconden en él</p>
-        <!-- Sin el mapa delante de la cámara no aparece ningún icono:
-             la app rastrea esa imagen concreta, no el entorno. -->
-        <a id="guide-link" href="/targets/map.jpg" target="_blank" rel="noopener"
-          >¿No tienes el mapa? Ábrelo aquí</a
-        >
+        <!-- Hubo aquí un enlace «¿No tienes el mapa? Ábrelo aquí»; se quitó
+             a petición: la experiencia es con el mapa impreso delante. -->
       </div>
 
       <!-- Segunda instrucción: aparece con el mapa ya localizado. -->
@@ -1256,6 +1411,13 @@
         <button type="button" id="focus-close" aria-label="Cerrar la ficha">✕</button>
         <h2 id="focus-name"></h2>
         <p id="focus-species"></p>
+        <button type="button" id="focus-narration" hidden data-playing="false" aria-pressed="false">
+          <span class="narration-badge" aria-hidden="true">
+            <svg class="narration-play" viewBox="0 0 24 24"><path d="M8 5.6v12.8a1 1 0 0 0 1.53.85l10.1-6.4a1 1 0 0 0 0-1.7l-10.1-6.4A1 1 0 0 0 8 5.6z" /></svg>
+            <svg class="narration-stop" viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2.6" /></svg>
+          </span>
+          <span id="focus-narration-label">Escuchar narración</span>
+        </button>
         <div id="focus-info"></div>
       </div>
 
@@ -1288,6 +1450,21 @@
         <!-- Opciones provisionales: los nombres están puestos para ver la
              idea, no para quedarse. -->
         <nav id="menu" data-visible="false" aria-hidden="true">
+          <!-- El volumen: silenciar con el altavoz, y el nivel con la barra.
+               No cierra el menú al tocarlo: se ajusta oyendo. -->
+          <div id="menu-sound" role="group" aria-label="Volumen">
+            <span id="menu-sound-title">Sonido</span>
+            <div id="menu-sound-row">
+              <button type="button" id="sound-toggle" aria-pressed="false" aria-label="Silenciar">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path class="speaker" d="M4 9.5h3.2L12 5.6a.6.6 0 0 1 1 .46v11.88a.6.6 0 0 1-1 .46L7.2 14.5H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z" />
+                  <path class="waves" d="M16 9a4 4 0 0 1 0 6M18.6 6.6a7.4 7.4 0 0 1 0 10.8" />
+                  <path class="cross" d="M16.5 9.5l5 5M21.5 9.5l-5 5" />
+                </svg>
+              </button>
+              <input type="range" id="sound-level" min="0" max="100" step="1" value="100" aria-label="Volumen" />
+            </div>
+          </div>
           <button type="button" data-action="share-story">Historia</button>
           <button type="button" data-action="social">Redes sociales</button>
           <button type="button" data-action="soon">Próximamente</button>

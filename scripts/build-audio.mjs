@@ -68,6 +68,7 @@ function encode(inputs, filter, out, ambience) {
 
 const used = new Map();
 const report = [];
+const narrations = [];
 
 for (const [animal, set] of Object.entries(clips)) {
   mkdirSync(`${OUT}/${animal}`, { recursive: true });
@@ -118,6 +119,37 @@ for (const [animal, set] of Object.entries(clips)) {
     report.push(out);
   }
 
+  // Narración: la voz que cuenta al animal cuando se abre su ficha. Es una
+  // grabación del equipo (en `audios/`, versionada), no de sources.json.
+  // Se CORTA en trozos por `cuts` —los segundos en que el animal actúa:
+  // la narración para, el animal canta o salta, y sigue— porque encadenar
+  // archivos es más fiable en iPhone que pausar y reanudar uno. Primero se
+  // normaliza la grabación entera y luego se corta, para que los trozos
+  // suenen exactamente al mismo volumen; cada corte cae en un silencio
+  // entre dos frases (medido: 0.3–0.5 s), así que el fundido de 15 ms no
+  // se oye.
+  if (set.narration !== undefined) {
+    const { file, cuts } = set.narration;
+    if (!existsSync(file)) throw new Error(`${animal}: falta la narración ${file}`);
+    const whole = `${SRC}/.cache/narration-${animal}.wav`;
+    execFileSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-i', file,
+      '-af', 'highpass=f=70,loudnorm=I=-16:TP=-1.5:LRA=11', '-ac', '1', '-ar', '44100', whole], { stdio: 'inherit' });
+    const bounds = [0, ...cuts, null];
+    for (let part = 0; part < bounds.length - 1; part += 1) {
+      const start = bounds[part];
+      const end = bounds[part + 1];
+      const out = `${OUT}/${animal}/narration-${part + 1}.mp3`;
+      const args = ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(start)];
+      if (end !== null) args.push('-t', String(end - start));
+      const fadeOut = end === null ? 'areverse,afade=t=in:d=0.3,areverse' : 'areverse,afade=t=in:d=0.015,areverse';
+      args.push('-i', whole, '-af', `afade=t=in:d=0.015,${fadeOut}`, '-ac', '1', '-ar', '44100',
+        '-codec:a', 'libmp3lame', '-b:a', '64k', out);
+      execFileSync(ffmpeg, args, { stdio: 'inherit' });
+      narrations.push(out);
+      report.push(out);
+    }
+  }
+
   // Ambiente: una o varias capas mezcladas (el cangrejo es playa + manglar).
   const layers = await Promise.all(set.ambience.map(async (layer) => ({ ...layer, file: await cached(layer.src) })));
   const mix = layers.map((layer, i) => `[${i}:a]aformat=channel_layouts=mono,volume=${layer.gain}[l${i}]`).join(';');
@@ -141,6 +173,10 @@ for (const [key, outs] of used) {
   credits.push(`- **${source.title}** — ${source.author}. Licencia: ${source.license}. ${source.page}`);
   if (source.note) credits.push(`  - Nota: ${source.note}`);
   credits.push(`  - Usado en: ${[...new Set(outs)].map((o) => o.replace(`${OUT}/`, '')).join(', ')}`);
+}
+if (narrations.length > 0) {
+  credits.push('- **Narraciones** — grabación propia del equipo de Territorios Vivos (`audios/`).');
+  credits.push(`  - Usado en: ${narrations.map((o) => o.replace(`${OUT}/`, '')).join(', ')}`);
 }
 writeFileSync(`${OUT}/CREDITOS.md`, credits.join('\n') + '\n');
 

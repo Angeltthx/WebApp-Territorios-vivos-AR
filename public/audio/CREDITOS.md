@@ -37,3 +37,5 @@ Generado por `npm run build-audio`. No editar a mano.
 - **Oophaga pumilio call (macho)** — Captainstork. Licencia: CC BY 3.0. https://commons.wikimedia.org/wiki/File:Oophaga_pumilio_call.ogg
   - Nota: Rana del mismo género que la rana arlequín del mapa (Oophaga solanensis), de la que no hay grabaciones abiertas.
   - Usado en: frogs/ambience.mp3
+- **Narraciones** — grabación propia del equipo de Territorios Vivos (`audios/`).
+  - Usado en: whale/narration-1.mp3, whale/narration-2.mp3, crab/narration-1.mp3, crab/narration-2.mp3, turtle/narration-1.mp3, turtle/narration-2.mp3, bird/narration-1.mp3, bird/narration-2.mp3
