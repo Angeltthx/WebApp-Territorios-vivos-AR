@@ -80,6 +80,7 @@ export class WebAudioAdapter implements AudioPort {
   private ambience: Ambience | null = null;
   /** El trozo de narración que suena, y cómo avisar de que se cortó. */
   private voice: Voice | null = null;
+  private nowPlayingSet = false;
   /** Volumen general que ha elegido el usuario (menú), 0–1. */
   private volume = 1;
 
@@ -490,12 +491,35 @@ export class WebAudioAdapter implements AudioPort {
    * interruptor manda y hay que bajarlo a mano.
    */
   private claimPlaybackSession(): void {
+    this.describeNowPlaying();
     const session = (navigator as { audioSession?: { type?: string } }).audioSession;
     if (session === undefined) return;
     try {
       session.type = 'playback';
     } catch (error) {
       console.warn('[WebAudioAdapter] No se pudo fijar la sesión de audio', error);
+    }
+  }
+
+  /**
+   * Lo que el iPhone (y Android) enseñan en «Reproduciendo ahora» cuando la
+   * página suena desde segundo plano: nombre e icono de la experiencia. Sin
+   * esto salía el icono genérico del sitio, que era el de Netlify.
+   */
+  private describeNowPlaying(): void {
+    if (this.nowPlayingSet || !('mediaSession' in navigator) || typeof MediaMetadata === 'undefined') return;
+    this.nowPlayingSet = true;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: 'Territorios Vivos AR',
+        artist: 'Nuquí, Chocó',
+        artwork: [
+          { src: '/icons/favicon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+        ],
+      });
+    } catch (error) {
+      console.warn('[WebAudioAdapter] No se pudo describir el audio para el sistema', error);
     }
   }
 

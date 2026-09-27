@@ -9,6 +9,7 @@ import {
   MeshBasicMaterial,
   Object3D,
   Texture,
+  Vector3,
 } from 'three';
 import type { ArModel } from '@domain/entities/ArModel';
 import type { IconView } from '@domain/value-objects/IconPose';
@@ -79,7 +80,15 @@ const BOB_SPEED = 1.7;
  * también es tocable (el raycast lo alcanza), así que esto solo cubre su
  * base sobre el papel.
  */
-const TAP_FOOTPRINT_MARGIN = 1.05;
+const TAP_FOOTPRINT_MARGIN = 1.15;
+/**
+ * Cuánto más grande que su contorno es la zona de toque de un animal
+ * dormido. Era el contorno justo, y en algunos teléfonos un toque en el
+ * borde no entraba. Un 10 %: más no, que los textos de al lado también se
+ * tocan. (Además, PointerInteractionAdapter busca unos píxeles alrededor
+ * cuando el dedo cae en el vacío.)
+ */
+const DORMANT_TAP_MARGIN = 1.1;
 
 /** Lo que tarda un animal en materializarse, y en volver a esconderse. */
 const REVEAL_TIME_S = 0.55;
@@ -234,6 +243,14 @@ export class MarkerPin {
    * escala 1: un poco por encima de su lomo, porque los dos nadan debajo.
    */
   private readonly waterSurface: number;
+  /**
+   * El hueso que marca dónde está el cuerpo (la cadera), o el icono entero
+   * si el modelo no tiene esqueleto. De ahí sale el salpicón.
+   */
+  private readonly bodyAnchor: Object3D;
+  /** Dónde cayó el cuerpo en el último chapuzón, en el espacio del salpicón. */
+  private splashSpot: { readonly x: number; readonly z: number } | null = null;
+  private readonly tmpSpot = new Vector3();
   /** Avisa cuando salpica, con su fuerza: ahí suena el chapuzón. */
   onSplash: ((strength: number) => void) | null = null;
   /** Avisa en el instante del gesto en que suena el toque (ver `tapSoundAt`). */
@@ -282,6 +299,12 @@ export class MarkerPin {
   private readonly hit: Mesh<CircleGeometry, MeshBasicMaterial>;
   /** Medio ancho y medio alto del icono a escala 1, sobre el papel. */
   private readonly footprint: { readonly x: number; readonly y: number };
+  /**
+   * Medio ancho y medio alto del CONTORNO punteado, en anchos de mapa.
+   * Mientras el animal está dormido, su zona de toque es el contorno: se
+   * descubre tocándolo, y el icono todavía no ocupa nada.
+   */
+  private readonly outlineExtent: { readonly x: number; readonly y: number };
   /** Límite de escala para que ni el giro ni el pulso saquen el icono del mapa. */
   private readonly maxMapScale: number;
   private readonly idleTilt: number;
@@ -293,6 +316,7 @@ export class MarkerPin {
     targetAspect: number,
   ) {
     this.icon = loaded.object;
+    this.bodyAnchor = findBodyAnchor(this.icon);
     this.animator = new IconAnimator(this.icon, loaded.animations, model.animation);
     this.phase = index * 1.7;
     const tapMove = model.animation?.tapMove ?? 'none';
@@ -367,11 +391,12 @@ export class MarkerPin {
       side: DoubleSide,
       depthWrite: false,
     });
-    buildDashedSilhouette(
-      this.outline,
-      outlineLoopOf(model, this.icon, targetAspect),
-      this.outlineMaterial,
-    );
+    const loop = outlineLoopOf(model, this.icon, targetAspect);
+    buildDashedSilhouette(this.outline, loop, this.outlineMaterial);
+    this.outlineExtent = {
+      x: Math.max(0, ...loop.map((point) => Math.abs(point.x))),
+      y: Math.max(0, ...loop.map((point) => Math.abs(point.y))),
+    };
     this.outline.position.z = 0.002;
     this.group.add(this.outline);
 
@@ -451,12 +476,38 @@ export class MarkerPin {
   /**
    * Pone el salpicón en la superficie del agua (ver `waterSurface`), por
    * encima del animal. `baseZ`: el frente del icono.
+   *
+   * Mientras salpica, en el punto DONDE ESTABA EL CUERPO al tocar el agua
+   * (`splashSpot`), no delante del centro del icono. El salto de la ballena
+   * avanza hacia donde mira: girada con el dedo, caía a un lado y el
+   * salpicón salía en el sitio de siempre, en otro lugar.
    */
   placeWater(baseZ: number): void {
     if (this.splash === null) return;
     const size = this.reach * this.icon.scale.x;
-    this.splash.group.position.set(0, this.waterSurface * this.icon.scale.x, baseZ + WATER_FRONT * size);
+    const spot = this.splash.active ? this.splashSpot : null;
+    this.splash.group.position.set(
+      spot?.x ?? 0,
+      this.waterSurface * this.icon.scale.x,
+      (spot?.z ?? baseZ) + WATER_FRONT * size,
+    );
     this.splash.group.scale.setScalar(size);
+  }
+
+  /**
+   * Dónde está el cuerpo del animal ahora, en el espacio del salpicón (el
+   * pin sobre el mapa, o el escenario en primer plano): la cadera, que es el
+   * hueso que lleva el salto, con el giro del usuario y el gesto incluidos.
+   * La altura no se usa: el salpicón va siempre en la superficie del agua.
+   */
+  private measureSplashSpot(): void {
+    const parent = this.splash?.group.parent;
+    if (parent === null || parent === undefined) return;
+    parent.updateWorldMatrix(true, false);
+    this.icon.updateMatrixWorld(true);
+    const at = this.bodyAnchor.getWorldPosition(this.tmpSpot);
+    parent.worldToLocal(at);
+    this.splashSpot = { x: at.x, z: at.z };
   }
 
   /**
@@ -552,6 +603,7 @@ export class MarkerPin {
     }
     this.lastTapClipTime = clipTime;
     if (splash !== null && this.splash !== null) {
+      this.measureSplashSpot();
       this.splash.burst(splash);
       this.onSplash?.(splash);
     }
@@ -615,9 +667,15 @@ export class MarkerPin {
     const applied = Math.min(size * ICON_SCALE * materialised, this.maxMapScale);
 
     this.lift.visible = this.revealProgress > 0.001 && !this.focused;
-    // La zona de toque sigue al tamaño con que se ve el animal.
+    // La zona de toque sigue al tamaño con que se ve el animal; dormido, es
+    // su contorno (se descubre tocándolo).
     const tapScale = Math.max(applied, 0.0001) * TAP_FOOTPRINT_MARGIN;
-    this.hit.scale.set(this.footprint.x * tapScale, this.footprint.y * tapScale, 1);
+    const dormant = this.revealProgress < 0.999;
+    this.hit.scale.set(
+      Math.max(this.footprint.x * tapScale, dormant ? this.outlineExtent.x * DORMANT_TAP_MARGIN : 0),
+      Math.max(this.footprint.y * tapScale, dormant ? this.outlineExtent.y * DORMANT_TAP_MARGIN : 0),
+      1,
+    );
     if (!this.focused) this.icon.scale.setScalar(Math.max(applied, 0.0001));
 
     // El contorno se apaga a medida que el animal ocupa su sitio.
@@ -649,6 +707,19 @@ export class MarkerPin {
  * materiales pueden apuntar al mismo mapa—, así que hay que recorrer sus
  * propiedades y soltarlas a mano o se filtran en cada `clear()`.
  */
+/**
+ * La cadera del esqueleto (`…:Hips` en la ballena y la tortuga), o el
+ * icono si no la hay. Es el hueso que mueve el salto entero; una aleta o la
+ * cola dirían dónde está una punta, no el cuerpo.
+ */
+function findBodyAnchor(icon: Object3D): Object3D {
+  let hips: Object3D | null = null;
+  icon.traverse((node) => {
+    if (hips === null && (node as { isBone?: boolean }).isBone === true && /hips$/i.test(node.name)) hips = node;
+  });
+  return hips ?? icon;
+}
+
 /**
  * Cuánto dura el gesto de toque en segundos de reloj: el clip de toque, sus
  * vueltas, a su velocidad. El movimiento del cuerpo (TapChoreography) dura

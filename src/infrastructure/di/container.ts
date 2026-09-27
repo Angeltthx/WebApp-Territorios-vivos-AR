@@ -1,13 +1,13 @@
 import { AnimalSoundscape } from '@application/use-cases/AnimalSoundscape';
 import { CloseFocus } from '@application/use-cases/CloseFocus';
-import { DiscoverNearbyModel } from '@application/use-cases/DiscoverNearbyModel';
+import { DiscoverModel } from '@application/use-cases/DiscoverModel';
+import { Tutorial } from '@application/use-cases/Tutorial';
 import { OpenMapText } from '@application/use-cases/OpenMapText';
 import { TapModel } from '@application/use-cases/TapModel';
 import { PlayGestureSound } from '@application/use-cases/PlayGestureSound';
 import { StartArExperience } from '@application/use-cases/StartArExperience';
 import { TransformPlacement } from '@application/use-cases/TransformPlacement';
 import type { ArSession } from '@domain/entities/ArSession';
-import { Proximity } from '@domain/value-objects/Proximity';
 import { ConsoleAnalyticsAdapter } from '../analytics/ConsoleAnalyticsAdapter';
 import { WebAudioAdapter } from '../audio/WebAudioAdapter';
 import { PointerInteractionAdapter } from '../interaction/PointerInteractionAdapter';
@@ -22,8 +22,12 @@ export interface ContainerConfig {
   imageTargetSrc: string;
   /** Alto/ancho de la imagen compilada en `imageTargetSrc`. */
   targetAspect: number;
-  /** A qué distancia sale cada animal. Se calibra con el mapa delante. */
-  proximity: Proximity;
+  /**
+   * Campo de visión de la cámara sobre el lado largo, en grados, o null para
+   * el de MindAR. Sin él, los animales flotan fuera de su dibujo en un
+   * teléfono (ver CameraModel).
+   */
+  cameraFov: number | null;
   onSessionChange: (session: ArSession) => void;
 }
 
@@ -35,7 +39,7 @@ export interface ContainerConfig {
  * marcadas abajo. Ni el dominio, ni los casos de uso, ni la UI se enteran.
  */
 export function buildContainer(config: ContainerConfig) {
-  const runtime = new MindArRuntime(config.container, config.imageTargetSrc);
+  const runtime = new MindArRuntime(config.container, config.imageTargetSrc, undefined, config.cameraFov);
 
   // ↓↓↓ Las dos líneas que cambiarías al migrar de motor de tracking ↓↓↓
   const tracking = new MindArTrackingAdapter(runtime);
@@ -48,13 +52,25 @@ export function buildContainer(config: ContainerConfig) {
   const interaction = new PointerInteractionAdapter(runtime, scene);
   const models = new StaticModelRepository(NUQUI_CATALOG);
 
+  // El tutorial: la mano sobre el mapa (escena) y el cartel (vista) siguen
+  // el mismo reloj. Recorre los cuatro animales y luego los textos.
+  const tutorial = new Tutorial(
+    NUQUI_CATALOG.map((entry) => entry.id),
+    mapTexts.all.map((text) => text.id),
+  );
+  tutorial.onChange((state) => scene.setHint(state.hint));
+
   const startArExperience = new StartArExperience(
     tracking,
     scene,
     audio,
     models,
     analytics,
-    config.onSessionChange,
+    // Cada cambio de sesión pasa también por el tutorial.
+    (session) => {
+      tutorial.update(session);
+      config.onSessionChange(session);
+    },
   );
 
   const getSession = () => startArExperience.current;
@@ -64,25 +80,17 @@ export function buildContainer(config: ContainerConfig) {
   );
 
   const sounds = new AnimalSoundscape(audio, getSession);
-  const tapModel = new TapModel(scene, models, analytics, getSession);
-
-  // Los animales no se regalan por apuntar al mapa: hay que acercarse. La
-  // medida la hace el adaptador de escena, que es el unico que sabe donde
-  // esta la camara; que acercarse signifique DESCUBRIR —desbloquear para
-  // siempre y abrir la ficha— lo decide el caso de uso.
+  // Los animales se descubren TOCÁNDOLOS: un toque lo despierta y lo hace
+  // moverse (TapModel); dos toques seguidos lo abren en primer plano
+  // (DiscoverModel). Antes se abrían al acercar el teléfono.
   const emit = (session: ArSession) => startArExperience.update(session);
-  const discoverNearbyModel = new DiscoverNearbyModel(scene, models, sounds, analytics, getSession, emit);
-  // El primer plano bloquea a los demás animales; al cerrarlo, el que
-  // estuviera cerca se descubre ahora (ver DiscoverNearbyModel).
-  const closeFocus = new CloseFocus(scene, sounds, analytics, getSession, emit, (closed) =>
-    discoverNearbyModel.resume(closed),
-  );
+  const discoverModel = new DiscoverModel(scene, models, sounds, analytics, getSession, emit);
+  const tapModel = new TapModel(scene, models, analytics, getSession, emit, (id) => tutorial.animalTapped(id));
+  const closeFocus = new CloseFocus(scene, sounds, analytics, getSession, emit);
 
   // Con los cuatro animales encontrados, los textos del mapa se leen en grande.
   const openMapText = new OpenMapText(scene, mapTexts, models, sounds, analytics, getSession, emit);
 
-  scene.setProximity(config.proximity);
-  scene.onNearbyModel((modelId) => discoverNearbyModel.execute(modelId));
   // Cada sonido de un gesto suena en su fotograma: el del toque cuando la
   // animación llega a él, el chapuzón cuando se ve el salpicón.
   const gestureSound = new PlayGestureSound(sounds, models);
@@ -90,6 +98,8 @@ export function buildContainer(config: ContainerConfig) {
   // En las pausas de la narración, el animal hace su gesto: el mismo que
   // al tocarlo, con su sonido en su momento.
   sounds.setPerformer((id) => scene.pulse(id));
+  // Cuando la narración calla, el tutorial señala la ✕.
+  sounds.onNarrationChange(({ playing }) => tutorial.narrationChanged(playing));
   scene.onSplash((modelId, strength) => void gestureSound.splashed(modelId, strength));
 
   return {
@@ -98,6 +108,8 @@ export function buildContainer(config: ContainerConfig) {
     tapModel,
     closeFocus,
     openMapText,
+    discoverModel,
+    tutorial,
     // El botón de la ficha: escuchar o detener la narración del animal.
     narration: sounds,
     mapTexts: mapTexts.all,

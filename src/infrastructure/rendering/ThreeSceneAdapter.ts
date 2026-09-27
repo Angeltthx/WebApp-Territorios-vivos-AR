@@ -15,15 +15,15 @@ import type { ArModel } from '@domain/entities/ArModel';
 import type { Placement } from '@domain/entities/Placement';
 import type { Discovery } from '@domain/value-objects/Discovery';
 import { ModelId } from '@domain/value-objects/ModelId';
-import { Proximity } from '@domain/value-objects/Proximity';
 import { Stabilization } from '@domain/value-objects/Stabilization';
-import type { ScenePort } from '@application/ports/ScenePort';
+import type { HintSpec, ScenePort } from '@application/ports/ScenePort';
 import type { MindArRuntime } from '../mindar/MindArRuntime';
 import { IconLoader } from './IconLoader';
 import { MarkerPin, STAGE_LOOK_DOWN } from './MarkerPin';
 import { PoseFilter } from './PoseFilter';
 import { addEnvironment, addThreePointLighting } from './ThreePointLighting';
 import { MapTextHotspot } from './MapTextHotspot';
+import { TapHint } from './TapHint';
 import type { MapText } from '@domain/value-objects/MapText';
 
 /**
@@ -70,6 +70,29 @@ const STAGE_LIFT = 0.13;
  * mayor —más grande que la pantalla—. Los animales pequeños nunca llegan.
  */
 const STAGE_MAX_WIDTH = 0.82;
+/**
+ * Mientras su animal quede dentro de este margen de la pantalla (en
+ * coordenadas normalizadas, ±1 es el borde), la mano de "toca un animal" no
+ * cambia de animal.
+ */
+const HINT_KEEP_NDC = 0.85;
+/**
+ * Cuándo la mano se pasa a OTRO candidato: si ese queda casi en el centro
+ * (a menos de esto del centro, en coordenadas normalizadas) y el suyo ya no
+ * (más allá de `HINT_LET_GO_NDC`). Es "acercarse a otro animal": la
+ * cámara lo pone en medio. Moverse un poco no basta para que salte.
+ */
+const HINT_GRAB_NDC = 0.28;
+const HINT_LET_GO_NDC = 0.45;
+/**
+ * …y además la cámara está CERCA de él, en anchos de mapa. Centrado solo no
+ * basta: con el mapa entero en pantalla, el centro cae cerca del cangrejo,
+ * y la mano abandonaría la ballena nada más empezar. Con el mapa entero a
+ * la vista la cámara está a ~1,3–1,5 anchos; acercarse a un animal la deja
+ * bastante por debajo de 1. Si en el teléfono salta demasiado pronto o
+ * demasiado tarde, este es el número.
+ */
+const HINT_APPROACH_DISTANCE = 0.85;
 /*
  * Estos tres topes SUBIERON (0.32 / 0.6 / 0.62 → 0.4 / 0.95 / 0.82) y aun
  * así el plano es más abierto que antes. Los anteriores se calibraron a ojo
@@ -95,16 +118,16 @@ export class ThreeSceneAdapter implements ScenePort {
   private readonly hotspots = new Map<string, MapTextHotspot>();
 
   private stabilization: Stabilization = Stabilization.default();
-  private proximity: Proximity = Proximity.default();
   private elapsed = 0;
   /** Suaviza la pose del mapa: quieto o temblando no mueve a los animales. */
   private readonly poseFilter = new PoseFilter();
   private mounted = false;
   private unsubscribeFrame: (() => void) | null = null;
 
-  /** Qué animal está dentro del alcance de la cámara ahora mismo. */
-  private nearbyId: string | null = null;
-  private nearbyListener: ((modelId: string | null) => void) | null = null;
+  /** La mano que enseña a tocar un animal, y sobre cuál está. */
+  private readonly tapHint = new TapHint();
+  private hint: HintSpec | null = null;
+  private hintTarget: string | null = null;
   private splashListener: ((modelId: string, strength: number) => void) | null = null;
   private tapSoundListener: ((modelId: string) => void) | null = null;
 
@@ -120,8 +143,6 @@ export class ThreeSceneAdapter implements ScenePort {
    * cerrar la ficha.
    */
   private unit = 1;
-  /** Para no inundar la consola: la calibración se registra una vez por segundo. */
-  private sinceLastLog = 0;
 
   private readonly tmpPosition = new ThreeVector3();
   private readonly tmpQuaternion = new Quaternion();
@@ -219,8 +240,20 @@ export class ThreeSceneAdapter implements ScenePort {
     this.stabilization = stabilization;
   }
 
-  setProximity(proximity: Proximity): void {
-    this.proximity = proximity;
+  setHint(hint: HintSpec | null): void {
+    // Cambia la clase de cosa (animales → textos), el preferido o la lista:
+    // se vuelve a elegir.
+    if (
+      hint === null ||
+      this.hint === null ||
+      hint.kind !== this.hint.kind ||
+      hint.preferred !== this.hint.preferred ||
+      (this.hintTarget !== null && !hint.candidates.includes(this.hintTarget))
+    ) {
+      this.hintTarget = null;
+    }
+    this.hint = hint;
+    this.tapHint.setHint(hint);
   }
 
   /**
@@ -359,10 +392,6 @@ export class ThreeSceneAdapter implements ScenePort {
     return this.stagedIcon === null ? null : this.focusedId;
   }
 
-  onNearbyModel(listener: (modelId: string | null) => void): void {
-    this.nearbyListener = listener;
-  }
-
   onSplash(listener: (modelId: string, strength: number) => void): void {
     this.splashListener = listener;
   }
@@ -388,7 +417,7 @@ export class ThreeSceneAdapter implements ScenePort {
     }
     this.hotspots.clear();
     this.poseFilter.reset();
-    this.nearbyId = null;
+    this.hintTarget = null;
     this.focusedId = null;
     this.stagedIcon = null;
     this.follower.visible = false;
@@ -400,6 +429,7 @@ export class ThreeSceneAdapter implements ScenePort {
     this.clear();
     this.stageHit.geometry.dispose();
     this.stageHit.material.dispose();
+    this.tapHint.dispose();
     if (this.runtime.isInitialized) {
       this.runtime.mindar.renderer.dispose();
     }
@@ -422,12 +452,9 @@ export class ThreeSceneAdapter implements ScenePort {
 
     if (!this.follower.visible) return null;
 
-    // Solo lo revelado es tocable. Un animal que todavía es un contorno
-    // punteado no debe sonar: la recompensa por acercarse dejaría de serlo
-    // si se pudiera cobrar desde lejos.
-    for (const [key, pin] of this.pins) {
-      if (pin.isRevealed) map.set(key, pin.group);
-    }
+    // Todos los animales son tocables, también los que todavía son un
+    // contorno punteado: tocarlos es justo la forma de descubrirlos.
+    for (const [key, pin] of this.pins) map.set(key, pin.group);
     for (const [key, hotspot] of this.hotspots) {
       if (hotspot.isActive) map.set(`text:${key}`, hotspot.group);
     }
@@ -445,6 +472,7 @@ export class ThreeSceneAdapter implements ScenePort {
     addEnvironment(mindar.renderer, mindar.scene);
 
     this.follower.add(this.overlay);
+    this.overlay.add(this.tapHint.group);
     this.follower.visible = false;
     mindar.scene.add(this.follower);
 
@@ -460,7 +488,9 @@ export class ThreeSceneAdapter implements ScenePort {
   private onFrame(deltaSeconds: number): boolean {
     this.elapsed += deltaSeconds;
     this.followAnchor(deltaSeconds);
-    this.evaluateProximity(deltaSeconds);
+    this.measureUnit();
+    this.tapHint.advance(deltaSeconds);
+    this.placeTapHint();
     this.updateStage(deltaSeconds);
     for (const pin of this.pins.values()) {
       // Con el mapa fuera de cuadro solo se anima el animal que permanece en
@@ -475,112 +505,90 @@ export class ThreeSceneAdapter implements ScenePort {
   }
 
   /**
-   * ¿A qué animal se está acercando la cámara?
+   * Cuánto mide un ancho de mapa en unidades de mundo.
    *
-   * Dos medidas por icono, y las dos hacen falta:
-   *
-   *  - DISTANCIA de la cámara al icono, que dice si te has acercado.
-   *  - DESVÍO respecto al centro de la pantalla, que dice a cuál. Sobre un
-   *    mapa plano los cuatro animales quedan a distancias parecidas, así
-   *    que sin esto acercarse a la ballena sacaría también al cangrejo.
-   *
-   * Gana el más centrado, y solo sale si además está lo bastante cerca. La
-   * histéresis vive en `Proximity`, en el dominio: aquí solo se mide.
+   * MindAR no trabaja en unidades de mapa: su `postMatrix` escala el
+   * contenido por el ancho de la imagen compilada EN PÍXELES (1000 aquí).
+   * El primer plano se coloca en anchos de mapa delante de la cámara, así
+   * que necesita este número; se guarda el último con el mapa a la vista
+   * para que la ficha siga en su sitio aunque el mapa salga de cuadro.
    */
-  private evaluateProximity(deltaSeconds: number): void {
-    if (!this.follower.visible || this.pins.size === 0) {
-      this.publishNearby(null);
-      return;
-    }
-
-    const camera = this.runtime.mindar.camera;
-    // Las poses se acaban de escribir en followAnchor, así que las matrices
-    // de mundo de los pines son de hace un fotograma si no se refrescan.
+  private measureUnit(): void {
+    if (!this.follower.visible) return;
     this.follower.updateMatrixWorld(true);
+    const unit = this.follower.getWorldScale(this.tmpUnit).x;
+    if (unit > 0) this.unit = unit;
+  }
+
+  /**
+   * Lleva la mano del tutorial a uno de sus candidatos (animales o puntos
+   * de texto).
+   *
+   * Empieza en el preferido si se ve (la ballena, la primera vez) o, si no,
+   * en el más centrado. Se queda en él mientras siga bien a la vista: una
+   * mano que salta de uno a otro con cada temblor del pulso no enseña nada.
+   * Solo se pasa a otro si el usuario SE ACERCA a él —lo pone en medio de
+   * la pantalla y con la cámara cerca— y el suyo queda a un lado, o si el
+   * suyo sale de cuadro.
+   */
+  private placeTapHint(): void {
+    const hint = this.hint;
+    if (!this.follower.visible || hint === null) return;
+    const camera = this.runtime.mindar.camera;
     camera.updateMatrixWorld();
     camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
 
-    // CUÁNTO MIDE UN ANCHO DE MAPA EN ESTE MUNDO.
-    //
-    // MindAR no trabaja en unidades de mapa: su `postMatrix` escala el
-    // contenido por el ancho de la imagen compilada EN PÍXELES (1000 aquí),
-    // así que una distancia cruda a un icono sale en miles. Los umbrales de
-    // `Proximity` están en anchos de mapa —la única unidad que significa
-    // algo para una regla del dominio—, así que hay que dividir. Sin esta
-    // división la comparación era contra un número mil veces mayor y
-    // ningún animal salía por más que uno se acercara.
-    const unit = this.follower.getWorldScale(this.tmpUnit).x;
-    if (unit <= 0) return;
-    this.unit = unit;
-
-    let bestId: string | null = null;
-    let bestOffCentre = Number.POSITIVE_INFINITY;
-    let bestDistance = 0;
-
-    for (const [id, pin] of this.pins) {
-      pin.group.getWorldPosition(this.tmpWorld);
-
+    const objectOf = (id: string): Object3D | undefined =>
+      hint.kind === 'animal' ? this.pins.get(id)?.group : this.hotspots.get(id)?.group;
+    // Desvío del centro de la pantalla y distancia a la cámara (en anchos
+    // de mapa), o null si no está a la vista.
+    let distance = 0;
+    const offCentreOf = (object: Object3D): number | null => {
+      object.getWorldPosition(this.tmpWorld);
       const view = this.tmpView.copy(this.tmpWorld).applyMatrix4(camera.matrixWorldInverse);
-      // En Three.js la cámara mira hacia su -Z: un z positivo queda detrás.
-      if (view.z > 0) continue;
-
+      if (view.z > 0) return null;
+      distance = view.length() / this.unit;
       const ndc = this.tmpNdc.copy(this.tmpWorld).project(camera);
-      const offCentre = Math.hypot(ndc.x, ndc.y);
-      if (offCentre >= bestOffCentre) continue;
+      if (Math.abs(ndc.x) > HINT_KEEP_NDC || Math.abs(ndc.y) > HINT_KEEP_NDC) return null;
+      return Math.hypot(ndc.x, ndc.y);
+    };
 
-      bestOffCentre = offCentre;
-      bestDistance = view.length() / unit;
-      bestId = id;
+    let best: string | null = null;
+    let bestOffCentre = Number.POSITIVE_INFINITY;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    let currentOffCentre: number | null = null;
+    let preferredOffCentre: number | null = null;
+    for (const id of hint.candidates) {
+      const object = objectOf(id);
+      if (object === undefined) continue;
+      const offCentre = offCentreOf(object);
+      if (offCentre === null) continue;
+      if (id === this.hintTarget) currentOffCentre = offCentre;
+      if (id === hint.preferred) preferredOffCentre = offCentre;
+      if (offCentre < bestOffCentre) {
+        best = id;
+        bestOffCentre = offCentre;
+        bestDistance = distance;
+      }
     }
 
-    this.logCalibration(deltaSeconds, bestId, bestDistance, bestOffCentre);
-
-    if (bestId === null) {
-      this.publishNearby(null);
-      return;
+    if (currentOffCentre === null) {
+      // Sin sitio todavía, o el suyo salió de cuadro.
+      this.hintTarget = preferredOffCentre !== null ? hint.preferred : best;
+    } else if (
+      best !== null &&
+      best !== this.hintTarget &&
+      bestOffCentre < HINT_GRAB_NDC &&
+      bestDistance < HINT_APPROACH_DISTANCE &&
+      currentOffCentre > HINT_LET_GO_NDC
+    ) {
+      // Se ha acercado a otro: la mano se va con él.
+      this.hintTarget = best;
     }
 
-    const wasRevealed = this.nearbyId === bestId;
-    const reveal = this.proximity.decide(bestDistance, bestOffCentre, wasRevealed);
-    this.publishNearby(reveal ? bestId : null);
-  }
-
-  /**
-   * Avisa hacia fuera, solo si cambió algo.
-   *
-   * Ya NO revela nada por su cuenta: quién sale y quién no lo decide el
-   * caso de uso, que es donde vive la regla de que lo descubierto se queda
-   * descubierto. Aquí solo se mide y se avisa.
-   */
-  private publishNearby(id: string | null): void {
-    if (this.nearbyId === id) return;
-    this.nearbyId = id;
-    this.nearbyListener?.(id);
-  }
-
-  /**
-   * Escribe en consola la distancia medida, una vez por segundo.
-   *
-   * Los umbrales de `Proximity` NO se pueden deducir en el escritorio:
-   * dependen del campo de visión de la cámara real y del tamaño al que se
-   * imprima el mapa. Este registro es la única forma de calibrarlos, y por
-   * eso se queda.
-   */
-  private logCalibration(
-    deltaSeconds: number,
-    id: string | null,
-    distance: number,
-    offCentre: number,
-  ): void {
-    this.sinceLastLog += deltaSeconds;
-    if (this.sinceLastLog < 1) return;
-    this.sinceLastLog = 0;
-    if (id === null) return;
-
-    console.info(
-      `[Proximity] ${id}  distancia=${distance.toFixed(2)}  desvío=${offCentre.toFixed(2)}  ` +
-        `(sale por debajo de ${this.proximity.revealDistance})`,
-    );
+    const target = this.hintTarget === null ? undefined : objectOf(this.hintTarget);
+    this.tapHint.group.visible = this.tapHint.group.visible && target !== undefined;
+    if (target !== undefined) this.tapHint.group.position.set(target.position.x, target.position.y, 0);
   }
 
   /**

@@ -50,7 +50,7 @@ await Promise.all(sizes.map(async ([width, height]) => {
   fixtures.push({ frame, view, width, height });
 }));
 
-function check(mode: 'splash' | 'guide' | 'focus' | 'reading' | 'explore' | 'approach'): void {
+function check(mode: 'splash' | 'guide' | 'focus' | 'reading' | 'approach'): void {
   const failures: string[] = [];
   for (const { frame, width, height } of fixtures) {
     const doc = frame.contentDocument!;
@@ -63,8 +63,8 @@ function check(mode: 'splash' | 'guide' | 'focus' | 'reading' | 'explore' | 'app
     }
     for (const id of mode === 'splash' ? ['#start'] : mode === 'guide'
       ? ['#guide-frame', '#guide-title', '#guide-mission'] : mode === 'reading' ? ['#reading-card', '#reading-close']
-      : mode === 'explore' ? ['#explore', '#explore-title'] : mode === 'approach' ? ['#approach-title', '#approach-hands']
-      : ['#focus-name', '#focus-species', '#focus-narration', '#focus-info', '#focus-close']) {
+      : mode === 'approach' ? ['#approach-title', '#approach-sub']
+      : ['#focus-name', '#focus-species', '#focus-narration', '#focus-info', '#focus-close', '#close-hint-label']) {
       const r = rect(id);
       if (r.left < -1 || r.top < -1 || r.right > width + 1 || r.bottom > height + 1) {
         failures.push(`${width}×${height}: ${id} fuera de pantalla`);
@@ -88,22 +88,33 @@ document.querySelector('#reading')!.addEventListener('click', () => {
   // Tras la animación de entrada, que escala la tarjeta.
   window.setTimeout(() => check('reading'), 800);
 });
-document.querySelector('#explore')!.addEventListener('click', () => {
-  // Los cuatro encontrados y la ficha cerrada: sale la invitación.
-  let discovery = focused.discovery;
-  for (const model of catalog) discovery = discovery.unlock(model.id);
-  const invited = focused.withDiscovery(discovery.focus(null));
-  for (const { view } of fixtures) { view.cameraReady(); view.render(invited); }
-  check('explore');
-});
 document.querySelector('#approach')!.addEventListener('click', () => {
-  // Mapa en cuadro y ningún animal encontrado: a los 7 s, la indicación de acercarse.
+  // Mapa en cuadro: los pasos del tutorial, uno cada 2,5 s, comprobando en
+  // cada uno que el cartel cabe.
+  const steps = [
+    { step: 'tapAnimal', urgent: false, remaining: 4, returning: false },
+    { step: 'tapAnimal', urgent: true, remaining: 4, returning: false },
+    { step: 'doubleTap', urgent: false, remaining: 4, returning: false },
+    { step: 'tapAnimal', urgent: false, remaining: 3, returning: true },
+    { step: 'tapAnimal', urgent: false, remaining: 1, returning: true },
+    { step: 'tapText', urgent: true, remaining: 0, returning: true },
+    { step: 'explore', urgent: false, remaining: 0, returning: true },
+  ] as const;
   for (const { view } of fixtures) { view.cameraReady(); view.render(searching.tracking()); }
-  check('approach');
+  steps.forEach((state, index) => window.setTimeout(() => {
+    for (const { view } of fixtures) view.setTutorial(state);
+    check('approach');
+  }, index * 2500));
 });
 document.querySelector('#focus')!.addEventListener('click', () => {
   // Como la primera vez: la narración suena y el botón ofrece detenerla.
-  for (const { view } of fixtures) { view.cameraReady(); view.render(focused); view.setNarration({ available: true, playing: true }); }
+  // …y como al acabar de narrar: la mano del tutorial señala la ✕.
+  for (const { view } of fixtures) {
+    view.cameraReady();
+    view.render(focused);
+    view.setNarration({ available: true, playing: true });
+    view.setTutorial({ step: 'closeFocus', urgent: false, remaining: 3, returning: true });
+  }
   check('focus');
 });
 check('splash');
