@@ -12,7 +12,7 @@ export const TUTORIAL_URGENT_AFTER_MS = 6_000;
 /** Lo que dura en pantalla el «Explora el resto de Nuquí» final. */
 export const TUTORIAL_FAREWELL_MS = 5_000;
 
-export type TutorialStep = 'off' | 'tapAnimal' | 'doubleTap' | 'closeFocus' | 'tapText' | 'explore';
+export type TutorialStep = 'off' | 'tapAnimal' | 'tapFocused' | 'closeFocus' | 'tapText' | 'explore';
 
 /** Lo que la vista necesita para escribir el cartel. */
 export interface TutorialState {
@@ -33,13 +33,17 @@ export interface TutorialState {
  *
  *  1. `tapAnimal` — una mano toca un animal («Toca un animal»; la primera
  *     vez, siempre la BALLENA, aunque se puede tocar cualquiera). Un toque
- *     lo despierta y lo hace moverse.
- *  2. `doubleTap` — la mano toca DOS VECES ese mismo animal: «Tócalo dos
- *     veces». El doble toque abre su ficha y su narración.
- *  3. Mientras narra, silencio: nada tapa la ficha.
- *  4. `closeFocus` — al acabar (o al detenerla), una mano señala la ✕:
- *     «Toca la ✕ para cerrar».
- *  5. Al cerrar, enseguida, vuelta al paso 1 con otro que falte.
+ *     lo abre: su ficha y su narración.
+ *  2. `tapFocused` — ya en primer plano, una mano toca al animal: «Tócalo
+ *     para ver su animación». Se va en cuanto lo toca (su gesto). Solo la
+ *     primera vez que se abre cada animal.
+ *  3. `closeFocus` — al acabar la narración (o al detenerla), una mano
+ *     señala la ✕: «Toca la ✕ para cerrar».
+ *  4. Al cerrar, enseguida, vuelta al paso 1 con otro que falte.
+ *
+ * (Hubo un paso de doble toque entre el 1 y el 2, cuando un toque solo
+ * despertaba al animal y hacían falta dos para abrirlo. Se quitó con el
+ * doble toque.)
  *
  * Conocidos los cuatro, `tapText`: la mano toca UN punto amarillo de los
  * textos. Al cerrar ese primer texto, `explore`: «Explora el resto de
@@ -56,8 +60,6 @@ export interface TutorialState {
 export class Tutorial {
   private step: TutorialStep = 'off';
   private urgent = false;
-  /** El animal al que se le enseña el doble toque. */
-  private target: string | null = null;
   /** La cámara ya encontró el mapa en esta sesión. */
   private started = false;
   /** Hay una ficha o un texto abiertos. */
@@ -69,6 +71,8 @@ export class Tutorial {
   private narrating = false;
   /** Animales en cuya ficha ya se señaló la ✕ (una vez por animal). */
   private readonly closeTaught = new Set<string>();
+  /** Animales a los que ya se enseñó a tocar en primer plano (una vez por animal). */
+  private readonly gestureTaught = new Set<string>();
   private readonly opened = new Set<string>();
   private readonly read = new Set<string>();
   private urgentTimer: unknown = null;
@@ -113,7 +117,15 @@ export class Tutorial {
         this.busy = true;
         this.focusedAnimal = discovery.focused?.value ?? null;
         // Mientras narra, nada tapa la ficha (la ✕ llega al callar).
-        if (this.step !== 'closeFocus') this.hide();
+        // La primera vez que se abre cada animal: «tócalo para ver su
+        // animación». Las demás, nada tapa la ficha.
+        const animal = this.focusedAnimal;
+        if (animal !== null && !this.gestureTaught.has(animal)) {
+          this.gestureTaught.add(animal);
+          this.show('tapFocused');
+        } else if (this.step !== 'closeFocus') {
+          this.hide();
+        }
       }
       return;
     }
@@ -134,33 +146,28 @@ export class Tutorial {
     }
   }
 
-  /** Un toque (no doble) sobre un animal del mapa. */
-  animalTapped(id: string): void {
-    if (this.busy || !this.started) return;
-    // Uno que falta por conocer: ahora, el doble toque en ESE. Uno ya
-    // conocido no cambia nada (la mano sigue sobre los que faltan).
-    if ((this.step === 'tapAnimal' || this.step === 'doubleTap') && !this.opened.has(id)) {
-      this.show('doubleTap', id);
-    }
-  }
-
   /**
    * La narración de la ficha abierta cambió. Cuando CALLA —acabó, o la
    * detuvo—, la mano señala la ✕. Una vez por animal: la primera vez que
    * se abre, que es cuando narra solo.
    */
+  /** Tocó al animal que está en primer plano (y este hizo su gesto). */
+  focusedAnimalTapped(): void {
+    if (this.step === 'tapFocused') this.hide();
+  }
+
   narrationChanged(playing: boolean): void {
     const wasPlaying = this.narrating;
     this.narrating = playing;
     if (!this.busy || this.focusedAnimal === null || !wasPlaying || playing) return;
     if (this.closeTaught.has(this.focusedAnimal)) return;
     this.closeTaught.add(this.focusedAnimal);
-    this.show('closeFocus', null);
+    this.show('closeFocus');
   }
 
   private showNext(): void {
-    if (this.animals.some((id) => !this.opened.has(id))) this.show('tapAnimal', null);
-    else if (!this.finished && this.read.size === 0 && this.texts.length > 0) this.show('tapText', null);
+    if (this.animals.some((id) => !this.opened.has(id))) this.show('tapAnimal');
+    else if (!this.finished && this.read.size === 0 && this.texts.length > 0) this.show('tapText');
     else this.hide();
   }
 
@@ -169,7 +176,6 @@ export class Tutorial {
     this.clearTimers();
     this.finished = true;
     this.step = 'explore';
-    this.target = null;
     this.urgent = false;
     this.emit();
     this.idleTimer = this.timers.set(() => {
@@ -178,10 +184,9 @@ export class Tutorial {
     }, TUTORIAL_FAREWELL_MS);
   }
 
-  private show(step: TutorialStep, target: string | null): void {
+  private show(step: TutorialStep): void {
     this.clearTimers();
     this.step = step;
-    this.target = target;
     this.urgent = false;
     this.emit();
     this.urgentTimer = this.timers.set(() => {
@@ -195,7 +200,6 @@ export class Tutorial {
     this.clearTimers();
     if (this.step === 'off') return;
     this.step = 'off';
-    this.target = null;
     this.urgent = false;
     this.emit();
   }
@@ -208,10 +212,10 @@ export class Tutorial {
     this.opened.clear();
     this.read.clear();
     this.closeTaught.clear();
+    this.gestureTaught.clear();
     this.focusedAnimal = null;
     this.narrating = false;
     this.step = 'off';
-    this.target = null;
     this.urgent = false;
     this.emit();
   }
@@ -230,25 +234,15 @@ export class Tutorial {
         const candidates = this.animals.filter((id) => !this.opened.has(id));
         return {
           kind: 'animal',
-          gesture: 'tap',
           urgent: this.urgent,
           // La primera vez, la ballena; después, el que quede más a mano.
           preferred: this.opened.size === 0 && candidates.includes(this.firstAnimal) ? this.firstAnimal : null,
           candidates,
         };
       }
-      case 'doubleTap':
-        return {
-          kind: 'animal',
-          gesture: 'double',
-          urgent: this.urgent,
-          preferred: this.target,
-          candidates: this.target === null ? [] : [this.target],
-        };
       case 'tapText':
         return {
           kind: 'text',
-          gesture: 'tap',
           urgent: this.urgent,
           preferred: null,
           candidates: this.texts.filter((id) => !this.read.has(id)),

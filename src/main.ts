@@ -45,7 +45,6 @@ const {
   tapModel,
   closeFocus,
   openMapText,
-  discoverModel,
   tutorial,
   narration,
   mapTexts,
@@ -111,7 +110,6 @@ view = new ArView(root, {
 
     interaction.attach({
       onTapModel: (modelId) => void tapModel.execute(modelId),
-      onDoubleTapModel: (modelId) => discoverModel.execute(modelId),
       onTapText: (textId) => void openMapText.execute(textId),
       onRotate: (modelId, yaw, pitch) => transformPlacement.rotateBy(modelId, yaw, pitch),
     });

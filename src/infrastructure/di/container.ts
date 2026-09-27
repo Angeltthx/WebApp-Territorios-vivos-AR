@@ -80,12 +80,19 @@ export function buildContainer(config: ContainerConfig) {
   );
 
   const sounds = new AnimalSoundscape(audio, getSession);
-  // Los animales se descubren TOCÁNDOLOS: un toque lo despierta y lo hace
-  // moverse (TapModel); dos toques seguidos lo abren en primer plano
-  // (DiscoverModel). Antes se abrían al acercar el teléfono.
+  // Los animales se descubren TOCÁNDOLOS: sobre el mapa, un toque lo abre en
+  // primer plano (DiscoverModel); ya en primer plano, un toque es su gesto
+  // (TapModel). Antes se abrían al acercar el teléfono.
   const emit = (session: ArSession) => startArExperience.update(session);
   const discoverModel = new DiscoverModel(scene, models, sounds, analytics, getSession, emit);
-  const tapModel = new TapModel(scene, models, analytics, getSession, emit, (id) => tutorial.animalTapped(id));
+  const tapModel = new TapModel(
+    scene,
+    models,
+    analytics,
+    getSession,
+    (id) => discoverModel.execute(id),
+    () => tutorial.focusedAnimalTapped(),
+  );
   const closeFocus = new CloseFocus(scene, sounds, analytics, getSession, emit);
 
   // Con los cuatro animales encontrados, los textos del mapa se leen en grande.
@@ -108,7 +115,6 @@ export function buildContainer(config: ContainerConfig) {
     tapModel,
     closeFocus,
     openMapText,
-    discoverModel,
     tutorial,
     // El botón de la ficha: escuchar o detener la narración del animal.
     narration: sounds,

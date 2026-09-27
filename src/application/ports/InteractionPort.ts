@@ -6,12 +6,6 @@ export interface InteractionHandlers {
    */
   onTapModel(modelId: string): void;
   /**
-   * Dos toques seguidos sobre el MISMO animal. El primero ya llegó como
-   * `onTapModel` (y el animal ya está haciendo su gesto); el segundo, en vez
-   * de otro toque, llega aquí: es el gesto que abre su primer plano.
-   */
-  onDoubleTapModel(modelId: string): void;
-  /**
    * Toque sobre un texto del mapa marcado con destellos (solo existen
    * cuando ya se encontraron todos los animales).
    */

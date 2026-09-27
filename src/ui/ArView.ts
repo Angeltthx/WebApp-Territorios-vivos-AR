@@ -6,7 +6,7 @@ const HINTS: Record<SessionStatus, string> = {
   idle: 'Preparando la experiencia…',
   preparing: 'Preparando la escena…',
   searching: 'Apunta la cámara al mapa de Nuquí',
-  tracking: 'Toca un animal; dos veces para conocerlo',
+  tracking: 'Toca un animal para conocerlo',
   lost: 'Mapa fuera de encuadre. Vuelve a apuntar',
   error: 'Ocurrió un problema',
 };
@@ -77,7 +77,7 @@ const UNMUTE_LEVEL = 0.6;
 
 /** El paso del tutorial que tiene que escribir el cartel. */
 export interface TutorialView {
-  readonly step: 'off' | 'tapAnimal' | 'doubleTap' | 'closeFocus' | 'tapText' | 'explore';
+  readonly step: 'off' | 'tapAnimal' | 'tapFocused' | 'closeFocus' | 'tapText' | 'explore';
   readonly urgent: boolean;
   /** Animales que faltan por conocer. */
   readonly remaining: number;
@@ -519,7 +519,9 @@ export class ArView {
     this.approach.dataset['visible'] = show ? 'true' : 'false';
     this.approach.setAttribute('aria-hidden', show ? 'false' : 'true');
     this.approach.dataset['urgent'] = this.tutorial.urgent ? 'true' : 'false';
-    // En la ficha: la mano que señala la ✕ al callar la narración.
+    // En la ficha: la mano que toca al animal (la primera vez) y la que
+    // señala la ✕ al callar la narración.
+    this.focus.dataset['tapHint'] = this.tutorial.step === 'tapFocused' && this.focusVisible ? 'true' : 'false';
     this.focus.dataset['closeHint'] = this.tutorial.step === 'closeFocus' && this.focusVisible ? 'true' : 'false';
     this.focus.dataset['urgent'] = this.tutorial.urgent ? 'true' : 'false';
   }
@@ -528,15 +530,13 @@ export class ArView {
   private writeTutorial(): void {
     const { step, remaining, returning } = this.tutorial;
     const [title, before, strong, after] =
-      step === 'doubleTap'
-        ? ['Tócalo dos veces', 'Dos toques seguidos para ', 'conocerlo', '']
-        : step === 'tapText'
-          ? ['Toca un punto amarillo', 'Cada uno cuenta algo del ', 'Chocó', '']
-          : step === 'explore'
-            ? ['Explora el resto de Nuquí', 'Toca los ', 'puntos amarillos', ' que quieras']
-            : returning
-              ? ['Toca otro animal', remaining === 1 ? 'Te falta ' : 'Te faltan ', `${remaining}`, ' por conocer']
-              : ['Toca un animal', 'Toca la ', 'silueta dorada', ' para verlo moverse'];
+      step === 'tapText'
+        ? ['Toca un punto amarillo', 'Cada uno cuenta algo del ', 'Chocó', '']
+        : step === 'explore'
+          ? ['Explora el resto de Nuquí', 'Toca los ', 'puntos amarillos', ' que quieras']
+          : returning
+            ? ['Toca otro animal', remaining === 1 ? 'Te falta ' : 'Te faltan ', `${remaining}`, ' por conocer']
+            : ['Toca un animal', 'Toca la ', 'silueta dorada', ' para conocerlo'];
     if (step === 'off') return;
     this.approachTitle.textContent = title;
     const emphasis = document.createElement('strong');

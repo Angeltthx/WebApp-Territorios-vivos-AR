@@ -193,37 +193,30 @@ test('adaptador conserva denegación de cámara, silencia antes de await y resta
   await tracking.stop(); // Sin controlador ni stream también debe funcionar.
 });
 
-test('un toque en el mapa despierta al animal y hace su gesto; en primer plano, solo el de delante', async () => {
+test('un toque en el mapa abre el animal; en primer plano, un toque es su gesto (solo el de delante)', async () => {
   const h = harness();
   let count = 0;
-  const tapped: string[] = [];
-  const applied: boolean[] = [];
-  const scene = {
-    ...h.scene,
-    pulse: () => { count++; return true; },
-    applyDiscovery: (d: { isUnlocked(id: ModelId): boolean }) => { applied.push(d.isUnlocked(model.id)); },
-  };
+  const opened: string[] = [];
+  const scene = { ...h.scene, pulse: () => { count++; return true; } };
   let state = ArSession.idle().searching(Placement.initial(model.id, model.defaultScale)).tracking();
-  const tap = new TapModel(scene as never, models, analytics, () => state, (next) => { state = next; }, (id) => { tapped.push(id); });
-  // Sobre el mapa, dormida: la despierta (sin abrirla) y hace su gesto.
+  let gestured = 0;
+  const tap = new TapModel(scene as never, models, analytics, () => state, (id) => { opened.push(id); }, () => { gestured++; });
+  // Sobre el mapa, tocarlo es abrirlo (no un gesto).
   await tap.execute('whale');
-  assert.equal(state.discovery.isUnlocked(model.id), true);
-  assert.equal(state.discovery.focused, null);
-  assert.equal(state.discovery.isOpened(model.id), false);
-  assert.deepEqual(applied, [true]);
-  assert.equal(count, 1);
-  assert.deepEqual(tapped, ['whale']);
-  // Ya despierta, otro toque es solo el gesto.
-  await tap.execute('whale');
-  assert.equal(count, 2);
-  assert.equal(applied.length, 1);
-  // En primer plano, con o sin mapa: su gesto; otro animal no responde.
+  assert.deepEqual(opened, ['whale']);
+  assert.equal(count, 0);
+  // Ya en primer plano: cada toque es su gesto, con mapa o sin él.
   state = state.withDiscovery(state.discovery.unlock(model.id)).lost();
   await tap.execute('whale');
-  assert.equal(count, 3);
+  await tap.execute('whale');
+  assert.equal(count, 2);
+  // Cada gesto se avisa (al tutorial, que retira la mano de «tócalo»).
+  assert.equal(gestured, 2);
+  assert.deepEqual(opened, ['whale']);
+  // Otro animal no responde mientras la ballena está delante.
   await tap.execute('crab');
-  assert.equal(count, 3);
-  assert.deepEqual(tapped, ['whale', 'whale']);
+  assert.equal(count, 2);
+  assert.deepEqual(opened, ['whale']);
 });
 
 test('el sonido del toque suena en SU momento del gesto, no al tocar', () => {
@@ -1585,7 +1578,7 @@ test('la mano se posa sobre el animal más centrado, no se come los toques y un 
   const adapter = new ThreeSceneAdapter(runtime as never, 1.432);
   await adapter.preload([make('whale', 0.2, 0.15), make('crab', 0.52, 0.5)]);
   adapter.applyDiscovery(ArSession.idle().discovery);
-  adapter.setHint({ kind: 'animal', gesture: 'tap', urgent: false, preferred: null, candidates: ['whale', 'crab'] });
+  adapter.setHint({ kind: 'animal', urgent: false, preferred: null, candidates: ['whale', 'crab'] });
   for (let frame = 0; frame < 30; frame += 1) advance(1 / 30);
   scene.updateMatrixWorld(true);
 
@@ -1608,7 +1601,7 @@ test('la mano se posa sobre el animal más centrado, no se come los toques y un 
   assert.ok(hits.length > 0 && hits.every((hit) => hit.object.type !== 'Sprite'));
   // La ballena como preferida: la mano va a ella, aunque el cangrejo esté
   // más centrado; estar en medio no basta para quitársela.
-  adapter.setHint({ kind: 'animal', gesture: 'tap', urgent: false, preferred: 'whale', candidates: ['whale', 'crab'] });
+  adapter.setHint({ kind: 'animal', urgent: false, preferred: 'whale', candidates: ['whale', 'crab'] });
   for (let frame = 0; frame < 30; frame += 1) advance(1 / 30);
   scene.updateMatrixWorld(true);
   const handOnWhale = hand!.getWorldPosition(new Vector3());
@@ -1659,7 +1652,7 @@ test('el salpicón sale donde está el cuerpo al tocar el agua, aunque el animal
   pin.dispose();
 });
 
-test('el tutorial, animal por animal: toque, doble toque, la ✕ al callar la narración, el siguiente; un texto y exploración libre', () => {
+test('el tutorial, animal por animal: un toque lo abre, la ✕ al callar la narración, el siguiente; un texto y exploración libre', () => {
   const pending = new Map<number, { fn: () => void; ms: number }>();
   let next = 1;
   const timers = {
@@ -1673,18 +1666,23 @@ test('el tutorial, animal por animal: toque, doble toque, la ✕ al callar la na
   };
   const animals = ['whale', 'bird', 'crab', 'turtle'];
   const tutorial = new Tutorial(animals, ['turismo', 'rana'], timers);
-  const states: { step: string; urgent: boolean; preferred: string | null; gesture: string | undefined; remaining: number }[] = [];
+  const states: { step: string; urgent: boolean; preferred: string | null; remaining: number }[] = [];
   tutorial.onChange((state) => states.push({
     step: state.step, urgent: state.urgent, preferred: state.hint?.preferred ?? null,
-    gesture: state.hint?.gesture, remaining: state.remaining,
+    remaining: state.remaining,
   }));
   const last = () => states.at(-1)!;
   let state = ArSession.idle().searching(Placement.initial(model.id, model.defaultScale));
   const openAndHear = (id: string) => {
     state = state.withDiscovery(state.discovery.unlock(ModelId.of(id)));
     tutorial.update(state);
+    // La primera vez que se abre: «tócalo para ver su animación».
+    assert.equal(last().step, 'tapFocused');
+    assert.equal(tutorial.state.hint, null);
     tutorial.narrationChanged(true);
-    // Mientras narra, nada tapa la ficha.
+    assert.equal(last().step, 'tapFocused');
+    // Lo toca: la mano se va.
+    tutorial.focusedAnimalTapped();
     assert.equal(last().step, 'off');
     tutorial.narrationChanged(false);
     // Calló: la mano señala la ✕.
@@ -1695,28 +1693,18 @@ test('el tutorial, animal por animal: toque, doble toque, la ✕ al callar la na
 
   tutorial.update(state);
   assert.equal(last().step, 'off');
-  // Mapa encontrado: la mano sobre la ballena, UN toque.
+  // Mapa encontrado: la mano sobre la ballena.
   state = state.tracking();
   tutorial.update(state);
-  assert.deepEqual(last(), { step: 'tapAnimal', urgent: false, preferred: 'whale', gesture: 'tap', remaining: 4 });
+  assert.deepEqual(last(), { step: 'tapAnimal', urgent: false, preferred: 'whale', remaining: 4 });
   fire(6000);
   assert.equal(last().urgent, true);
-  // Toca el cangrejo (vale cualquiera): ahora DOS veces ese.
-  tutorial.animalTapped('crab');
-  assert.deepEqual(last(), { step: 'doubleTap', urgent: false, preferred: 'crab', gesture: 'double', remaining: 4 });
+  // Toca el cangrejo (vale cualquiera): un toque lo abre.
   openAndHear('crab');
   // Al cerrar, ENSEGUIDA el siguiente (sin esperar).
-  assert.deepEqual(last(), { step: 'tapAnimal', urgent: false, preferred: null, gesture: 'tap', remaining: 3 });
-  // Tocar uno ya conocido no cambia nada; uno nuevo, su doble toque.
-  tutorial.animalTapped('crab');
-  assert.equal(last().step, 'tapAnimal');
-  tutorial.animalTapped('whale');
-  assert.deepEqual(last(), { step: 'doubleTap', urgent: false, preferred: 'whale', gesture: 'double', remaining: 3 });
-  openAndHear('whale');
-  for (const id of ['bird', 'turtle']) {
+  assert.deepEqual(last(), { step: 'tapAnimal', urgent: false, preferred: null, remaining: 3 });
+  for (const id of ['whale', 'bird', 'turtle']) {
     assert.equal(last().step, 'tapAnimal');
-    tutorial.animalTapped(id);
-    assert.equal(last().step, 'doubleTap');
     openAndHear(id);
   }
   // Los cuatro conocidos: enseguida, UN punto de los textos.
@@ -1739,9 +1727,11 @@ test('el tutorial, animal por animal: toque, doble toque, la ✕ al callar la na
   tutorial.update(state);
   assert.equal(last().step, 'off');
   assert.equal(pending.size, 0);
-  // Volver a abrir un animal ya conocido no vuelve a señalar la ✕.
+  // Volver a abrir un animal ya conocido no vuelve a enseñar a tocarlo ni
+  // a señalar la ✕.
   state = state.withDiscovery(state.discovery.unlock(ModelId.of('crab')));
   tutorial.update(state);
+  assert.equal(last().step, 'off');
   tutorial.narrationChanged(true);
   tutorial.narrationChanged(false);
   assert.equal(last().step, 'off');
@@ -1775,76 +1765,6 @@ test('un toque que cae a pocos píxeles de un animal cuenta; lo que está justo 
   assert.equal(at(px(0.12 - 0.1) + 2, 200)?.id, 'crab');
   // Lejos de todo: nada.
   assert.equal(at(px(0.8), 200), null);
-});
-
-test('dos toques seguidos sobre el mismo animal abren; lentos, lejos o en otro, son dos toques', () => {
-  const camera = new PerspectiveCamera(45, 1, 0.01, 100);
-  camera.position.set(0, 0, 5);
-  camera.updateMatrixWorld(true);
-  const canvas = {
-    style: {} as Record<string, string>,
-    addEventListener() {}, removeEventListener() {}, setPointerCapture() {},
-    getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }),
-  };
-  const pickables = new Map<string, Object3D>();
-  const place = (id: string, x: number) => {
-    const animal = new Group();
-    animal.userData['modelId'] = id;
-    const body = new Mesh(new PlaneGeometry(0.6, 0.6), new MeshBasicMaterial());
-    body.position.x = x;
-    animal.add(body);
-    animal.updateMatrixWorld(true);
-    pickables.set(id, animal);
-  };
-  place('whale', -0.6);
-  place('crab', 0.6);
-  const adapter = new PointerInteractionAdapter({ mindar: { camera, renderer: { domElement: canvas } } } as never, { pickables });
-  const log: string[] = [];
-  adapter.attach({
-    onTapModel: (id) => log.push(`toque ${id}`),
-    onDoubleTapModel: (id) => log.push(`doble ${id}`),
-    onTapText() {}, onRotate() {},
-  });
-  const pointer = adapter as unknown as { handleDown(e: unknown): void; handleUp(e: unknown): void };
-  let clock = 1000;
-  const realNow = performance.now.bind(performance);
-  performance.now = () => clock;
-  const tap = (x: number, y = 50) => {
-    pointer.handleDown({ pointerId: 1, clientX: x, clientY: y });
-    clock += 80;
-    pointer.handleUp({ pointerId: 1, clientX: x, clientY: y });
-  };
-  const whaleX = (new Vector3(-0.6, 0, 0).project(camera).x + 1) * 50;
-  const crabX = (new Vector3(0.6, 0, 0).project(camera).x + 1) * 50;
-  try {
-    tap(whaleX); clock += 200; tap(whaleX);
-    assert.deepEqual(log, ['toque whale', 'doble whale']);
-    // Demasiado lentos: dos toques.
-    log.length = 0;
-    clock += 2000; tap(whaleX); clock += 700; tap(whaleX);
-    assert.deepEqual(log, ['toque whale', 'toque whale']);
-    // Uno en cada animal: dos toques.
-    log.length = 0;
-    clock += 2000; tap(whaleX); clock += 150; tap(crabX);
-    assert.deepEqual(log, ['toque whale', 'toque crab']);
-  } finally {
-    performance.now = realNow;
-    adapter.detach();
-  }
-});
-
-test('revelar con un toque no cuenta como conocerlo: los textos se abren al CONOCER a todos', () => {
-  const ids = ['whale', 'crab'].map((id) => ModelId.of(id));
-  let discovery = Discovery.empty();
-  for (const id of ids) discovery = discovery.reveal(id);
-  assert.equal(discovery.isUnlocked(ids[0]!), true);
-  assert.equal(discovery.focused, null);
-  assert.equal(discovery.hasFoundAll(2), false);
-  for (const id of ids) discovery = discovery.unlock(id).focus(null);
-  assert.equal(discovery.hasFoundAll(2), true);
-  assert.equal(discovery.openedCount, 2);
-  // Revelar uno ya revelado no cambia nada.
-  assert.equal(discovery.reveal(ids[0]!), discovery);
 });
 
 test('en un teléfono, la cámara de MindAR se corrige a su campo de visión real antes de usarse', async () => {
@@ -1884,4 +1804,20 @@ test('en un teléfono, la cámara de MindAR se corrige a su campo de visión rea
   const desk: { controller?: unknown } = {};
   installCameraModel(desk, null);
   assert.equal(Object.getOwnPropertyDescriptor(desk, 'controller'), undefined);
+});
+
+test('si no toca al animal en primer plano, al callar la narración la mano pasa a la ✕', () => {
+  const timers = { set: () => 1, clear: () => {} };
+  const tutorial = new Tutorial(['whale', 'crab'], ['turismo'], timers);
+  let state = ArSession.idle().searching(Placement.initial(model.id, model.defaultScale)).tracking();
+  tutorial.update(state);
+  state = state.withDiscovery(state.discovery.unlock(ModelId.of('whale')));
+  tutorial.update(state);
+  assert.equal(tutorial.state.step, 'tapFocused');
+  tutorial.narrationChanged(true);
+  tutorial.narrationChanged(false);
+  assert.equal(tutorial.state.step, 'closeFocus');
+  // Tocarlo ahora no quita la ✕.
+  tutorial.focusedAnimalTapped();
+  assert.equal(tutorial.state.step, 'closeFocus');
 });

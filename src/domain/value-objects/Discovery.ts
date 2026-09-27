@@ -5,13 +5,13 @@ import type { ModelId } from './ModelId';
  *
  * Son dos ideas distintas y conviene no confundirlas:
  *
- *  - DESBLOQUEADO (revelado) es para siempre. Tocar un animal lo saca de
- *    su contorno punteado y ya se queda sobre el mapa el resto de la
- *    sesión, moviéndose.
- *  - CONOCIDO es haberlo abierto al menos una vez (doble toque): haber
- *    visto su ficha y oído su historia. ESE es el progreso que cuenta —el
- *    que abre los textos del mapa y el que sigue el tutorial—; tocarlo una
- *    vez solo lo despierta.
+ *  - DESBLOQUEADO es para siempre. Tocar un animal lo saca de su contorno
+ *    punteado y ya se queda sobre el mapa el resto de la sesión.
+ *  - CONOCIDO es haberlo abierto al menos una vez: haber visto su ficha y
+ *    oído su historia. Hoy tocar un animal hace las dos cosas a la vez;
+ *    se guardan aparte porque es CONOCER lo que abre los textos del mapa y
+ *    lo que sigue el tutorial (hubo una versión en la que un toque solo
+ *    despertaba al animal y el doble toque lo abría).
  *  - ENFOCADO es momentáneo. Es el animal que se está mirando en grande,
  *    con su nombre y su ficha. Se cierra con la X y no se pierde nada.
  *
@@ -77,17 +77,6 @@ export class Discovery {
   /** Hay algo abierto en grande —un animal o un texto— y no se le quita el sitio. */
   get isBusy(): boolean {
     return this.focused !== null || this.reading !== null;
-  }
-
-  /**
-   * Un toque: saca al animal de su contorno (y se queda fuera para
-   * siempre), sin abrir nada. Ya revelado, no cambia nada.
-   */
-  reveal(id: ModelId): Discovery {
-    if (this.unlockedIds.has(id.value)) return this;
-    const next = new Set(this.unlockedIds);
-    next.add(id.value);
-    return new Discovery(next, this.openedIds, this.focused, this.reading);
   }
 
   /**
