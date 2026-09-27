@@ -32,12 +32,16 @@ const HINTS: Record<SessionStatus, string> = {
  */
 
 /**
- * Cuánto dura la guía la primera vez, sin que nadie la pida.
+ * La guía de la primera vez NO se va sola: se queda hasta que la cámara
+ * encuentra el mapa. Antes duraba 5,5 s, y quien todavía no había sacado el
+ * mapa se quedaba mirando la cámara sin saber qué buscar.
  *
- * Lo bastante para leer el rótulo y entender el marco, y lo bastante poco
- * para no estorbar a quien ya tiene el mapa delante.
+ * Y si pasa este rato sin encontrarlo, el marco y el texto empiezan a
+ * LATIR —crecen un poco con un brillo, vuelven, descansan—: una instrucción
+ * que lleva un rato quieta en pantalla deja de leerse, y el movimiento la
+ * vuelve a poner delante.
  */
-const GUIDE_AUTO_MS = 5500;
+const GUIDE_CALL_TO_ACTION_MS = 5000;
 
 /**
  * Cuánto dura cuando la pide el botón «?».
@@ -57,6 +61,25 @@ export interface ArViewCallbacks {
   onStart: () => void;
   /** Cerrar la ficha del animal que se está mirando de cerca. */
   onCloseFocus: () => void;
+  /** Escuchar la narración del animal, o detenerla si está sonando. */
+  onToggleNarration: () => void;
+  /**
+   * El volumen general que debe sonar, 0–1 (0 si está silenciado). Se
+   * dispara también al construir la vista, con el que se eligió la última
+   * vez en este teléfono.
+   */
+  onVolumeChange: (level: number) => void;
+}
+
+/** Dónde se recuerda el volumen elegido, en este navegador. */
+const VOLUME_KEY = 'territorios-vivos:volumen';
+/** Al quitar el silencio con el nivel en 0, a cuánto vuelve. */
+const UNMUTE_LEVEL = 0.6;
+
+/** Lo que la vista necesita saber de la narración para pintar su botón. */
+export interface NarrationView {
+  readonly available: boolean;
+  readonly playing: boolean;
 }
 
 /**
@@ -89,6 +112,14 @@ export class ArView {
   private readonly focusSpecies: HTMLElement;
   private readonly focusInfo: HTMLElement;
   private readonly focusClose: HTMLButtonElement;
+  private readonly narrationButton: HTMLButtonElement;
+  private readonly narrationLabel: HTMLElement;
+  private readonly soundToggle: HTMLButtonElement;
+  private readonly soundLevel: HTMLInputElement;
+  private readonly onVolumeChange: (level: number) => void;
+  /** Nivel elegido con la barra, 0–1, y si está silenciado encima. */
+  private level = 1;
+  private muted = false;
   private readonly reading: HTMLElement;
   private readonly readingCard: HTMLElement;
   private readonly explore: HTMLElement;
@@ -115,8 +146,13 @@ export class ArView {
   private lastSession: ArSession | null = null;
 
   private guideTimer: number | null = null;
-  /** La guía automática se muestra una vez por sesión, no en cada recaída. */
-  private guideAutoShown = false;
+  /** Cuenta los 5 s de guía sin mapa antes del llamado a la acción. */
+  private callTimer: number | null = null;
+  /**
+   * La cámara ya encontró el mapa alguna vez en esta sesión. Hasta entonces
+   * la guía se queda puesta; después, perderlo lo avisa la píldora de abajo.
+   */
+  private mapFound = false;
 
   constructor(root: HTMLElement, callbacks: ArViewCallbacks) {
     this.hint = this.require(root, '#hint');
@@ -137,6 +173,33 @@ export class ArView {
     this.focusClose = this.require<HTMLButtonElement>(root, '#focus-close');
 
     this.focusClose.addEventListener('click', callbacks.onCloseFocus);
+
+    this.narrationButton = this.require<HTMLButtonElement>(root, '#focus-narration');
+    this.narrationLabel = this.require(root, '#focus-narration-label');
+    this.narrationButton.addEventListener('click', callbacks.onToggleNarration);
+
+    // El volumen, en el menú. El altavoz silencia sin olvidar el nivel; la
+    // barra lo mueve (y llevarla a 0 es silenciar). Se recuerda en este
+    // navegador: quien lo bajó en un museo no quiere que vuelva a sonar a
+    // todo volumen al recargar.
+    this.soundToggle = this.require<HTMLButtonElement>(root, '#sound-toggle');
+    this.soundLevel = this.require<HTMLInputElement>(root, '#sound-level');
+    this.onVolumeChange = callbacks.onVolumeChange;
+    this.restoreVolume();
+    this.soundToggle.addEventListener('click', () => {
+      if (this.muted || this.level === 0) {
+        this.muted = false;
+        if (this.level === 0) this.level = UNMUTE_LEVEL;
+      } else {
+        this.muted = true;
+      }
+      this.applyVolume();
+    });
+    this.soundLevel.addEventListener('input', () => {
+      this.level = Number(this.soundLevel.value) / 100;
+      this.muted = this.level === 0;
+      this.applyVolume();
+    });
 
     this.reading = this.require(root, '#reading');
     this.readingCard = this.require(root, '#reading-card');
@@ -163,7 +226,8 @@ export class ArView {
     // Las opciones todavía no llevan a ninguna parte: hoy solo cierran el
     // menú. Su `data-action` en el HTML es el gancho por el que entrarán
     // cuando se decida qué hace cada una.
-    for (const item of this.menu.querySelectorAll('button')) {
+    // Solo las opciones: el control de volumen se usa con el menú abierto.
+    for (const item of this.menu.querySelectorAll('button[data-action]')) {
       item.addEventListener('click', () => this.closeMenu());
     }
 
@@ -219,6 +283,46 @@ export class ArView {
     callbacks.onPrepare();
   }
 
+  /**
+   * El botón de la narración, en la ficha. La primera vez que se abre un
+   * animal la voz arranca sola y el botón ofrece DETENERLA (para quedarse
+   * con el sonido del sitio); después ofrece escucharla. Mientras suena,
+   * unas barras se mueven al ritmo de una voz: el botón dice qué está
+   * pasando, no solo qué hace.
+   */
+  setNarration(state: NarrationView): void {
+    this.narrationButton.hidden = !state.available;
+    this.narrationButton.dataset['playing'] = state.playing ? 'true' : 'false';
+    this.narrationButton.setAttribute('aria-pressed', state.playing ? 'true' : 'false');
+    this.narrationLabel.textContent = state.playing ? 'Detener narración' : 'Escuchar narración';
+  }
+
+  private applyVolume(): void {
+    this.soundLevel.value = String(Math.round((this.muted ? 0 : this.level) * 100));
+    this.soundToggle.setAttribute('aria-pressed', this.muted ? 'true' : 'false');
+    this.soundToggle.setAttribute('aria-label', this.muted ? 'Activar el sonido' : 'Silenciar');
+    this.onVolumeChange(this.muted ? 0 : this.level);
+    try {
+      window.localStorage.setItem(VOLUME_KEY, JSON.stringify({ level: this.level, muted: this.muted }));
+    } catch {
+      // Sin almacenamiento (modo privado): se olvida al recargar, nada más.
+    }
+  }
+
+  private restoreVolume(): void {
+    try {
+      const saved: unknown = JSON.parse(window.localStorage.getItem(VOLUME_KEY) ?? 'null');
+      if (saved !== null && typeof saved === 'object') {
+        const { level, muted } = saved as { level?: unknown; muted?: unknown };
+        if (typeof level === 'number' && level >= 0 && level <= 1) this.level = level;
+        this.muted = muted === true;
+      }
+    } catch {
+      // Nada guardado o no se puede leer: volumen entero.
+    }
+    this.applyVolume();
+  }
+
   /** Los textos del mapa que se pueden abrir en grande. */
   setMapTexts(texts: readonly MapText[]): void {
     this.mapTexts = texts;
@@ -272,7 +376,12 @@ export class ArView {
     // El menú vive en la esquina de enfrente y sigue la misma regla. Si se
     // esconde, se cierra: un menú desplegado bajo un botón que ya no está
     // es un cartel huérfano en mitad de la cámara.
-    this.menuButton.hidden = !session.hasStarted || this.focusVisible;
+    //
+    // Con una excepción: con la ficha de un animal abierta el ☰ SE QUEDA,
+    // porque dentro está el volumen y es justo cuando suena la narración
+    // cuando uno quiere bajarlo. No choca con nada: la X vive en la otra
+    // esquina. Con un texto abierto sí se va (su tarjeta ocupa la pantalla).
+    this.menuButton.hidden = !session.hasStarted || session.discovery.reading !== null;
     if (this.menuButton.hidden) this.closeMenu();
 
     // Va al final para leer el estado ya actualizado, incluido el del menú.
@@ -346,21 +455,41 @@ export class ArView {
     }
 
     if (!session.hasStarted) {
-      this.guideAutoShown = false;
+      this.mapFound = false;
       this.hideGuide();
       return;
     }
 
     // Encontrado el mapa, la guía sobra: le toca el turno al otro cartel.
     if (session.status === 'tracking') {
+      this.mapFound = true;
       this.hideGuide();
       return;
     }
 
-    if (session.status === 'searching' && !this.guideAutoShown) {
-      this.guideAutoShown = true;
-      this.showGuide(GUIDE_AUTO_MS);
-    }
+    // Todavía sin mapa: la guía se queda. El menú abierto la aparta (se
+    // leería a través de él); al cerrarlo, vuelve.
+    if (this.guidePinned(session) && !this.menuVisible) this.pinGuide();
+  }
+
+  /** Buscando el mapa sin haberlo encontrado nunca: la guía no se va. */
+  private guidePinned(session: ArSession): boolean {
+    return session.hasStarted && session.status === 'searching' && !this.mapFound;
+  }
+
+  /**
+   * Pone la guía sin fecha de caducidad y, si en 5 s no aparece el mapa,
+   * enciende su llamado a la acción. Llamarlo con la guía ya fijada no hace
+   * nada: `render` se llama a menudo y reiniciaría la cuenta.
+   */
+  private pinGuide(): void {
+    if (this.guideVisible && this.guideTimer === null) return;
+    this.showGuide(null);
+    if (this.callTimer !== null || this.guide.dataset['call'] === 'true') return;
+    this.callTimer = window.setTimeout(() => {
+      this.callTimer = null;
+      this.guide.dataset['call'] = 'true';
+    }, GUIDE_CALL_TO_ACTION_MS);
   }
 
   /**
@@ -422,6 +551,8 @@ export class ArView {
     this.menu.dataset['visible'] = 'false';
     this.menu.setAttribute('aria-hidden', 'true');
     this.menuButton.setAttribute('aria-expanded', 'false');
+    // Si todavía no se ha encontrado el mapa, la guía vuelve.
+    if (this.lastSession !== null) this.syncGuide(this.lastSession);
     this.repaintTransientHints();
   }
 
@@ -438,19 +569,31 @@ export class ArView {
     return this.menu.dataset['visible'] === 'true';
   }
 
-  private showGuide(durationMs: number): void {
+  /** `null`: sin caducidad (la guía de la primera vez). */
+  private showGuide(durationMs: number | null): void {
     this.clearGuideTimer();
     this.guide.dataset['visible'] = 'true';
     this.guide.setAttribute('aria-hidden', 'false');
-    this.guideTimer = window.setTimeout(() => {
-      this.hideGuide();
-      this.repaintTransientHints();
-    }, durationMs);
+    if (durationMs !== null) {
+      this.guideTimer = window.setTimeout(() => {
+        this.guideTimer = null;
+        // Pedida con «?» cuando aún no hay mapa: no se va, se queda fija.
+        if (this.lastSession !== null && this.guidePinned(this.lastSession)) {
+          this.pinGuide();
+          return;
+        }
+        this.hideGuide();
+        this.repaintTransientHints();
+      }, durationMs);
+    }
     this.repaintTransientHints();
   }
 
   private hideGuide(): void {
     this.clearGuideTimer();
+    if (this.callTimer !== null) window.clearTimeout(this.callTimer);
+    this.callTimer = null;
+    delete this.guide.dataset['call'];
     this.guide.dataset['visible'] = 'false';
     this.guide.setAttribute('aria-hidden', 'true');
   }

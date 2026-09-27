@@ -8,6 +8,7 @@ import {
   MeshBasicMaterial,
   Object3D,
   Quaternion,
+  SkinnedMesh,
   Vector3 as ThreeVector3,
 } from 'three';
 import type { ArModel } from '@domain/entities/ArModel';
@@ -19,9 +20,9 @@ import { Stabilization } from '@domain/value-objects/Stabilization';
 import type { ScenePort } from '@application/ports/ScenePort';
 import type { MindArRuntime } from '../mindar/MindArRuntime';
 import { IconLoader } from './IconLoader';
-import { MarkerPin } from './MarkerPin';
+import { MarkerPin, STAGE_LOOK_DOWN } from './MarkerPin';
 import { PoseFilter } from './PoseFilter';
-import { addThreePointLighting } from './ThreePointLighting';
+import { addEnvironment, addThreePointLighting } from './ThreePointLighting';
 import { MapTextHotspot } from './MapTextHotspot';
 import type { MapText } from '@domain/value-objects/MapText';
 
@@ -51,12 +52,10 @@ import type { MapText } from '@domain/value-objects/MapText';
 const STAGE_DISTANCE = 0.5;
 /**
  * Cuánto del alto de la pantalla puede ocupar el animal en primer plano.
- * Era 0.42 y los clientes lo veían salirse del encuadre —la ballena sobre
- * todo—, con la ficha tapándole además la parte de abajo.
  */
-const STAGE_FILL = 0.32;
+const STAGE_FILL = 0.4;
 /** Cuánto del ancho puede ocupar, medido por la silueta que ve la cámara. */
-const STAGE_FILL_WIDTH = 0.6;
+const STAGE_FILL_WIDTH = 0.95;
 /**
  * Cuánto se sube el animal sobre el centro de la pantalla, en fracción del
  * alto visible: la ficha ocupa la parte de abajo, y centrado quedaba medio
@@ -70,7 +69,17 @@ const STAGE_LIFT = 0.13;
  * 1,3 veces el ancho, y en perspectiva el morro, más cerca, se veía aún
  * mayor —más grande que la pantalla—. Los animales pequeños nunca llegan.
  */
-const STAGE_MAX_WIDTH = 0.62;
+const STAGE_MAX_WIDTH = 0.82;
+/*
+ * Estos tres topes SUBIERON (0.32 / 0.6 / 0.62 → 0.4 / 0.95 / 0.82) y aun
+ * así el plano es más abierto que antes. Los anteriores se calibraron a ojo
+ * contra una medida falsa: el primer plano medía al animal con la caja que
+ * three había guardado de una malla animada al construir el pin (ver
+ * `setFocus`), y la ballena "medía" casi un cubo de la mitad de su largo.
+ * Medida bien, y en tres cuartos, queda en torno a la mitad del ancho de la
+ * pantalla —la tortuga y el cangrejo, con su `focusSize`, parecido; la
+ * pava, algo menos—, medido en píxeles en /verify-stage.html.
+ */
 
 export class ThreeSceneAdapter implements ScenePort {
   private readonly follower = new Group();
@@ -103,8 +112,6 @@ export class ThreeSceneAdapter implements ScenePort {
   private focusedId: string | null = null;
   private stagedIcon: Object3D | null = null;
   private readonly stagedNaturalSize = new ThreeVector3(1, 1, 1);
-  /** Giro que el usuario imprime con el dedo. */
-  private spin = 0;
   private scale = 1;
   /**
    * Cuánto mide un ancho de mapa en unidades de mundo, del último fotograma
@@ -176,15 +183,18 @@ export class ThreeSceneAdapter implements ScenePort {
   }
 
   applyPlacement(placement: Placement): void {
-    const { offset, rotationY, scale } = placement;
+    const { offset, scale } = placement;
 
     // El offset mueve la capa entera; los iconos conservan su sitio
     // relativo sobre el mapa.
     this.overlay.position.set(offset.x, offset.y, offset.z);
 
-    this.spin = rotationY;
+    // Cada animal con SU giro: arrastrar uno ya no mueve a los otros tres.
     this.scale = scale.value;
-    for (const pin of this.pins.values()) pin.applyTransform(scale.value, rotationY);
+    for (const [key, pin] of this.pins) {
+      const { yaw, pitch } = placement.orientationOf(ModelId.of(key));
+      pin.applyTransform(scale.value, yaw, pitch);
+    }
   }
 
   /**
@@ -245,6 +255,14 @@ export class ThreeSceneAdapter implements ScenePort {
         icon.scale.setScalar(1);
         icon.rotation.set(0, 0, 0);
         icon.updateMatrixWorld(true);
+        // TRAMPA: three calcula la caja de una malla animada UNA vez, en la
+        // postura de ese momento, y la reutiliza para siempre. Sin
+        // recalcularla, la ballena medía 0.10 × 0.14 × 0.10 —casi un cubo,
+        // cuando es alargada— y el encaje no sabía lo larga que es: de
+        // frente no se notaba, en tres cuartos ocupaba el 90 % del ancho.
+        icon.traverse((object) => {
+          if (object instanceof SkinnedMesh) object.computeBoundingBox();
+        });
         new Box3().setFromObject(icon).getSize(this.stagedNaturalSize);
         this.stagedNaturalSize.set(
           this.stagedNaturalSize.x || 1,
@@ -289,8 +307,11 @@ export class ThreeSceneAdapter implements ScenePort {
 
     // Sin giro automático: no es un producto en un expositor. Solo gira
     // cuando el usuario lo arrastra con el dedo.
+    // Tres cuartos de partida (ver MarkerPin.stageYaw) más lo que el
+    // usuario lo haya girado: el mismo giro que lleva sobre el mapa.
     const pin = this.pins.get(this.focusedId ?? '');
-    const yaw = (pin?.stageYaw ?? 0) + this.spin;
+    const yaw = (pin?.stageYaw ?? 0) + (pin?.userSpin ?? 0);
+    const pitch = STAGE_LOOK_DOWN + (pin?.userTilt ?? 0);
 
     // Ajusta por la silueta que realmente ve la cámara. Usar la dimensión 3D
     // máxima hacía que la ballena fuera diminuta de frente (su largo apunta a
@@ -306,7 +327,13 @@ export class ThreeSceneAdapter implements ScenePort {
     // `distance - s·r` en vez de a `distance`). Despejando s de
     // s·r·d / (d − s·r) ≤ W queda la expresión de abajo.
     const halfWidth = (visibleHeight * camera.aspect * STAGE_MAX_WIDTH) / 2;
-    const radius = Math.max(this.stagedNaturalSize.x, this.stagedNaturalSize.z) / 2;
+    // Inclinado, también el alto puede acabar apuntando a la cámara.
+    const radius =
+      Math.max(
+        this.stagedNaturalSize.x,
+        this.stagedNaturalSize.z,
+        Math.abs(Math.sin(pitch)) * this.stagedNaturalSize.y,
+      ) / 2;
     const perspectiveCap = (halfWidth * distance) / (radius * (distance + halfWidth));
     const fittedScale = Math.min(
       availableHeight / this.stagedNaturalSize.y,
@@ -317,14 +344,19 @@ export class ThreeSceneAdapter implements ScenePort {
     // El gesto de toque (salto, buceo, correteo) y su salpicón, igual que
     // sobre el mapa: lo aplica el propio pin, que es quien lo lleva.
     if (pin !== undefined) {
-      pin.poseIcon(yaw);
+      pin.poseIcon(yaw, 0, pitch);
       pin.placeWater(0);
     } else {
-      icon.rotation.set(0, yaw, 0);
+      icon.rotation.set(pitch, yaw, 0);
     }
     // El círculo tiene radio 1: queda algo mayor que el animal para que sea
     // fácil acertarle con un dedo y el teléfono en movimiento.
     this.stageHit.scale.setScalar(Math.min(availableWidth, availableHeight) * this.scale * 0.65);
+  }
+
+  /** El animal en primer plano: arrastrar en cualquier sitio lo gira a él. */
+  get focusedModelId(): string | null {
+    return this.stagedIcon === null ? null : this.focusedId;
   }
 
   onNearbyModel(listener: (modelId: string | null) => void): void {
@@ -410,6 +442,7 @@ export class ThreeSceneAdapter implements ScenePort {
     const mindar = this.runtime.init();
     this.configureRendering();
     addThreePointLighting(mindar.scene);
+    addEnvironment(mindar.renderer, mindar.scene);
 
     this.follower.add(this.overlay);
     this.follower.visible = false;

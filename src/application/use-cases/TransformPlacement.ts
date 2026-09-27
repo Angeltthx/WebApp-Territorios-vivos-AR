@@ -1,12 +1,14 @@
 import type { ArSession } from '@domain/entities/ArSession';
 import type { Placement } from '@domain/entities/Placement';
+import { ModelId } from '@domain/value-objects/ModelId';
 import type { ScenePort } from '../ports/ScenePort';
 import type { SessionListener } from './StartArExperience';
 
 /**
- * Rotar los animales en su sitio. La regla (normalización del ángulo) vive
- * en el dominio; este caso de uso solo coordina dominio y escena. Escalar
- * a mano se quitó: cada animal tiene su tamaño fijo en el catálogo.
+ * Girar UN animal en su sitio: de lado y hacia arriba o abajo. La regla
+ * (normalización del ángulo, tope de la inclinación) vive en el dominio;
+ * este caso de uso solo coordina dominio y escena. Escalar a mano se quitó:
+ * cada animal tiene su tamaño fijo en el catálogo.
  */
 export class TransformPlacement {
   constructor(
@@ -15,8 +17,9 @@ export class TransformPlacement {
     private readonly onSessionChange: SessionListener,
   ) {}
 
-  rotateBy(radians: number): void {
-    this.apply((placement) => placement.rotatedBy(radians));
+  rotateBy(modelId: string, yawRadians: number, pitchRadians = 0): void {
+    const id = ModelId.of(modelId);
+    this.apply((placement) => placement.rotatedBy(id, yawRadians, pitchRadians));
   }
 
   private apply(transform: (placement: Placement) => Placement): void {

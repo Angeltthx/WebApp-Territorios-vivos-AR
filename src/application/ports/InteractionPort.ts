@@ -11,13 +11,15 @@ export interface InteractionHandlers {
    */
   onTapText(textId: string): void;
   /**
-   * Arrastre horizontal. Delta en radianes.
+   * Arrastre sobre UN animal: el que había bajo el dedo al empezar, o el
+   * que está en primer plano. Deltas en radianes: `yaw` del arrastre
+   * horizontal (girarlo de lado), `pitch` del vertical (inclinarlo).
    *
    * No hay pellizco para escalar: se quitó a propósito. Cada animal tiene su
    * tamaño calibrado en el catálogo y agrandarlo a mano rompía esa
    * jerarquía (y lo sacaba de encima de su dibujo).
    */
-  onRotate(deltaRadians: number): void;
+  onRotate(modelId: string, yawRadians: number, pitchRadians: number): void;
 }
 
 export interface InteractionPort {

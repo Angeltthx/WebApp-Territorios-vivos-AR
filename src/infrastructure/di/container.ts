@@ -87,6 +87,9 @@ export function buildContainer(config: ContainerConfig) {
   // animación llega a él, el chapuzón cuando se ve el salpicón.
   const gestureSound = new PlayGestureSound(sounds, models);
   scene.onTapSound((modelId) => void gestureSound.tapped(modelId));
+  // En las pausas de la narración, el animal hace su gesto: el mismo que
+  // al tocarlo, con su sonido en su momento.
+  sounds.setPerformer((id) => scene.pulse(id));
   scene.onSplash((modelId, strength) => void gestureSound.splashed(modelId, strength));
 
   return {
@@ -95,6 +98,8 @@ export function buildContainer(config: ContainerConfig) {
     tapModel,
     closeFocus,
     openMapText,
+    // El botón de la ficha: escuchar o detener la narración del animal.
+    narration: sounds,
     mapTexts: mapTexts.all,
     interaction,
     // Se expone para poder desbloquearlo en el PRIMER toque del usuario.

@@ -26,6 +26,21 @@ export interface AudioPort {
   startAmbience(url: string): void;
   /** Apaga el ambiente con un fundido. */
   stopAmbience(): void;
+  /**
+   * Un trozo de narración, por delante de todo y con el ambiente más bajo
+   * mientras habla. Resuelve `true` si acabó de sonar, `false` si se cortó
+   * (`stopVoice`) o no se pudo cargar: quien encadena trozos solo sigue con
+   * `true`. Nunca se descarta por llegar tarde, a diferencia de un toque.
+   */
+  playVoice(url: string): Promise<boolean>;
+  /** Corta la narración con un fundido corto. */
+  stopVoice(): void;
+  /**
+   * Volumen general, 0–1, con un fundido corto. Lo mueve el usuario desde el
+   * menú; 0 es silencio. No corta nada: con el volumen a 0 la narración y el
+   * ambiente siguen su curso, y al subirlo se oyen donde van.
+   */
+  setVolume(level: number): void;
 
   dispose(): void;
 }

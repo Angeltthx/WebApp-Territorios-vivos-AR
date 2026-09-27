@@ -51,6 +51,11 @@ export class DiscoverNearbyModel {
     const focused = session.discovery.focused;
     // Bloqueado: otro animal en primer plano, o un texto abierto para leer.
     if (session.discovery.reading !== null || (focused !== null && !focused.equals(id))) return;
+    // Ya es ÉSTE el que está en primer plano: no hay nada que abrir. Volver
+    // a abrirlo —la cámara se aleja un poco y vuelve a acercarse, cosa que
+    // pasa sin querer con el teléfono en la mano— cortaba la narración a
+    // media frase y, como ya contaba como escuchada, no volvía a sonar.
+    if (focused !== null) return;
 
     const already = session.discovery.isUnlocked(id);
     const discovery = session.discovery.unlock(id);

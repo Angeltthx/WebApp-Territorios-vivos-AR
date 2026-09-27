@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Verificación del primer plano · Territorios Vivos AR</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #14161a;
+        color: #e8e8ea;
+        font: 500 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      h1 { font-size: 15px; margin: 0 0 4px; }
+      p { margin: 0 0 14px; color: #9aa0ab; font-size: 13px; max-width: 80ch; }
+      nav { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+      nav button {
+        font: inherit;
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid #3a3d44;
+        background: #1f2227;
+        color: inherit;
+        cursor: pointer;
+      }
+      nav button[aria-pressed="true"] { background: #ffc53d; color: #14161a; border-color: #ffc53d; }
+      /* Un teléfono en vertical: el mapa hace de imagen de cámara y encima
+         va la misma penumbra que pone #focus en la app. */
+      #phone {
+        position: relative;
+        width: 390px;
+        height: 844px;
+        border-radius: 18px;
+        overflow: hidden;
+        border: 1px solid #2a2d33;
+        background: url('/targets/map.jpg') center 40% / 170% auto no-repeat, #0b0c0e;
+      }
+      #phone::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        pointer-events: none;
+        background: radial-gradient(
+          ellipse at center 42%,
+          rgba(0, 0, 0, 0.12) 0%,
+          rgba(0, 0, 0, 0.62) 62%,
+          rgba(0, 0, 0, 0.86) 100%
+        );
+      }
+      #stage { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; touch-action: none; }
+    </style>
+  </head>
+  <body>
+    <h1>¿Cómo se ve cada animal en primer plano?</h1>
+    <p>
+      El <code>ThreeSceneAdapter</code> real —su iluminación, su tone mapping, su encuadre en tres
+      cuartos— y el arrastre real de <code>PointerInteractionAdapter</code>, sobre el mapa como si
+      fuera la cámara. Arrastra para girar (de lado y arriba/abajo), toca para el gesto. Consola:
+      <code>stepStage(1.5)</code> avanza el tiempo en una pestaña de fondo.
+    </p>
+    <nav id="animals"></nav>
+    <div id="phone"><canvas id="stage"></canvas></div>
+    <script type="module" src="/src/verify-stage.ts"></script>
+  </body>
+</html>

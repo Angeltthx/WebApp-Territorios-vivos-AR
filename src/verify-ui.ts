@@ -37,7 +37,13 @@ await Promise.all(sizes.map(async ([width, height]) => {
   screens.append(section);
   await loaded;
   const root = frame.contentDocument!.querySelector<HTMLElement>('#app')!;
-  const view = new ArView(root, { onPrepare() {}, onStart() {}, onCloseFocus() {} });
+  // El botón de la narración alterna solo, para ver sus dos estados.
+  let playing = true;
+  const view: ArView = new ArView(root, {
+    onPrepare() {}, onStart() {}, onCloseFocus() {},
+    onToggleNarration() { playing = !playing; view.setNarration({ available: true, playing }); },
+    onVolumeChange() {},
+  });
   view.setCatalog(catalog);
   view.setMapTexts(mapTexts);
   view.render(ArSession.idle());
@@ -56,9 +62,9 @@ function check(mode: 'splash' | 'guide' | 'focus' | 'reading' | 'explore' | 'app
       }
     }
     for (const id of mode === 'splash' ? ['#start'] : mode === 'guide'
-      ? ['#guide-frame', '#guide-title', '#guide-mission', '#guide-link'] : mode === 'reading' ? ['#reading-card', '#reading-close']
+      ? ['#guide-frame', '#guide-title', '#guide-mission'] : mode === 'reading' ? ['#reading-card', '#reading-close']
       : mode === 'explore' ? ['#explore', '#explore-title'] : mode === 'approach' ? ['#approach-title', '#approach-hands']
-      : ['#focus-name', '#focus-species', '#focus-info', '#focus-close']) {
+      : ['#focus-name', '#focus-species', '#focus-narration', '#focus-info', '#focus-close']) {
       const r = rect(id);
       if (r.left < -1 || r.top < -1 || r.right > width + 1 || r.bottom > height + 1) {
         failures.push(`${width}×${height}: ${id} fuera de pantalla`);
@@ -96,7 +102,8 @@ document.querySelector('#approach')!.addEventListener('click', () => {
   check('approach');
 });
 document.querySelector('#focus')!.addEventListener('click', () => {
-  for (const { view } of fixtures) { view.cameraReady(); view.render(focused); }
+  // Como la primera vez: la narración suena y el botón ofrece detenerla.
+  for (const { view } of fixtures) { view.cameraReady(); view.render(focused); view.setNarration({ available: true, playing: true }); }
   check('focus');
 });
 check('splash');
