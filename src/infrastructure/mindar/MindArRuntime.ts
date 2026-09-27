@@ -1,6 +1,7 @@
 import type { MindARThree, MindARAnchor } from 'mind-ar/dist/mindar-image-three.prod.js';
 
 import { FrameLockedBackground } from './FrameLockedBackground';
+import { installCameraModel } from './CameraModel';
 
 /**
  * Trabajo por fotograma. Devuelve `true` si ha dejado algo que pintar: si
@@ -101,6 +102,11 @@ export class MindArRuntime {
     private readonly container: HTMLElement,
     private readonly imageTargetSrc: string,
     private readonly tuning: MindArTuning = DEFAULT_TUNING,
+    /**
+     * Campo de visión de la cámara sobre el lado largo de la imagen, en
+     * grados, o null para dejar el de MindAR (ver CameraModel).
+     */
+    private readonly longSideFovDeg: number | null = null,
   ) {}
 
   /**
@@ -172,6 +178,9 @@ export class MindArRuntime {
       uiScanning: 'no',
       uiError: 'no',
     });
+    // Antes de `start()`: la corrección se engancha a la creación del
+    // controlador, que ocurre dentro.
+    installCameraModel(this.instance, this.longSideFovDeg);
 
     this.anchorRef = this.instance.addAnchor(0);
     this.configureRenderer();

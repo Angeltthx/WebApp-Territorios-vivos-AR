@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import { existsSync } from 'node:fs';
 import { NUQUI_CATALOG } from '../src/infrastructure/repositories/StaticModelRepository';
-import { RecurringNudge } from '../src/ui/RecurringNudge';
 import assert from 'node:assert/strict';
 import { StartArExperience } from '../src/application/use-cases/StartArExperience';
 import { TapModel } from '../src/application/use-cases/TapModel';
 import { AnimalSoundscape, soundPreloadOrder } from '../src/application/use-cases/AnimalSoundscape';
-import { DiscoverNearbyModel } from '../src/application/use-cases/DiscoverNearbyModel';
+import { DiscoverModel } from '../src/application/use-cases/DiscoverModel';
+import { Tutorial } from '../src/application/use-cases/Tutorial';
 import { CloseFocus } from '../src/application/use-cases/CloseFocus';
 import { OpenMapText } from '../src/application/use-cases/OpenMapText';
 import { MapText } from '../src/domain/value-objects/MapText';
@@ -15,10 +15,10 @@ import { pickDifferent, Soundscape } from '../src/domain/value-objects/Soundscap
 import { ArSession } from '../src/domain/entities/ArSession';
 import { ArModel } from '../src/domain/entities/ArModel';
 import { ModelId } from '../src/domain/value-objects/ModelId';
+import { Discovery } from '../src/domain/value-objects/Discovery';
 import { Placement } from '../src/domain/entities/Placement';
 import { ModelSource } from '../src/domain/value-objects/ModelSource';
 import { AnimationSequence } from '../src/domain/value-objects/AnimationSequence';
-import { Proximity } from '../src/domain/value-objects/Proximity';
 import { ThreeSceneAdapter } from '../src/infrastructure/rendering/ThreeSceneAdapter';
 import { IconAnimator } from '../src/infrastructure/rendering/IconAnimator';
 import { MarkerPin } from '../src/infrastructure/rendering/MarkerPin';
@@ -53,6 +53,7 @@ import {
   Raycaster,
   Skeleton,
   SkinnedMesh,
+  Sprite,
   Uint16BufferAttribute,
   Scene,
   ShaderLib,
@@ -90,8 +91,8 @@ function harness() {
   };
   const scene = {
     preload: async () => { calls.loads++; },
-    applyPlacement() {}, setStabilization() {}, setProximity() {},
-    applyDiscovery() {}, onNearbyModel() {}, pulse: () => true, clear() {}, dispose() {},
+    applyPlacement() {}, setStabilization() {}, setHint() {},
+    applyDiscovery() {}, pulse: () => true, clear() {}, dispose() {},
   };
   const audio = {
     unlock: async () => { calls.unlocks++; }, play() {}, dispose() {},
@@ -192,22 +193,37 @@ test('adaptador conserva denegación de cámara, silencia antes de await y resta
   await tracking.stop(); // Sin controlador ni stream también debe funcionar.
 });
 
-test('el primer plano responde al toque sin mapa; un animal bloqueado o perdido sin ficha, no', async () => {
+test('un toque en el mapa despierta al animal y hace su gesto; en primer plano, solo el de delante', async () => {
   const h = harness();
   let count = 0;
-  const scene = { ...h.scene, pulse: () => { count++; return true; } };
+  const tapped: string[] = [];
+  const applied: boolean[] = [];
+  const scene = {
+    ...h.scene,
+    pulse: () => { count++; return true; },
+    applyDiscovery: (d: { isUnlocked(id: ModelId): boolean }) => { applied.push(d.isUnlocked(model.id)); },
+  };
   let state = ArSession.idle().searching(Placement.initial(model.id, model.defaultScale)).tracking();
-  const tap = new TapModel(scene as never, models, analytics, () => state);
+  const tap = new TapModel(scene as never, models, analytics, () => state, (next) => { state = next; }, (id) => { tapped.push(id); });
+  // Sobre el mapa, dormida: la despierta (sin abrirla) y hace su gesto.
   await tap.execute('whale');
-  assert.equal(count, 0);
-  state = state.withDiscovery(state.discovery.unlock(model.id)).lost();
-  await tap.execute('whale');
+  assert.equal(state.discovery.isUnlocked(model.id), true);
+  assert.equal(state.discovery.focused, null);
+  assert.equal(state.discovery.isOpened(model.id), false);
+  assert.deepEqual(applied, [true]);
   assert.equal(count, 1);
-  await tap.execute('whale');
-  assert.equal(count, 2); // cada toque vuelve a responder aunque ya esté enfocado
-  state = state.withDiscovery(state.discovery.focus(null));
+  assert.deepEqual(tapped, ['whale']);
+  // Ya despierta, otro toque es solo el gesto.
   await tap.execute('whale');
   assert.equal(count, 2);
+  assert.equal(applied.length, 1);
+  // En primer plano, con o sin mapa: su gesto; otro animal no responde.
+  state = state.withDiscovery(state.discovery.unlock(model.id)).lost();
+  await tap.execute('whale');
+  assert.equal(count, 3);
+  await tap.execute('crab');
+  assert.equal(count, 3);
+  assert.deepEqual(tapped, ['whale', 'whale']);
 });
 
 test('el sonido del toque suena en SU momento del gesto, no al tocar', () => {
@@ -514,15 +530,6 @@ test('la ballena salpica en el fotograma del choque de su clip, no antes', () =>
   pin.dispose();
 });
 
-test('proximidad permite descubrir antes y conserva histéresis', () => {
-  const proximity = Proximity.default();
-  assert.equal(proximity.decide(1.7, 0.7, false), true);
-  assert.equal(proximity.decide(1.8, 0.7, false), false);
-  assert.equal(proximity.decide(2, 0.7, true), true);
-  assert.equal(proximity.decide(2.2, 0.7, true), false);
-  assert.equal(proximity.decide(1, 0.73, false), false);
-});
-
 test('un modelo animado se dimensiona incluyendo el recorrido del clip', () => {
   const root = new Group();
   const body = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial());
@@ -819,7 +826,7 @@ test('una llamada programada no suena si la sesión perdió el primer plano por 
   assert.equal(h.pendingMs(), null);
 });
 
-test('con un animal en primer plano, acercarse a otro no le quita el sitio; al cerrar, sí cuenta', async () => {
+test('tocar un animal lo abre; con uno abierto, tocar otro no le quita el sitio ni se abre solo al cerrar', async () => {
   const whale = voiced('whale');
   const crab = voiced('crab');
   const repo = { findAll: async () => [whale, crab], findById: async (id: ModelId) => (id.value === 'whale' ? whale : crab) };
@@ -828,9 +835,8 @@ test('con un animal en primer plano, acercarse a otro no le quita el sitio; al c
   const sounds = new AnimalSoundscape(h.audio as never, () => state, h.timers);
   const applied: (string | null)[] = [];
   const scene = { applyDiscovery: (d: { focused: ModelId | null }) => { applied.push(d.focused?.value ?? null); } };
-  const discover = new DiscoverNearbyModel(scene as never, repo as never, sounds, analytics, () => state, (next) => { state = next; });
-  const close = new CloseFocus(scene as never, sounds, analytics, () => state, (next) => { state = next; },
-    (closed) => discover.resume(closed));
+  const discover = new DiscoverModel(scene as never, repo as never, sounds, analytics, () => state, (next) => { state = next; });
+  const close = new CloseFocus(scene as never, sounds, analytics, () => state, (next) => { state = next; });
 
   discover.execute('whale');
   await Promise.resolve(); await Promise.resolve();
@@ -842,17 +848,21 @@ test('con un animal en primer plano, acercarse a otro no le quita el sitio; al c
   assert.equal(state.discovery.focused?.value, 'whale');
   assert.equal(state.discovery.isUnlocked(crab.id), false);
 
-  // Al cerrar con la X, el cangrejo —junto al que ya está la cámara— sí.
-  close.execute();
-  await Promise.resolve(); await Promise.resolve();
-  assert.equal(state.discovery.focused?.value, 'crab');
-  assert.ok(h.log.includes('ambience off'));
-  assert.equal(h.log.at(-1), 'ambience /crab/amb');
-
-  // Cerrar el cangrejo estando todavía junto a él no lo reabre solo.
+  // Al cerrar con la X no se abre nada solo: hay que tocar el siguiente.
   close.execute();
   assert.equal(state.discovery.focused, null);
+  assert.ok(h.log.includes('ambience off'));
+  discover.execute('crab');
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(state.discovery.focused?.value, 'crab');
+  assert.equal(h.log.at(-1), 'ambience /crab/amb');
+  close.execute();
   assert.deepEqual(applied, ['whale', null, 'crab', null]);
+
+  // Sin el mapa a la vista no se abre nada: el toque no puede venir de él.
+  state = state.lost();
+  discover.execute('whale');
+  assert.equal(state.discovery.focused, null);
 });
 
 test('cada sonido del catálogo existe en public/audio, y se precarga primero lo que suena al entrar', () => {
@@ -920,8 +930,8 @@ test('un texto solo se abre con todos los animales encontrados y bloquea al rest
   const scene = { applyDiscovery() {} };
   const set = (next: ArSession) => { state = next; };
   const open = new OpenMapText(scene as never, texts, repo as never, sounds, analytics, () => state, set);
-  const discover = new DiscoverNearbyModel(scene as never, repo as never, sounds, analytics, () => state, set);
-  const close = new CloseFocus(scene as never, sounds, analytics, () => state, set, (closed) => discover.resume(closed));
+  const discover = new DiscoverModel(scene as never, repo as never, sounds, analytics, () => state, set);
+  const close = new CloseFocus(scene as never, sounds, analytics, () => state, set);
 
   // Falta el cangrejo: todavía no se lee nada.
   discover.execute('whale');
@@ -936,7 +946,7 @@ test('un texto solo se abre con todos los animales encontrados y bloquea al rest
   assert.equal(state.discovery.reading, 'turismo');
   assert.equal(h.log.at(-1), 'ambience /audio/coast/ambience.mp3');
 
-  // Leyendo, acercarse a un animal no lo abre…
+  // Leyendo, tocar un animal no lo abre…
   discover.execute('whale');
   assert.equal(state.discovery.focused, null);
   // …ni se abre otro texto encima.
@@ -946,9 +956,8 @@ test('un texto solo se abre con todos los animales encontrados y bloquea al rest
   close.execute();
   assert.equal(state.discovery.reading, null);
   assert.equal(h.log.includes('ambience off'), true);
-  // Y al cerrar el texto, la ballena junto a la que está la cámara sí se abre.
-  assert.equal(state.discovery.focused?.value, 'whale');
-  close.execute();
+  // Y al cerrar el texto no se abre ningún animal solo.
+  assert.equal(state.discovery.focused, null);
   await open.execute('no-existe');
   assert.equal(state.discovery.reading, null);
 });
@@ -1003,53 +1012,6 @@ test('la zona de toque de un animal es su huella, no un disco que tape lo de al 
   assert.ok(size.x < 0.16, `la zona mide ${size.x.toFixed(3)} de ancho`);
   assert.ok(size.y < size.x, 'la zona sigue la forma del animal, no es un círculo');
   pin.dispose();
-});
-
-test('la invitación sale, se aparta a los 15 s y vuelve tras un rato sin uso', () => {
-  let now = 0;
-  const pending: { at: number; fn: () => void; id: number }[] = [];
-  let nextId = 1;
-  const timers = {
-    set: (fn: () => void, ms: number) => { const id = nextId++; pending.push({ at: now + ms, fn, id }); return id; },
-    clear: (id: unknown) => { const i = pending.findIndex((t) => t.id === id); if (i >= 0) pending.splice(i, 1); },
-  };
-  const advance = (ms: number) => {
-    const until = now + ms;
-    for (;;) {
-      pending.sort((a, b) => a.at - b.at);
-      const next = pending[0];
-      if (next === undefined || next.at > until) break;
-      pending.shift();
-      now = next.at;
-      next.fn();
-    }
-    now = until;
-  };
-  const log: string[] = [];
-  const nudge = new RecurringNudge(() => log.push(`on@${now}`), () => log.push(`off@${now}`), 15_000, 35_000, timers);
-
-  nudge.update(false);
-  assert.equal(nudge.isVisible, false);
-  nudge.update(true);
-  assert.equal(nudge.isVisible, true);
-  nudge.update(true); // renders repetidos no la reinician
-  advance(15_000);
-  assert.equal(nudge.isVisible, false);
-  advance(34_000);
-  assert.equal(nudge.isVisible, false);
-  advance(1_000);
-  assert.equal(nudge.isVisible, true);
-  // Tocar un punto (abrir un texto) la aparta al instante…
-  nudge.update(false);
-  assert.equal(nudge.isVisible, false);
-  // …y al cerrar, no vuelve enseguida: espera otro rato sin uso.
-  nudge.update(true);
-  advance(20_000);
-  assert.equal(nudge.isVisible, false);
-  advance(15_000);
-  assert.equal(nudge.isVisible, true);
-  assert.deepEqual(log, ['on@0', 'off@15000', 'on@50000', 'off@50000', 'on@85000']);
-  nudge.dispose();
 });
 
 test('el filtro de pose deja fuera el temblor y sigue sin retraso un barrido del teléfono', () => {
@@ -1383,10 +1345,17 @@ test('en la escena, arrastrar un animal gira solo ese; el primer plano sale en t
   adapter.applyDiscovery(discovery);
   advance(0.016);
   assert.equal(adapter.focusedModelId, 'crab');
+  // Sin desenfoque (se quitó a petición del cliente): el resto del mapa
+  // sigue a la vista detrás del animal.
+  const mapLayer = iconOf('whale').parent!.parent!.parent!;
+  assert.equal(mapLayer.visible, true);
   const staged = adapter.pickables?.get('crab')?.children.find((child) => child.userData['modelId'] === 'crab');
   assert.ok(staged);
   assert.ok(Math.abs(staged.rotation.y) > 0.4 && Math.abs(staged.rotation.y) < 0.9, `giro ${staged.rotation.y}`);
   assert.ok(staged.rotation.x > 0.1, 'se ve un poco desde arriba');
+  // Al cerrar, el mapa vuelve.
+  adapter.applyDiscovery(discovery.focus(null));
+  assert.equal(mapLayer.visible, true);
   adapter.clear();
 });
 
@@ -1537,7 +1506,7 @@ test('mientras narra solo suena la voz: tocar anima sin sonar y no la corta; en 
   assert.equal(h.log.at(-1), 'clip /turtle/t1');
 });
 
-test('alejarse y volver a acercarse al animal abierto no reabre la ficha ni corta la narración', async () => {
+test('volver a pedir abrir el animal que ya está abierto no reabre la ficha ni corta la narración', async () => {
   const turtle = narratedTurtle();
   const repo = { findAll: async () => [turtle], findById: async () => turtle };
   let state = ArSession.idle().searching(Placement.initial(turtle.id, turtle.defaultScale)).tracking();
@@ -1545,15 +1514,14 @@ test('alejarse y volver a acercarse al animal abierto no reabre la ficha ni cort
   h.audio.playVoice = (url: string) => { h.log.push(`voice ${url}`); return new Promise(() => {}); };
   const sounds = new AnimalSoundscape(h.audio as never, () => state, h.timers);
   const scene = { applyDiscovery() {} };
-  const discover = new DiscoverNearbyModel(scene as never, repo as never, sounds, analytics, () => state, (next) => { state = next; });
+  const discover = new DiscoverModel(scene as never, repo as never, sounds, analytics, () => state, (next) => { state = next; });
   const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   discover.execute('turtle');
   await flush();
   h.fire();
   assert.equal(h.log.at(-1), 'voice /turtle/n1');
-  // El pulso aleja la cámara un momento y la vuelve a acercar.
-  discover.execute(null);
+  // Un segundo aviso de abrirla (un doble toque que se cuela, p. ej.).
   discover.execute('turtle');
   await flush();
   assert.ok(!h.log.includes('voice off'), 'la narración se cortó al volver a acercarse');
@@ -1590,4 +1558,330 @@ test('el primer trozo de cada narración se descarga antes que los toques', () =
   }
   const firstCall = order.findIndex((url) => url.includes('/call-'));
   assert.ok(order.findIndex((url) => url.endsWith('narration-1.mp3')) > firstCall);
+});
+
+test('la mano se posa sobre el animal más centrado, no se come los toques y un animal dormido se toca por su contorno', async () => {
+  globalThis.document = { createElement: () => ({ getContext: () => null }) } as unknown as Document;
+  const scene = new Scene();
+  const camera = new PerspectiveCamera(60, 0.6, 0.01, 100);
+  let advance = (_delta: number): unknown => undefined;
+  const runtime = {
+    prepare: async () => {},
+    init: () => ({ scene, renderer: {} }),
+    mindar: { scene, camera, renderer: {} },
+    onFrame: (fn: (delta: number) => unknown) => { advance = fn; return () => {}; },
+    anchorVisible: true,
+    anchor: { group: new Group() },
+  };
+  // El mapa, delante de la cámara.
+  runtime.anchor.group.position.set(0, 0, -1.4);
+  runtime.anchor.group.updateMatrixWorld(true);
+  const make = (id: string, u: number, v: number) => ArModel.fromSnapshot({
+    id, name: id, description: 'Ficha',
+    source: ModelSource.primitive('whale', 0x224466), spot: { u, v },
+    outlineShape: [{ u: u - 0.06, v: v - 0.04 }, { u: u + 0.06, v: v - 0.04 }, { u, v: v + 0.05 }],
+    sound: { waveform: 'sine', rootFrequencyHz: 90, overtoneRatios: [1], durationMs: 1800 },
+  });
+  const adapter = new ThreeSceneAdapter(runtime as never, 1.432);
+  await adapter.preload([make('whale', 0.2, 0.15), make('crab', 0.52, 0.5)]);
+  adapter.applyDiscovery(ArSession.idle().discovery);
+  adapter.setHint({ kind: 'animal', gesture: 'tap', urgent: false, preferred: null, candidates: ['whale', 'crab'] });
+  for (let frame = 0; frame < 30; frame += 1) advance(1 / 30);
+  scene.updateMatrixWorld(true);
+
+  // Los dos, dormidos, son tocables: tocarlos es descubrirlos.
+  const pickables = adapter.pickables;
+  assert.ok(pickables?.has('whale') && pickables.has('crab'));
+  // La mano está sobre el cangrejo, el más centrado.
+  let hand: Object3D | undefined;
+  // La mano: el sprite apoyado en la punta del dedo (no el humo ni el «2×»).
+  scene.traverse((node) => { if (node instanceof Sprite && Math.abs(node.center.y - 0.88) < 1e-3) hand = node; });
+  assert.ok(hand?.visible, 'la mano no se ve');
+  const handAt = hand!.getWorldPosition(new Vector3());
+  const crabAt = pickables!.get('crab')!.getWorldPosition(new Vector3());
+  const whaleAt = pickables!.get('whale')!.getWorldPosition(new Vector3());
+  assert.ok(handAt.distanceTo(crabAt) < handAt.distanceTo(whaleAt));
+  // Un toque en el cangrejo da en el cangrejo, no en la mano.
+  const ray = new Raycaster();
+  ray.setFromCamera(new Vector2(crabAt.clone().project(camera).x, crabAt.clone().project(camera).y), camera);
+  const hits = ray.intersectObjects([...pickables!.values()], true).filter((hit) => hit.object.visible);
+  assert.ok(hits.length > 0 && hits.every((hit) => hit.object.type !== 'Sprite'));
+  // La ballena como preferida: la mano va a ella, aunque el cangrejo esté
+  // más centrado; estar en medio no basta para quitársela.
+  adapter.setHint({ kind: 'animal', gesture: 'tap', urgent: false, preferred: 'whale', candidates: ['whale', 'crab'] });
+  for (let frame = 0; frame < 30; frame += 1) advance(1 / 30);
+  scene.updateMatrixWorld(true);
+  const handOnWhale = hand!.getWorldPosition(new Vector3());
+  assert.ok(handOnWhale.distanceTo(whaleAt) < handOnWhale.distanceTo(crabAt), 'la primera sugerencia no es la ballena');
+  // Acercarse al cangrejo (en medio y cerca): la mano se va con él.
+  runtime.anchor.group.position.set(-crabAt.x, -crabAt.y, -0.5);
+  runtime.anchor.group.updateMatrixWorld(true);
+  for (let frame = 0; frame < 60; frame += 1) advance(1 / 30);
+  scene.updateMatrixWorld(true);
+  const crabNow = pickables!.get('crab')!.getWorldPosition(new Vector3());
+  const whaleNow = pickables!.get('whale')!.getWorldPosition(new Vector3());
+  const handNow = hand!.getWorldPosition(new Vector3());
+  assert.ok(handNow.distanceTo(crabNow) < handNow.distanceTo(whaleNow), 'acercarse al cangrejo no movió la mano');
+  // Con el primer animal abierto, la mano se va.
+  adapter.setHint(null);
+  for (let frame = 0; frame < 30; frame += 1) advance(1 / 30);
+  assert.equal(hand!.parent?.visible, false);
+  adapter.clear();
+});
+
+test('el salpicón sale donde está el cuerpo al tocar el agua, aunque el animal esté girado', () => {
+  globalThis.document = { createElement: () => ({ getContext: () => null }) } as unknown as Document;
+  const turtle = ArModel.fromSnapshot(NUQUI_CATALOG.find((entry) => entry.id === 'turtle')!);
+  // Un cuerpo con su cadera algo adelantada, como la de un animal a mitad de salto.
+  const body = new Group();
+  body.add(new Mesh(new BoxGeometry(0.1, 0.04, 0.1), new MeshBasicMaterial()));
+  const hips = new Bone();
+  hips.name = 'RIG_TortugaHips';
+  hips.position.set(0.03, 0, 0.02);
+  body.add(hips);
+  const pin = new MarkerPin(turtle, { object: body, animations: [], splashes: [] }, 0, 1.432);
+  const internals = pin as unknown as {
+    splash: { group: Group; burst(strength: number): void };
+    measureSplashSpot(): void;
+  };
+  for (const yaw of [0, Math.PI / 2, -2]) {
+    pin.applyTransform(1, yaw, 0);
+    internals.measureSplashSpot();
+    internals.splash.burst(1);
+    pin.advance(0, 0);
+    pin.group.updateMatrixWorld(true);
+    const hipsAt = pin.group.worldToLocal(hips.getWorldPosition(new Vector3()));
+    const splashAt = internals.splash.group.position;
+    assert.ok(Math.abs(splashAt.x - hipsAt.x) < 1e-6, `giro ${yaw}: salpica en x=${splashAt.x.toFixed(3)}, el cuerpo está en ${hipsAt.x.toFixed(3)}`);
+    // Siempre en la superficie del agua y por delante del cuerpo.
+    assert.ok(splashAt.z >= hipsAt.z);
+  }
+  pin.dispose();
+});
+
+test('el tutorial, animal por animal: toque, doble toque, la ✕ al callar la narración, el siguiente; un texto y exploración libre', () => {
+  const pending = new Map<number, { fn: () => void; ms: number }>();
+  let next = 1;
+  const timers = {
+    set: (fn: () => void, ms: number) => { pending.set(next, { fn, ms }); return next++; },
+    clear: (handle: unknown) => { pending.delete(handle as number); },
+  };
+  const fire = (ms: number) => {
+    for (const [handle, timer] of [...pending]) {
+      if (timer.ms === ms) { pending.delete(handle); timer.fn(); }
+    }
+  };
+  const animals = ['whale', 'bird', 'crab', 'turtle'];
+  const tutorial = new Tutorial(animals, ['turismo', 'rana'], timers);
+  const states: { step: string; urgent: boolean; preferred: string | null; gesture: string | undefined; remaining: number }[] = [];
+  tutorial.onChange((state) => states.push({
+    step: state.step, urgent: state.urgent, preferred: state.hint?.preferred ?? null,
+    gesture: state.hint?.gesture, remaining: state.remaining,
+  }));
+  const last = () => states.at(-1)!;
+  let state = ArSession.idle().searching(Placement.initial(model.id, model.defaultScale));
+  const openAndHear = (id: string) => {
+    state = state.withDiscovery(state.discovery.unlock(ModelId.of(id)));
+    tutorial.update(state);
+    tutorial.narrationChanged(true);
+    // Mientras narra, nada tapa la ficha.
+    assert.equal(last().step, 'off');
+    tutorial.narrationChanged(false);
+    // Calló: la mano señala la ✕.
+    assert.equal(last().step, 'closeFocus');
+    state = state.withDiscovery(state.discovery.focus(null));
+    tutorial.update(state);
+  };
+
+  tutorial.update(state);
+  assert.equal(last().step, 'off');
+  // Mapa encontrado: la mano sobre la ballena, UN toque.
+  state = state.tracking();
+  tutorial.update(state);
+  assert.deepEqual(last(), { step: 'tapAnimal', urgent: false, preferred: 'whale', gesture: 'tap', remaining: 4 });
+  fire(6000);
+  assert.equal(last().urgent, true);
+  // Toca el cangrejo (vale cualquiera): ahora DOS veces ese.
+  tutorial.animalTapped('crab');
+  assert.deepEqual(last(), { step: 'doubleTap', urgent: false, preferred: 'crab', gesture: 'double', remaining: 4 });
+  openAndHear('crab');
+  // Al cerrar, ENSEGUIDA el siguiente (sin esperar).
+  assert.deepEqual(last(), { step: 'tapAnimal', urgent: false, preferred: null, gesture: 'tap', remaining: 3 });
+  // Tocar uno ya conocido no cambia nada; uno nuevo, su doble toque.
+  tutorial.animalTapped('crab');
+  assert.equal(last().step, 'tapAnimal');
+  tutorial.animalTapped('whale');
+  assert.deepEqual(last(), { step: 'doubleTap', urgent: false, preferred: 'whale', gesture: 'double', remaining: 3 });
+  openAndHear('whale');
+  for (const id of ['bird', 'turtle']) {
+    assert.equal(last().step, 'tapAnimal');
+    tutorial.animalTapped(id);
+    assert.equal(last().step, 'doubleTap');
+    openAndHear(id);
+  }
+  // Los cuatro conocidos: enseguida, UN punto de los textos.
+  assert.equal(last().step, 'tapText');
+  assert.equal(last().remaining, 0);
+  // Al cerrar ese primer texto: «Explora el resto de Nuquí», sin mano.
+  state = state.withDiscovery(state.discovery.read('turismo'));
+  tutorial.update(state);
+  assert.equal(last().step, 'off');
+  state = state.withDiscovery(state.discovery.focus(null));
+  tutorial.update(state);
+  assert.equal(last().step, 'explore');
+  assert.equal(tutorial.state.hint, null);
+  // A los 5 s se va, y el tutorial se acabó: leer otro no lo trae de vuelta.
+  fire(5000);
+  assert.equal(last().step, 'off');
+  state = state.withDiscovery(state.discovery.read('rana'));
+  tutorial.update(state);
+  state = state.withDiscovery(state.discovery.focus(null));
+  tutorial.update(state);
+  assert.equal(last().step, 'off');
+  assert.equal(pending.size, 0);
+  // Volver a abrir un animal ya conocido no vuelve a señalar la ✕.
+  state = state.withDiscovery(state.discovery.unlock(ModelId.of('crab')));
+  tutorial.update(state);
+  tutorial.narrationChanged(true);
+  tutorial.narrationChanged(false);
+  assert.equal(last().step, 'off');
+});
+
+test('un toque que cae a pocos píxeles de un animal cuenta; lo que está justo debajo siempre gana', () => {
+  const camera = new PerspectiveCamera(45, 1, 0.01, 100);
+  camera.position.set(0, 0, 5);
+  camera.updateMatrixWorld(true);
+  const canvas = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 400, height: 400 }) };
+  const pickables = new Map<string, Object3D>();
+  const place = (id: string, x: number, size: number) => {
+    const animal = new Group();
+    animal.userData['modelId'] = id;
+    const body = new Mesh(new PlaneGeometry(size, size), new MeshBasicMaterial());
+    body.position.x = x;
+    animal.add(body);
+    animal.updateMatrixWorld(true);
+    pickables.set(id, animal);
+  };
+  place('whale', -0.5, 0.4);
+  place('crab', 0.12, 0.2);
+  const adapter = new PointerInteractionAdapter({ mindar: { camera, renderer: { domElement: canvas } } } as never, { pickables });
+  const at = (x: number, y: number) =>
+    (adapter as unknown as { forgivingTargetAt(x: number, y: number): { id: string } | null }).forgivingTargetAt(x, y);
+  const px = (x: number) => (new Vector3(x, 0, 0).project(camera).x + 1) * 200;
+  // Justo fuera del borde derecho de la ballena, a unos 8 px: cuenta.
+  const whaleEdge = px(-0.5 + 0.2);
+  assert.equal(at(whaleEdge + 8, 200)?.id, 'whale');
+  // Sobre el cangrejo, aunque la ballena quede a pocos píxeles: el cangrejo.
+  assert.equal(at(px(0.12 - 0.1) + 2, 200)?.id, 'crab');
+  // Lejos de todo: nada.
+  assert.equal(at(px(0.8), 200), null);
+});
+
+test('dos toques seguidos sobre el mismo animal abren; lentos, lejos o en otro, son dos toques', () => {
+  const camera = new PerspectiveCamera(45, 1, 0.01, 100);
+  camera.position.set(0, 0, 5);
+  camera.updateMatrixWorld(true);
+  const canvas = {
+    style: {} as Record<string, string>,
+    addEventListener() {}, removeEventListener() {}, setPointerCapture() {},
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }),
+  };
+  const pickables = new Map<string, Object3D>();
+  const place = (id: string, x: number) => {
+    const animal = new Group();
+    animal.userData['modelId'] = id;
+    const body = new Mesh(new PlaneGeometry(0.6, 0.6), new MeshBasicMaterial());
+    body.position.x = x;
+    animal.add(body);
+    animal.updateMatrixWorld(true);
+    pickables.set(id, animal);
+  };
+  place('whale', -0.6);
+  place('crab', 0.6);
+  const adapter = new PointerInteractionAdapter({ mindar: { camera, renderer: { domElement: canvas } } } as never, { pickables });
+  const log: string[] = [];
+  adapter.attach({
+    onTapModel: (id) => log.push(`toque ${id}`),
+    onDoubleTapModel: (id) => log.push(`doble ${id}`),
+    onTapText() {}, onRotate() {},
+  });
+  const pointer = adapter as unknown as { handleDown(e: unknown): void; handleUp(e: unknown): void };
+  let clock = 1000;
+  const realNow = performance.now.bind(performance);
+  performance.now = () => clock;
+  const tap = (x: number, y = 50) => {
+    pointer.handleDown({ pointerId: 1, clientX: x, clientY: y });
+    clock += 80;
+    pointer.handleUp({ pointerId: 1, clientX: x, clientY: y });
+  };
+  const whaleX = (new Vector3(-0.6, 0, 0).project(camera).x + 1) * 50;
+  const crabX = (new Vector3(0.6, 0, 0).project(camera).x + 1) * 50;
+  try {
+    tap(whaleX); clock += 200; tap(whaleX);
+    assert.deepEqual(log, ['toque whale', 'doble whale']);
+    // Demasiado lentos: dos toques.
+    log.length = 0;
+    clock += 2000; tap(whaleX); clock += 700; tap(whaleX);
+    assert.deepEqual(log, ['toque whale', 'toque whale']);
+    // Uno en cada animal: dos toques.
+    log.length = 0;
+    clock += 2000; tap(whaleX); clock += 150; tap(crabX);
+    assert.deepEqual(log, ['toque whale', 'toque crab']);
+  } finally {
+    performance.now = realNow;
+    adapter.detach();
+  }
+});
+
+test('revelar con un toque no cuenta como conocerlo: los textos se abren al CONOCER a todos', () => {
+  const ids = ['whale', 'crab'].map((id) => ModelId.of(id));
+  let discovery = Discovery.empty();
+  for (const id of ids) discovery = discovery.reveal(id);
+  assert.equal(discovery.isUnlocked(ids[0]!), true);
+  assert.equal(discovery.focused, null);
+  assert.equal(discovery.hasFoundAll(2), false);
+  for (const id of ids) discovery = discovery.unlock(id).focus(null);
+  assert.equal(discovery.hasFoundAll(2), true);
+  assert.equal(discovery.openedCount, 2);
+  // Revelar uno ya revelado no cambia nada.
+  assert.equal(discovery.reveal(ids[0]!), discovery);
+});
+
+test('en un teléfono, la cámara de MindAR se corrige a su campo de visión real antes de usarse', async () => {
+  const { chooseLongSideFov, installCameraModel, verticalFieldOfView } = await import('../src/infrastructure/mindar/CameraModel');
+  // En vertical el lado largo es el alto: su campo de visión es el vertical.
+  assert.ok(Math.abs(verticalFieldOfView(720, 1280, 66) - (66 * Math.PI) / 180) < 1e-9);
+  // Apaisado: el vertical es el del lado corto, menor.
+  assert.ok(verticalFieldOfView(1280, 720, 66) < (45 * Math.PI) / 180);
+  // Teléfono → 66°; ordenador → el de MindAR; `?fov=` manda si es razonable.
+  assert.equal(chooseLongSideFov(null, true), 66);
+  assert.equal(chooseLongSideFov(null, false), null);
+  assert.equal(chooseLongSideFov(70, false), 70);
+  assert.equal(chooseLongSideFov(500, true), 66);
+
+  // MindAR crea el controlador con 45° y ACTO SEGUIDO lo usa: la corrección
+  // tiene que llegar en la propia asignación.
+  const mindar: { controller?: unknown } = {};
+  installCameraModel(mindar, 66);
+  const focal45 = 1280 / 2 / Math.tan((45 * Math.PI) / 360);
+  const controller = {
+    inputWidth: 720,
+    inputHeight: 1280,
+    projectionTransform: [[focal45, 0, 360], [0, focal45, 640], [0, 0, 1]],
+    projectionMatrix: [] as number[],
+    _glProjectionMatrix: ({ projectionTransform, height }: { projectionTransform: number[][]; height: number }) =>
+      [0, 0, 0, 0, 0, (2 * projectionTransform[1]![1]!) / height],
+  };
+  const transform = controller.projectionTransform;
+  mindar.controller = controller;
+  assert.equal(mindar.controller, controller);
+  // La misma matriz (en su sitio), con la focal de 66°.
+  assert.equal(controller.projectionTransform, transform);
+  const focal66 = 1280 / 2 / Math.tan((66 * Math.PI) / 360);
+  assert.ok(Math.abs(transform[0]![0]! - focal66) < 1e-6 && Math.abs(transform[1]![1]! - focal66) < 1e-6);
+  assert.ok(Math.abs(controller.projectionMatrix[5]! - 1 / Math.tan((66 * Math.PI) / 360)) < 1e-9);
+  // En un ordenador no se toca nada.
+  const desk: { controller?: unknown } = {};
+  installCameraModel(desk, null);
+  assert.equal(Object.getOwnPropertyDescriptor(desk, 'controller'), undefined);
 });

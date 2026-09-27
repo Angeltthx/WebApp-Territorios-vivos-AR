@@ -2,8 +2,22 @@ import type { ArModel } from '@domain/entities/ArModel';
 import type { Placement } from '@domain/entities/Placement';
 import type { Discovery } from '@domain/value-objects/Discovery';
 import type { ModelId } from '@domain/value-objects/ModelId';
-import type { Proximity } from '@domain/value-objects/Proximity';
 import type { Stabilization } from '@domain/value-objects/Stabilization';
+
+/**
+ * La mano del tutorial (ver `setHint`): sobre qué clase de cosa se posa,
+ * qué gesto enseña, si insiste, a cuál prefiere y entre cuáles puede elegir.
+ */
+export interface HintSpec {
+  readonly kind: 'animal' | 'text';
+  /** Un toque, o dos seguidos (el que abre un animal). */
+  readonly gesture: 'tap' | 'double';
+  readonly urgent: boolean;
+  /** Dónde ponerla si está a la vista (la ballena la primera vez), o null. */
+  readonly preferred: string | null;
+  /** Ids de animales (o de textos) sobre los que puede ir. */
+  readonly candidates: readonly string[];
+}
 
 /**
  * Abstrae el motor 3D.
@@ -25,8 +39,13 @@ export interface ScenePort {
 
   setStabilization(stabilization: Stabilization): void;
 
-  /** Regla que decide a qué distancia sale cada animal de su escondite. */
-  setProximity(proximity: Proximity): void;
+  /**
+   * La mano del tutorial sobre el propio mapa, o null para retirarla. La
+   * escena decide sobre CUÁL de los candidatos (solo ella sabe qué está a
+   * la vista): el preferido si se ve, y si la cámara se centra en otro,
+   * ese.
+   */
+  setHint(hint: HintSpec | null): void;
 
   /**
    * Pone la escena de acuerdo con lo descubierto: qué animales están fuera
@@ -39,20 +58,9 @@ export interface ScenePort {
   applyDiscovery(discovery: Discovery): void;
 
   /**
-   * Avisa cuando cambia qué animal está lo bastante cerca, o null si
-   * ninguno lo está.
-   *
-   * Va por aquí y no por InteractionPort porque no nace de un gesto: nace
-   * de la geometría de la escena, que es justo lo que este adaptador tiene
-   * y el interior no. El mismo reparto que TrackingPort, que avisa de que
-   * apareció el marcador sin que nadie se lo pida.
-   */
-  onNearbyModel(listener: (modelId: string | null) => void): void;
-
-  /**
    * Avisa cada vez que un animal salpica al tocar el agua, con la fuerza
    * del salpicón (0–1). Es un fotograma exacto de la animación y solo la
-   * escena lo sabe, igual que la cercanía.
+   * escena lo sabe.
    */
   onSplash(listener: (modelId: string, strength: number) => void): void;
 

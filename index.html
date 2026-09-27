@@ -20,6 +20,15 @@
     />
     <title>Territorios Vivos AR · Nuquí, Chocó</title>
 
+    <!-- El icono de la experiencia (LOGO.png → `npm run make-icons`). Sin
+         estas líneas se veía el de Netlify: en la pestaña, en Google y en el
+         «Reproduciendo ahora» del iPhone con la página en segundo plano. -->
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/icons/favicon-96.png" type="image/png" sizes="96x96" />
+    <link rel="icon" href="/icons/favicon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
     <!-- Las tipografías DEL PÓSTER: Arvo (los nombres de lugar, JURUBIDÁ,
          TRIBUGÁ…), Oswald (las etiquetas de especie, BALLENA JOROBADA) y
          Merriweather (los párrafos, y su cursiva para los nombres
@@ -454,7 +463,7 @@
          oscurece la pantalla. La guia puede permitirselo porque mientras se
          busca el mapa no hay nada que mirar; esta aparece cuando el mapa ya
          esta en cuadro, y atenuarlo estorbaria justo lo que el usuario
-         necesita ver para acercarse a un animal.
+         necesita ver para tocar un animal.
          ------------------------------------------------------------------ */
       #approach {
         position: fixed;
@@ -473,78 +482,33 @@
         transition: opacity 0.45s ease, visibility 0.45s;
       }
       #approach[data-visible="true"] { opacity: 1; visibility: visible; }
-      /* Si en 7 s no ha encontrado ningún animal: un teléfono de línea
-         blanca baja hacia un contorno dorado punteado sobre el mapa —el
-         mismo que marca a los animales por encontrar—; en su pantalla el
-         animal crece y, al llegar, el contorno late. Enseña a la vez QUÉ
-         buscar y QUÉ hacer (acercarse; aquí no hay zoom con los dedos).
-         Mismo lenguaje que el visor de la guía: punteado blanco, esquinas. */
-      #approach-hands {
-        position: absolute;
-        left: 50%;
-        bottom: calc(12vh + env(safe-area-inset-bottom));
-        width: min(52vw, 210px);
-        transform: translateX(-50%);
-        opacity: 0;
-        transition: opacity 0.6s ease;
-        overflow: visible;
-        filter: drop-shadow(0 2px 12px rgba(0, 0, 0, 0.75));
+      /* La mano que enseña a tocar no está aquí: vive en el propio mapa,
+         sobre un animal (TapHint, en la escena 3D). Aquí solo el rótulo.
+         Con prisa —6 s sin tocar ninguno, `data-urgent`— el rótulo late al
+         mismo ritmo que la guía de encuadre, y la silueta dorada del
+         subtítulo brilla: dice a la vez QUÉ tocar y que ya toca hacerlo. */
+      #approach[data-urgent="true"] #approach-title {
+        animation: approach-call 1.6s cubic-bezier(0.33, 0, 0.2, 1) infinite;
       }
-      #approach[data-stuck="true"] #approach-hands { opacity: 1; }
-      #approach-hands .sheet {
-        fill: rgba(255, 255, 255, 0.06);
-        stroke: rgba(255, 255, 255, 0.55);
-        stroke-width: 1.6;
-        stroke-dasharray: 5 5;
-        stroke-linejoin: round;
+      #approach[data-urgent="true"] #approach-sub strong {
+        animation: approach-gold 1.6s ease-in-out infinite;
       }
-      #approach-hands .outline,
-      #approach-hands .seen {
-        fill: none;
-        stroke: #ffc53d;
-        stroke-width: 2.2;
-        stroke-dasharray: 4 4;
+      @keyframes approach-call {
+        0%, 62%, 100% { transform: scale(1); text-shadow: 0 2px 22px rgba(0, 0, 0, 0.95); }
+        30% { transform: scale(1.1); text-shadow: 0 2px 22px rgba(0, 0, 0, 0.95), 0 0 24px rgba(255, 255, 255, 0.5); }
       }
-      #approach-hands .outline {
-        transform-box: fill-box;
-        transform-origin: center;
-        animation: contorno 2.6s ease-in-out infinite;
+      @keyframes approach-gold {
+        0%, 62%, 100% { text-shadow: 0 1px 14px rgba(0, 0, 0, 0.95); }
+        30% { text-shadow: 0 0 14px rgba(255, 197, 61, 0.9); }
       }
-      #approach-hands .phone {
-        animation: bajar 2.6s ease-in-out infinite;
+      #approach-sub strong {
+        font-weight: 700;
+        color: #ffc53d;
       }
-      #approach-hands .body {
-        fill: rgba(0, 0, 0, 0.28);
-        stroke: #fff;
-        stroke-width: 2.4;
+      @media (prefers-reduced-motion: reduce) {
+        #approach[data-urgent="true"] #approach-title,
+        #approach[data-urgent="true"] #approach-sub strong { animation: none; }
       }
-      #approach-hands .corner {
-        fill: none;
-        stroke: #fff;
-        stroke-width: 2.2;
-        stroke-linecap: round;
-      }
-      #approach-hands .seen {
-        transform-box: fill-box;
-        transform-origin: center;
-        animation: crecer 2.6s ease-in-out infinite;
-      }
-      @keyframes bajar {
-        0%, 10% { transform: translateY(0); }
-        55%, 72% { transform: translateY(26px); }
-        100% { transform: translateY(0); }
-      }
-      @keyframes crecer {
-        0%, 10% { transform: scale(0.55); opacity: 0.6; }
-        55%, 72% { transform: scale(1.35); opacity: 1; }
-        100% { transform: scale(0.55); opacity: 0.6; }
-      }
-      @keyframes contorno {
-        0%, 50% { transform: scale(1); opacity: 0.75; }
-        60% { transform: scale(1.14); opacity: 1; }
-        72%, 100% { transform: scale(1); opacity: 0.75; }
-      }
-
 
       #approach-title {
         margin: 0;
@@ -854,6 +818,61 @@
       }
       @media (prefers-reduced-motion: reduce) {
         #focus-narration, .narration-badge::before, .narration-badge::after { animation: none !important; }
+      }
+
+      /* LA ✕ DEL TUTORIAL. Al callar la primera narración de un animal
+         (`#focus[data-close-hint]`), una mano toca la ✕ desde abajo, un
+         anillo dorado late alrededor de ella y una píldora dice qué hacer.
+         Con prisa (`data-urgent`), todo más rápido. */
+      #close-hint {
+        position: absolute;
+        top: calc(52px + env(safe-area-inset-top));
+        right: calc(2px + env(safe-area-inset-right));
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.4s ease, visibility 0.4s;
+      }
+      #focus[data-close-hint="true"] #close-hint { opacity: 1; visibility: visible; }
+      .close-hand {
+        width: 64px;
+        height: 64px;
+        margin-right: 1px;
+        transform-origin: 45% 12%;
+        animation: close-tap 1.5s ease-in-out infinite;
+      }
+      #close-hint-label {
+        margin: 0;
+        padding: 7px 12px;
+        border-radius: 999px;
+        background: rgba(16, 18, 20, 0.62);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        font: 700 13px/1.1 var(--font-text);
+        color: #fff;
+        white-space: nowrap;
+      }
+      @keyframes close-tap {
+        0%, 100% { transform: translate(0, 10px) scale(1); }
+        45% { transform: translate(0, -4px) scale(0.92); }
+        60% { transform: translate(0, -4px) scale(0.92); }
+      }
+      #focus[data-close-hint="true"] #focus-close {
+        border-color: rgba(255, 197, 61, 0.9);
+        animation: close-ring 1.5s ease-out infinite;
+      }
+      @keyframes close-ring {
+        0% { box-shadow: 0 0 0 0 rgba(255, 197, 61, 0.75); }
+        60%, 100% { box-shadow: 0 0 0 16px rgba(255, 197, 61, 0); }
+      }
+      #focus[data-close-hint="true"][data-urgent="true"] .close-hand,
+      #focus[data-close-hint="true"][data-urgent="true"] #focus-close { animation-duration: 0.95s; }
+      @media (prefers-reduced-motion: reduce) {
+        .close-hand, #focus[data-close-hint="true"] #focus-close { animation: none; }
       }
 
       #focus-close {
@@ -1231,79 +1250,6 @@
       }
 
 
-      /* Invitación a tocar los puntos, al encontrar a los cuatro animales.
-         Mismo lenguaje que el visor de «Apunta al mapa»: transparente,
-         borde blanco punteado, esquinas de visor y Arvo con sombra. No
-         es un botón: los puntos ya están en el mapa, esto solo lo cuenta. */
-      #explore {
-        position: fixed;
-        left: 50%;
-        bottom: calc(26px + env(safe-area-inset-bottom));
-        z-index: 3;
-        width: min(calc(100% - 44px), 23rem);
-        box-sizing: border-box;
-        padding: 16px 20px 18px;
-        border: 2px dashed rgba(255, 255, 255, 0.5);
-        border-radius: 16px;
-        background: rgba(0, 0, 0, 0.18);
-        color: #fff;
-        text-align: center;
-        pointer-events: none;
-        transform: translate(-50%, 14px);
-        opacity: 0;
-        visibility: hidden;
-        transition: opacity 0.5s ease, transform 0.5s ease, visibility 0.5s;
-      }
-      #explore[data-visible="true"] {
-        opacity: 1;
-        visibility: visible;
-        transform: translate(-50%, 0);
-        /* Respira como el visor, pero sin perder el centrado (translate). */
-        animation: respirar-centrado 2.6s ease-in-out infinite;
-      }
-      @keyframes respirar-centrado {
-        0%, 100% { transform: translate(-50%, 0) scale(1); }
-        50% { transform: translate(-50%, 0) scale(1.022); }
-      }
-      #explore > span {
-        position: absolute;
-        width: 20px;
-        height: 20px;
-        border: 3px solid #fff;
-      }
-      #explore > span:nth-child(1) { top: -3px; left: -3px; border-right: 0; border-bottom: 0; border-radius: 16px 0 0 0; }
-      #explore > span:nth-child(2) { top: -3px; right: -3px; border-left: 0; border-bottom: 0; border-radius: 0 16px 0 0; }
-      #explore > span:nth-child(3) { bottom: -3px; left: -3px; border-right: 0; border-top: 0; border-radius: 0 0 0 16px; }
-      #explore > span:nth-child(4) { bottom: -3px; right: -3px; border-left: 0; border-top: 0; border-radius: 0 0 16px 0; }
-      /* El mismo punto con onda que hay sobre los textos: "esto es lo que se toca". */
-      .explore-dot {
-        display: block;
-        width: 10px;
-        height: 10px;
-        margin: 0 auto 10px;
-        border-radius: 50%;
-        background: #fff4d6;
-        animation: onda 2s ease-out infinite;
-      }
-      @keyframes onda {
-        from { box-shadow: 0 0 0 0 rgba(255, 244, 214, 0.7); }
-        to { box-shadow: 0 0 0 14px rgba(255, 244, 214, 0); }
-      }
-      #explore-title {
-        margin: 0;
-        font-family: var(--font-title);
-        font-weight: 700;
-        font-size: clamp(20px, 5.4vw, 25px);
-        line-height: 1.2;
-        text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
-      }
-      #explore-sub {
-        margin: 6px 0 0;
-        font-size: 13.5px;
-        color: rgba(255, 255, 255, 0.88);
-        text-shadow: 0 1px 14px rgba(0, 0, 0, 0.95);
-      }
-
       /* No gastar animaciones CSS bajo la cámara una vez retirada la portada. */
       #boot[data-visible="false"] *,
       #guide[data-visible="false"] * { animation-play-state: paused !important; }
@@ -1388,27 +1334,52 @@
              a petición: la experiencia es con el mapa impreso delante. -->
       </div>
 
-      <!-- Segunda instrucción: aparece con el mapa ya localizado. -->
+      <!-- El cartel del tutorial: aparece con el mapa ya localizado, junto
+           con la mano que toca un animal (o un punto) sobre el mapa. -->
       <div id="approach" data-visible="false" aria-hidden="true">
-        <p id="approach-title">Acerca tu cámara a un animal</p>
-        <p id="approach-sub">Busca las siluetas punteadas sobre el mapa</p>
-        <svg id="approach-hands" viewBox="0 0 220 200" aria-hidden="true">
-          <!-- El mapa, en perspectiva y punteado como el visor de la guía. -->
-          <path class="sheet" d="M52 142 L168 142 L204 190 L16 190 Z" />
-          <!-- Un animal por encontrar: el mismo contorno dorado del mapa. -->
-          <ellipse class="outline" cx="110" cy="166" rx="30" ry="10" />
-          <!-- El teléfono baja hacia él; en su pantalla, el animal crece. -->
-          <g class="phone">
-            <rect class="body" x="82" y="16" width="56" height="96" rx="11" />
-            <path class="corner" d="M92 38 v-8 h8 M128 38 v-8 h-8 M92 90 v8 h8 M128 90 v8 h-8" />
-            <ellipse class="seen" cx="110" cy="64" rx="12" ry="5" />
-          </g>
-        </svg>
+        <!-- Lo reescribe ArView en cada paso del tutorial. -->
+        <p id="approach-title">Toca un animal</p>
+        <p id="approach-sub">Toca la <strong>silueta dorada</strong> para verlo moverse</p>
       </div>
 
       <!-- Primer plano de un animal descubierto. -->
       <div id="focus" data-visible="false" aria-hidden="true">
         <button type="button" id="focus-close" aria-label="Cerrar la ficha">✕</button>
+        <!-- Tutorial: al callar la narración, una mano señala la ✕. La misma
+             mano que la del mapa (TapHint): si cambia una, cambia la otra. -->
+        <div id="close-hint" aria-hidden="true">
+          <svg class="close-hand" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+          <defs>
+          <linearGradient id="close-hand-skin" gradientUnits="userSpaceOnUse" x1="40" y1="8" x2="70" y2="94">
+          <stop offset="0" stop-color="#ffffff"/>
+          <stop offset="1" stop-color="#efe9dc"/>
+          </linearGradient>
+          <filter id="close-hand-shadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="2.2" stdDeviation="2.4" flood-color="#000" flood-opacity="0.45"/>
+          </filter>
+          <radialGradient id="close-hand-glow">
+          <stop offset="0" stop-color="#ffe7a3" stop-opacity="0.95"/>
+          <stop offset="0.45" stop-color="#ffc53d" stop-opacity="0.55"/>
+          <stop offset="1" stop-color="#ffc53d" stop-opacity="0"/>
+          </radialGradient>
+          </defs>
+          <circle cx="45" cy="13" r="12" fill="url(#close-hand-glow)"/>
+          <g filter="url(#close-hand-shadow)" fill="url(#close-hand-skin)">
+          <rect x="38" y="8" width="14" height="56" rx="7"/>
+          <rect x="51" y="33" width="13" height="32" rx="6.5"/>
+          <rect x="63" y="39" width="12" height="28" rx="6"/>
+          <rect x="74" y="46" width="10.5" height="24" rx="5.25"/>
+          <path d="M38 52 H84.5 V70 C84.5 84 76 93 64 93 H55 C47 93 42 89 37 83 L24 66 C21 62 22 57 26 55 C29.5 53.3 33 54.5 35.5 57.5 L38 61 Z"/>
+          </g>
+          <g fill="none" stroke="#d9cfbb" stroke-width="1.1" stroke-linecap="round">
+          <path d="M51.6 40 V58"/>
+          <path d="M63.4 46 V60"/>
+          <path d="M74.3 52 V63"/>
+          <path d="M38.4 61.5 C40.5 66 43.5 69 47 70.5"/>
+          </g>
+          </svg>
+          <p id="close-hint-label">Toca la ✕ para cerrar</p>
+        </div>
         <h2 id="focus-name"></h2>
         <p id="focus-species"></p>
         <button type="button" id="focus-narration" hidden data-playing="false" aria-pressed="false">
@@ -1428,13 +1399,6 @@
       </div>
       <!-- Con los cuatro animales encontrados: una invitación a tocar los
            puntos de los textos. Sin botones; se aparta sola (ver ArView). -->
-      <div id="explore" data-visible="false" aria-hidden="true" aria-live="polite">
-        <span></span><span></span><span></span><span></span>
-        <i class="explore-dot" aria-hidden="true"></i>
-        <p id="explore-title">¿Quieres conocer más del Chocó?</p>
-        <p id="explore-sub">Toca los puntos del mapa para interactuar</p>
-      </div>
-
       <div id="ui">
         <button
           type="button"

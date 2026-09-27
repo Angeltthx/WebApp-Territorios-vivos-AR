@@ -36,6 +36,8 @@ import { MarkerPin } from '@infrastructure/rendering/MarkerPin';
 import { NUQUI_CATALOG } from '@infrastructure/repositories/StaticModelRepository';
 import { NUQUI_MAP_TEXTS } from '@infrastructure/repositories/StaticMapTextRepository';
 import { MapTextHotspot } from '@infrastructure/rendering/MapTextHotspot';
+import { TapHint } from '@infrastructure/rendering/TapHint';
+import { anchorPositionOf } from '@infrastructure/rendering/MarkerPin';
 import { MapText } from '@domain/value-objects/MapText';
 
 const TARGET_ASPECT = 1432 / 1000;
@@ -78,6 +80,17 @@ const hotspots = NUQUI_MAP_TEXTS.map((snapshot, index) => {
   scene.add(hotspot.group);
   return hotspot;
 });
+
+// La mano del tutorial, sobre el animal que diga `?hint=crab` (por
+// defecto la ballena), en calma; `?urgent` la pone con prisa y `?double`
+// enseña el doble toque.
+const hintParams = new URLSearchParams(window.location.search);
+const tapHint = new TapHint();
+const hinted = NUQUI_CATALOG.find((entry) => entry.id === (hintParams.get('hint') ?? 'whale')) ?? NUQUI_CATALOG[0]!;
+const hintAt = anchorPositionOf(hinted.spot, TARGET_ASPECT);
+tapHint.group.position.set(hintAt.x, hintAt.y, 0);
+tapHint.setHint({ gesture: hintParams.has('double') ? 'double' : 'tap', urgent: hintParams.has('urgent') });
+scene.add(tapHint.group);
 
 const icons = new IconLoader();
 const pins: MarkerPin[] = [];
@@ -174,12 +187,17 @@ Object.assign(window, {
   // una animación no se puede fotografiar a mitad. `tap('whale')` y luego
   // `stepVerify(1.2)` la dejan exactamente en ese instante.
   tap: (id: string) => pins[NUQUI_CATALOG.findIndex((model) => model.id === id)]?.pulse(),
+  // Gira un animal como lo haría el dedo (radianes): `turn('whale', 1.57)`
+  // y luego `tap('whale')` comprueba que el salpicón sale donde cae.
+  turn: (id: string, yaw: number, pitch = 0) =>
+    pins[NUQUI_CATALOG.findIndex((model) => model.id === id)]?.applyTransform(1, yaw, pitch),
   stepVerify: (seconds: number) => {
     const frame = 1 / 60;
     for (let t = 0; t < seconds; t += frame) {
       elapsed += frame;
       for (const pin of pins) pin.advance(frame, elapsed);
       for (const hotspot of hotspots) hotspot.advance(frame, elapsed);
+      tapHint.advance(frame);
     }
     last = performance.now();
     for (const render of draw) render();
@@ -198,6 +216,7 @@ function renderer(): void {
 
   for (const pin of pins) pin.advance(delta, elapsed);
   for (const hotspot of hotspots) hotspot.advance(delta, elapsed);
+  tapHint.advance(delta);
   for (const render of draw) render();
 
   requestAnimationFrame(renderer);

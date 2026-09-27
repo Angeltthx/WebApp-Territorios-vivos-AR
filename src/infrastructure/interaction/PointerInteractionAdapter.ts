@@ -22,6 +22,25 @@ const ROTATION_PER_PIXEL = 0.008;
  * animal cabeceaba a cada vuelta.
  */
 const TILT_PER_PIXEL = 0.006;
+/**
+ * El doble toque que abre un animal: el segundo, a menos de esto del
+ * primero, en tiempo y en pantalla, y sobre el MISMO animal. Algo más
+ * holgado que el de un sistema operativo (~300 ms): el teléfono está en
+ * una mano y el mapa se mueve bajo el dedo.
+ */
+const DOUBLE_TAP_MS = 450;
+const DOUBLE_TAP_PX = 45;
+/**
+ * TOLERANCIA DEL DEDO. Si el rayo del toque no da en nada, se prueba a
+ * estas distancias alrededor (en px, ocho direcciones cada una) antes de
+ * darlo por fallado: en algunos teléfonos un toque en el borde de un
+ * animal no entraba. Solo cuenta cuando el dedo cae en el VACÍO —lo que
+ * está justo debajo siempre gana—, así que nunca le quita el toque a otro
+ * animal o punto que sí se tocó. Del anillo más cercano con algo, gana lo
+ * que más muestras toquen.
+ */
+const TOLERANCE_RINGS_PX = [10, 18];
+const TOLERANCE_DIRECTIONS = 8;
 
 export interface InteractiveSource {
   /** Objetos tocables indexados por id, o null si no hay nada a la vista. */
@@ -59,6 +78,8 @@ export class PointerInteractionAdapter implements InteractionPort {
    * el arrastre giraba a los cuatro a la vez.
    */
   private dragTarget: string | null = null;
+  /** El último toque sobre un animal, para reconocer el segundo de un doble toque. */
+  private lastTap: { readonly id: string; readonly at: number; readonly x: number; readonly y: number } | null = null;
 
   private readonly onPointerDown = (event: PointerEvent) => this.handleDown(event);
   private readonly onPointerMove = (event: PointerEvent) => this.handleMove(event);
@@ -150,17 +171,68 @@ export class PointerInteractionAdapter implements InteractionPort {
     const elapsed = performance.now() - this.startedAt;
     if (elapsed > TAP_MAX_DURATION_MS) return;
 
-    const target = this.targetAt(event.clientX, event.clientY);
+    const target = this.forgivingTargetAt(event.clientX, event.clientY) ?? this.secondTapNear(event);
     if (target === null) return;
 
-    if (target.kind === 'text') this.handlers.onTapText(target.id);
-    else this.handlers.onTapModel(target.id);
+    if (target.kind === 'text') {
+      this.lastTap = null;
+      this.handlers.onTapText(target.id);
+      return;
+    }
+    const now = performance.now();
+    const previous = this.lastTap;
+    if (
+      previous !== null &&
+      previous.id === target.id &&
+      now - previous.at <= DOUBLE_TAP_MS &&
+      Math.hypot(event.clientX - previous.x, event.clientY - previous.y) <= DOUBLE_TAP_PX
+    ) {
+      this.lastTap = null;
+      this.handlers.onDoubleTapModel(target.id);
+      return;
+    }
+    this.lastTap = { id: target.id, at: now, x: event.clientX, y: event.clientY };
+    this.handlers.onTapModel(target.id);
   }
 
   /** Qué animal hay bajo el dedo (los textos no se giran), o null. */
   private modelAt(clientX: number, clientY: number): string | null {
-    const target = this.targetAt(clientX, clientY);
+    const target = this.forgivingTargetAt(clientX, clientY);
     return target?.kind === 'model' ? target.id : null;
+  }
+
+  /** Lo que hay bajo el dedo o, si no hay nada, lo que haya a pocos píxeles (ver TOLERANCE_RINGS_PX). */
+  private forgivingTargetAt(clientX: number, clientY: number): TapTarget | null {
+    const exact = this.targetAt(clientX, clientY);
+    if (exact !== null) return exact;
+    for (const radius of TOLERANCE_RINGS_PX) {
+      const votes = new Map<string, { target: TapTarget; count: number }>();
+      for (let i = 0; i < TOLERANCE_DIRECTIONS; i += 1) {
+        const angle = (i / TOLERANCE_DIRECTIONS) * Math.PI * 2;
+        const near = this.targetAt(clientX + Math.cos(angle) * radius, clientY + Math.sin(angle) * radius);
+        if (near === null) continue;
+        const key = `${near.kind}:${near.id}`;
+        const vote = votes.get(key) ?? { target: near, count: 0 };
+        vote.count += 1;
+        votes.set(key, vote);
+      }
+      let best: { target: TapTarget; count: number } | null = null;
+      for (const vote of votes.values()) if (best === null || vote.count > best.count) best = vote;
+      if (best !== null) return best.target;
+    }
+    return null;
+  }
+
+  /**
+   * El segundo toque de un doble toque que ha caído un poco fuera del
+   * animal: si llega a tiempo y cerca del primero, cuenta para él.
+   */
+  private secondTapNear(event: PointerEvent): TapTarget | null {
+    const previous = this.lastTap;
+    if (previous === null) return null;
+    if (performance.now() - previous.at > DOUBLE_TAP_MS) return null;
+    if (Math.hypot(event.clientX - previous.x, event.clientY - previous.y) > DOUBLE_TAP_PX) return null;
+    return { kind: 'model', id: previous.id };
   }
 
   /**

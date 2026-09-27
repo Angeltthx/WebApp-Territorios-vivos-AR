@@ -92,7 +92,7 @@ export class AnimalSoundscape {
    * gesto y su chapuzón, porque la voz los está esperando.
    */
   private inCue = false;
-  private narrationListener: ((state: NarrationState) => void) | null = null;
+  private readonly narrationListeners: ((state: NarrationState) => void)[] = [];
 
   constructor(
     private readonly audio: AudioPort,
@@ -106,9 +106,12 @@ export class AnimalSoundscape {
     this.performer = perform;
   }
 
-  /** La ficha se entera así de si hay narración y de si está sonando. */
+  /**
+   * Quién se entera de si hay narración y de si está sonando: la ficha (su
+   * botón) y el tutorial (que señala la ✕ cuando calla).
+   */
   onNarrationChange(listener: (state: NarrationState) => void): void {
-    this.narrationListener = listener;
+    this.narrationListeners.push(listener);
   }
 
   focusOpened(model: ArModel): void {
@@ -285,10 +288,11 @@ export class AnimalSoundscape {
   }
 
   private emitNarration(): void {
-    this.narrationListener?.({
+    const state = {
       available: this.focusedModel?.soundscape?.narration != null,
       playing: this.narrating,
-    });
+    };
+    for (const listener of this.narrationListeners) listener(state);
   }
 
   private isStillFocused(model: ArModel): boolean {

@@ -5,7 +5,16 @@ import type { ModelRepository } from '../ports/ModelRepository';
 import type { ScenePort } from '../ports/ScenePort';
 
 /**
- * Toque sobre un animal: lanza su gesto (el salto, el canto, el correteo).
+ * UN toque sobre un animal: su gesto (el salto, el canto, el correteo).
+ *
+ *   - SOBRE EL MAPA, si todavía es un contorno dorado, primero lo despierta
+ *     (`Discovery.reveal`: sale con su humo y se queda para siempre) y
+ *     enseguida hace su gesto. Abrirlo es otra cosa: el DOBLE toque
+ *     (DiscoverModel). Hubo una versión en la que un toque ya abría la
+ *     ficha, y se perdía algo que gustaba: tocar un animal y verlo moverse.
+ *   - EN PRIMER PLANO, solo responde el que está delante.
+ *
+ * `tapped` avisa al tutorial de que tocó un animal del mapa.
  *
  * Aquí NO suena nada. Cada sonido suena en SU momento de la animación —la
  * pava canta al estirar el cuello, la ballena resopla al volver a
@@ -22,13 +31,27 @@ export class TapModel {
     private readonly models: ModelRepository,
     private readonly analytics: AnalyticsPort,
     private readonly getSession: () => ArSession,
+    private readonly update: (session: ArSession) => void,
+    private readonly tapped: (modelId: string) => void = () => {},
   ) {}
 
   async execute(rawModelId: string): Promise<void> {
     const session = this.getSession();
     const id = ModelId.of(rawModelId);
-    const focused = session.discovery.focused?.equals(id) === true;
-    if ((!session.isInteractive && !focused) || !session.discovery.isUnlocked(id)) return;
+    const focused = session.discovery.focused;
+    if (focused !== null) {
+      // En primer plano solo cuenta el que está delante.
+      if (!focused.equals(id)) return;
+    } else {
+      // Sobre el mapa: con un texto abierto o sin el mapa a la vista, nada.
+      if (session.discovery.reading !== null || !session.isInteractive) return;
+      if (!session.discovery.isUnlocked(id)) {
+        const discovery = session.discovery.reveal(id);
+        this.scene.applyDiscovery(discovery);
+        this.update(session.withDiscovery(discovery));
+      }
+      this.tapped(rawModelId);
+    }
 
     const model = await this.models.findById(id);
     if (model === null) return;

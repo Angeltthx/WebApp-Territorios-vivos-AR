@@ -1,6 +1,6 @@
 import { buildContainer } from '@infrastructure/di/container';
-import { Proximity } from '@domain/value-objects/Proximity';
 import { ArView } from '@ui/ArView';
+import { chooseLongSideFov } from '@infrastructure/mindar/CameraModel';
 
 /**
  * Marcador: el mapa ilustrado de Nuquí (Chocó).
@@ -16,36 +16,17 @@ const TARGET_SRC = '/targets/map.mind';
 const TARGET_ASPECT = 1432 / 1000;
 
 /**
- * Umbrales de cercanía, ajustables por URL:
- *
- *     ?reveal=0.9&hide=1.2&aim=0.6
- *
- * Existe porque estos números NO se pueden calcular aquí: dependen del
- * campo de visión de la cámara real y del tamaño al que esté impreso —o en
- * pantalla— el mapa. Poder moverlos desde la barra de direcciones permite
- * calibrarlos con el teléfono en la mano, sin recompilar ni desplegar.
+ * El campo de visión de la cámara (ver CameraModel). En un teléfono, 66°
+ * sobre el lado largo; `?fov=70` lo cambia desde la barra de direcciones,
+ * para afinarlo con el póster delante sin recompilar ni desplegar. Si los
+ * animales "flotan" hacia fuera de su dibujo al inclinar el teléfono, se
+ * prueba a subirlo o bajarlo de 3 en 3.
  */
-function tunedProximity(): Proximity {
-  const params = new URLSearchParams(window.location.search);
-  const base = Proximity.default();
-
-  const value = (key: string, fallback: number): number => {
-    const raw = params.get(key);
-    const parsed = raw === null ? Number.NaN : Number(raw);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-  };
-
-  try {
-    return Proximity.of(
-      value('reveal', base.revealDistance),
-      value('hide', base.hideDistance),
-      value('aim', base.aimRadius),
-    );
-  } catch (error) {
-    // Una combinación inválida en la URL no puede tumbar la experiencia.
-    console.warn('[main] Umbrales de cercanía inválidos; se usan los de serie', error);
-    return base;
-  }
+function cameraFov(): number | null {
+  const raw = new URLSearchParams(window.location.search).get('fov');
+  const requested = raw === null ? null : Number(raw);
+  const touch = navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches;
+  return chooseLongSideFov(requested, touch);
 }
 
 const root = document.querySelector<HTMLElement>('#app');
@@ -64,6 +45,8 @@ const {
   tapModel,
   closeFocus,
   openMapText,
+  discoverModel,
+  tutorial,
   narration,
   mapTexts,
   interaction,
@@ -72,7 +55,7 @@ const {
   container: arContainer,
   imageTargetSrc: TARGET_SRC,
   targetAspect: TARGET_ASPECT,
-  proximity: tunedProximity(),
+  cameraFov: cameraFov(),
   onSessionChange: (session) => view?.render(session),
 });
 
@@ -128,11 +111,15 @@ view = new ArView(root, {
 
     interaction.attach({
       onTapModel: (modelId) => void tapModel.execute(modelId),
+      onDoubleTapModel: (modelId) => discoverModel.execute(modelId),
       onTapText: (textId) => void openMapText.execute(textId),
       onRotate: (modelId, yaw, pitch) => transformPlacement.rotateBy(modelId, yaw, pitch),
     });
   },
 });
+
+// El tutorial: el cartel sigue al mismo reloj que la mano del mapa.
+tutorial.onChange((state) => view.setTutorial(state));
 
 // El botón de la narración sigue a lo que suena: se detiene solo al acabar.
 narration.onNarrationChange((state) => view.setNarration(state));

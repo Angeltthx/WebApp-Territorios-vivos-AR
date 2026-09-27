@@ -1,4 +1,3 @@
-import { RecurringNudge } from './RecurringNudge';
 import type { MapText, MapTextBlock } from '@domain/value-objects/MapText';
 import type { ArModel } from '@domain/entities/ArModel';
 import type { ArSession, SessionStatus } from '@domain/entities/ArSession';
@@ -7,7 +6,7 @@ const HINTS: Record<SessionStatus, string> = {
   idle: 'Preparando la experiencia…',
   preparing: 'Preparando la escena…',
   searching: 'Apunta la cámara al mapa de Nuquí',
-  tracking: 'Toca el animal para que suene',
+  tracking: 'Toca un animal; dos veces para conocerlo',
   lost: 'Mapa fuera de encuadre. Vuelve a apuntar',
   error: 'Ocurrió un problema',
 };
@@ -76,6 +75,16 @@ const VOLUME_KEY = 'territorios-vivos:volumen';
 /** Al quitar el silencio con el nivel en 0, a cuánto vuelve. */
 const UNMUTE_LEVEL = 0.6;
 
+/** El paso del tutorial que tiene que escribir el cartel. */
+export interface TutorialView {
+  readonly step: 'off' | 'tapAnimal' | 'doubleTap' | 'closeFocus' | 'tapText' | 'explore';
+  readonly urgent: boolean;
+  /** Animales que faltan por conocer. */
+  readonly remaining: number;
+  /** Ya conoce alguno. */
+  readonly returning: boolean;
+}
+
 /** Lo que la vista necesita saber de la narración para pintar su botón. */
 export interface NarrationView {
   readonly available: boolean;
@@ -90,7 +99,7 @@ export interface NarrationView {
  * dure cinco segundos o quince es una decisión de presentación, no una
  * regla de la experiencia. La sesión no necesita saber que existen.
  *
- * Lo que sí viene del dominio es CUÁNDO toca cada una: `needsApproachHint`
+ * Lo que sí viene del dominio es CUÁNDO toca cada una: `needsTapHint`
  * es una pregunta sobre el estado de la sesión, no sobre el HTML.
  */
 export class ArView {
@@ -122,12 +131,11 @@ export class ArView {
   private muted = false;
   private readonly reading: HTMLElement;
   private readonly readingCard: HTMLElement;
-  private readonly explore: HTMLElement;
-  /** El ciclo de la invitación: sale, se aparta a los 15 s, vuelve tras 35 s sin uso. */
-  private readonly exploreNudge: RecurringNudge;
   private mapTexts: readonly MapText[] = [];
-  /** Cuenta los 7 s sin encontrar ningún animal (ver syncApproach). */
-  private stuckTimer: number | null = null;
+  /** El paso del tutorial (lo decide Tutorial, el mismo reloj que la mano). */
+  private tutorial: TutorialView = { step: 'off', urgent: false, remaining: 0, returning: false };
+  private readonly approachTitle: HTMLElement;
+  private readonly approachSub: HTMLElement;
 
   /**
    * El catálogo, para poder escribir el nombre y la ficha del animal
@@ -203,13 +211,8 @@ export class ArView {
 
     this.reading = this.require(root, '#reading');
     this.readingCard = this.require(root, '#reading-card');
-    this.explore = this.require(root, '#explore');
-    this.exploreNudge = new RecurringNudge(
-      () => this.setExploreVisible(true),
-      () => this.setExploreVisible(false),
-      EXPLORE_VISIBLE_MS,
-      EXPLORE_IDLE_MS,
-    );
+    this.approachTitle = this.require(root, '#approach-title');
+    this.approachSub = this.require(root, '#approach-sub');
     this.require<HTMLButtonElement>(root, '#reading-close').addEventListener('click', callbacks.onCloseFocus);
     // Tocar fuera de la tarjeta también la cierra: es un texto, no hay nada
     // que girar detrás, y es el gesto que cualquiera prueba primero.
@@ -323,6 +326,13 @@ export class ArView {
     this.applyVolume();
   }
 
+  /** El paso del tutorial: qué pide el cartel, y si insiste. */
+  setTutorial(state: TutorialView): void {
+    this.tutorial = state;
+    this.writeTutorial();
+    if (this.lastSession !== null) this.syncTransientHints(this.lastSession);
+  }
+
   /** Los textos del mapa que se pueden abrir en grande. */
   setMapTexts(texts: readonly MapText[]): void {
     this.mapTexts = texts;
@@ -366,7 +376,6 @@ export class ArView {
 
     this.syncFocus(session);
     this.syncReading(session);
-    this.syncUnlock(session);
     this.syncGuide(session);
 
     // Con una ficha abierta, el «?» sobra y además chocaría con la X: los
@@ -393,7 +402,7 @@ export class ArView {
    *
    * Se recalculan también al abrir y cerrar el menú, no solo al cambiar la
    * sesión. El motivo es visual y se ve en el móvil: el menú es
-   * semitransparente, así que "Acerca tu cámara a un animal" no quedaba
+   * semitransparente, así que "Toca un animal" no quedaba
    * detrás sino ATRAVESÁNDOLO, con las letras encima de las opciones. Que
    * el menú gane por z-index no basta cuando se le ve el fondo; lo que
    * hace falta es que el cartel se aparte mientras el menú está abierto, y
@@ -409,9 +418,7 @@ export class ArView {
       this.guideVisible ||
       this.approachVisible ||
       this.focusVisible ||
-      this.menuVisible ||
-      // La invitación a tocar los puntos vive en el mismo sitio que la píldora.
-      this.explore.dataset['visible'] === 'true';
+      this.menuVisible;
   }
 
   /**
@@ -493,40 +500,48 @@ export class ArView {
   }
 
   /**
-   * El segundo cartel: "acerca tu cámara a un animal".
+   * El cartel del tutorial, arriba: «Toca un animal», «Tócalo dos veces»,
+   * «Toca otro animal», «Toca los puntos amarillos».
    *
-   * A diferencia de la guía, este no lleva temporizador. Se queda mientras
-   * haga falta y desaparece solo cuando el usuario hace lo que pide, que es
-   * el momento exacto en que la instrucción deja de tener sentido. Que la
-   * condición venga del dominio (`needsApproachHint`) es lo que garantiza
-   * que no se quede colgado.
+   * Qué paso toca y cuándo insiste (`data-urgent`, a los 6 s) lo decide
+   * Tutorial, que es el mismo reloj que mueve la mano sobre el mapa: el
+   * cartel y la mano van a la vez. Solo con el mapa a la vista: sin él, la
+   * mano no se ve y el cartel pediría algo imposible.
    */
   private syncApproach(session: ArSession): void {
     const show =
-      session.needsApproachHint &&
+      this.tutorial.step !== 'off' &&
+      session.status === 'tracking' &&
       !this.guideVisible &&
       !this.bootVisible &&
       !this.focusVisible &&
       !this.menuVisible;
     this.approach.dataset['visible'] = show ? 'true' : 'false';
     this.approach.setAttribute('aria-hidden', show ? 'false' : 'true');
+    this.approach.dataset['urgent'] = this.tutorial.urgent ? 'true' : 'false';
+    // En la ficha: la mano que señala la ✕ al callar la narración.
+    this.focus.dataset['closeHint'] = this.tutorial.step === 'closeFocus' && this.focusVisible ? 'true' : 'false';
+    this.focus.dataset['urgent'] = this.tutorial.urgent ? 'true' : 'false';
+  }
 
-    // Si el mapa ya está en cuadro y en 7 s no ha encontrado ningún animal,
-    // se le enseña el gesto —acercar el teléfono—. El reloj
-    // corre mientras haga falta la instrucción, aunque se tape un momento
-    // (menú, «?»); al encontrar el primero se apaga para siempre.
-    if (!session.needsApproachHint) {
-      if (this.stuckTimer !== null) window.clearTimeout(this.stuckTimer);
-      this.stuckTimer = null;
-      this.approach.dataset['stuck'] = 'false';
-      return;
-    }
-    if (this.stuckTimer === null && this.approach.dataset['stuck'] !== 'true') {
-      this.stuckTimer = window.setTimeout(() => {
-        this.stuckTimer = null;
-        if (this.lastSession?.needsApproachHint === true) this.approach.dataset['stuck'] = 'true';
-      }, STUCK_HINT_MS);
-    }
+  /** Escribe el paso del tutorial. Solo cuando cambia: no en cada pintado. */
+  private writeTutorial(): void {
+    const { step, remaining, returning } = this.tutorial;
+    const [title, before, strong, after] =
+      step === 'doubleTap'
+        ? ['Tócalo dos veces', 'Dos toques seguidos para ', 'conocerlo', '']
+        : step === 'tapText'
+          ? ['Toca un punto amarillo', 'Cada uno cuenta algo del ', 'Chocó', '']
+          : step === 'explore'
+            ? ['Explora el resto de Nuquí', 'Toca los ', 'puntos amarillos', ' que quieras']
+            : returning
+              ? ['Toca otro animal', remaining === 1 ? 'Te falta ' : 'Te faltan ', `${remaining}`, ' por conocer']
+              : ['Toca un animal', 'Toca la ', 'silueta dorada', ' para verlo moverse'];
+    if (step === 'off') return;
+    this.approachTitle.textContent = title;
+    const emphasis = document.createElement('strong');
+    emphasis.textContent = strong;
+    this.approachSub.replaceChildren(before, emphasis, after);
   }
 
   private toggleMenu(): void {
@@ -678,20 +693,7 @@ export class ArView {
    * justamente lo que pide—, y si pasa un rato sin que se abra nada vuelve
    * a salir: quien no la vio o no la entendió tiene otra oportunidad.
    */
-  private syncUnlock(session: ArSession): void {
-    const discovery = session.discovery;
-    const unlocked = this.mapTexts.length > 0 && discovery.hasFoundAll(this.catalog.length);
-    // Tiene sentido con el mapa libre: nada abierto. Abrir un texto —lo que
-    // la invitación pide— la aparta al instante.
-    this.exploreNudge.update(unlocked && !discovery.isBusy);
-  }
 
-  private setExploreVisible(visible: boolean): void {
-    this.explore.dataset['visible'] = visible ? 'true' : 'false';
-    this.explore.setAttribute('aria-hidden', visible ? 'false' : 'true');
-    // Comparte sitio con la píldora de abajo: que se aparten entre sí.
-    if (this.lastSession !== null) this.syncTransientHints(this.lastSession);
-  }
 
   private clearGuideTimer(): void {
     if (this.guideTimer === null) return;
@@ -708,13 +710,6 @@ export class ArView {
     return element;
   }
 }
-
-/** Lo que dura en pantalla la invitación a tocar los puntos. */
-const EXPLORE_VISIBLE_MS = 15_000;
-/** Sin abrir nada durante esto, la invitación vuelve a salir. */
-const EXPLORE_IDLE_MS = 35_000;
-/** Sin encontrar ningún animal durante esto, aparece la indicación de acercarse. */
-const STUCK_HINT_MS = 7_000;
 
 /** Un bloque de texto del mapa, con el aspecto que tiene impreso. */
 function renderBlock(block: MapTextBlock): HTMLElement {

@@ -126,17 +126,6 @@ export class ArSession {
   }
 
   /**
-   * ¿Hay que seguir pidiéndole al usuario que se acerque a un animal?
-   *
-   * Solo mientras ve el mapa, no está mirando ninguno de cerca y no ha
-   * encontrado todavía a ninguno. En cuanto aparece el primero la
-   * instrucción sobra: ya entendió el gesto y lo repetirá solo.
-   */
-  get needsApproachHint(): boolean {
-    return this.status === 'tracking' && !this.discovery.hasAny;
-  }
-
-  /**
    * Una sesión en 'error' NO cuenta como iniciada: el usuario debe poder
    * reintentar sin recargar la página (típico tras denegar la cámara
    * por accidente y luego concederla en ajustes).
