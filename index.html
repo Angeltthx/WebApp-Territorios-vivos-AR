@@ -144,6 +144,14 @@
       #ui {
         position: fixed;
         inset: 0;
+        /* Por encima de la guía, la ficha y la lectura (2–4) y de la
+           portada (5). `position: fixed` crea SIEMPRE su propio contexto de
+           apilado: sin este z-index, todo lo de dentro —el menú incluido,
+           por alto que fuera su propio z-index— quedaba en el nivel 0,
+           debajo de la ficha, y el menú desplegado salía tapado por ella. Lo
+           demás de #ui (la píldora, «?», Reintentar) ya se esconde solo
+           cuando hay una capa encima. */
+        z-index: 6;
         display: flex;
         flex-direction: column;
         justify-content: flex-end;
@@ -520,6 +528,8 @@
         text-shadow: 0 2px 22px rgba(0, 0, 0, 0.95);
       }
       #guide-mission {
+        /* Líneas parejas: sin esto, en inglés quedaba un «it» solo abajo. */
+        text-wrap: balance;
         margin: calc(clamp(10px, 3vh, 24px) * -0.6) 0 0;
         max-width: 26ch;
         text-align: center;
@@ -541,6 +551,7 @@
       }
 
       #approach-sub {
+        text-wrap: balance;
         margin: 0;
         font-size: 13.5px;
         color: rgba(255, 255, 255, 0.86);
@@ -971,9 +982,16 @@
          tomando forma. Cada una lleva su `data-action`, que es el gancho
          por el que entrarán cuando se decidan; hoy solo cierran el menú.
          ------------------------------------------------------------------ */
+      /* EL MENÚ, POR ENCIMA DE TODO. Estaba a la altura de la ficha y de la
+         lectura (z-index 3–4) y con el fondo al 55 %: desplegado, el texto
+         de detrás se leía a través de sus opciones. Ahora va por encima de
+         cualquier capa (su contenedor #ui, a 6; él, a 30 dentro), con fondo
+         casi opaco, y oscurece el resto de la pantalla mientras está
+         abierto. */
       #menu-button {
         position: absolute;
-        z-index: 4;
+        /* Uno más que el menú: su sombra no debe oscurecer el botón que lo cierra. */
+        z-index: 31;
         top: calc(14px + env(safe-area-inset-top));
         left: calc(14px + env(safe-area-inset-left));
         display: flex;
@@ -1008,7 +1026,7 @@
 
       #menu {
         position: absolute;
-        z-index: 4;
+        z-index: 30;
         top: calc(68px + env(safe-area-inset-top));
         left: calc(14px + env(safe-area-inset-left));
         display: flex;
@@ -1017,8 +1035,9 @@
         max-width: calc(100vw - 28px);
         padding: 6px;
         border-radius: 16px;
-        background: rgba(18, 18, 20, 0.55);
-        backdrop-filter: blur(14px);
+        background: rgba(18, 18, 20, 0.9);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         border: 1px solid var(--border);
         /* Se despliega desde el botón, no desde su propio centro. */
         transform-origin: top left;
@@ -1029,7 +1048,11 @@
         visibility: hidden;
         transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
       }
+      /* Todo lo demás se oscurece un poco: una sombra que cubre la pantalla
+         entera sin ser un elemento más (tocar fuera sigue cerrando el menú,
+         ver ArView). */
       #menu[data-visible="true"] {
+        box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45);
         opacity: 1;
         visibility: visible;
         transform: none;
@@ -1095,6 +1118,48 @@
       #sound-toggle .cross { display: none; }
       #sound-toggle[aria-pressed="true"] .waves { display: none; }
       #sound-toggle[aria-pressed="true"] .cross { display: inline; stroke: #ffc53d; }
+      /* EL IDIOMA, bajo el volumen: dos opciones como un interruptor, la
+         elegida en dorado. Cada una se escribe en su propio idioma
+         («English», no «Inglés»): así la encuentra quien no lee el otro. */
+      #menu-language {
+        padding: 10px 12px 12px 14px;
+        margin-bottom: 4px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      #menu-language-title {
+        display: block;
+        margin-bottom: 8px;
+        font-family: var(--font-label);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.7);
+      }
+      #menu-language-options {
+        display: flex;
+        gap: 4px;
+        padding: 3px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+      }
+      #menu #menu-language-options button {
+        flex: 1;
+        min-height: 36px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        text-align: center;
+        font-family: var(--font-text);
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: none;
+        color: rgba(255, 255, 255, 0.85);
+        transition: background 0.2s ease, color 0.2s ease;
+      }
+      #menu #menu-language-options button[aria-pressed="true"] {
+        background: #ffc53d;
+        color: #2a2c1c;
+      }
       #sound-level {
         flex: 1;
         min-width: 0;
@@ -1516,6 +1581,15 @@
                 </svg>
               </button>
               <input type="range" id="sound-level" min="0" max="100" step="1" value="100" aria-label="Volumen" />
+            </div>
+          </div>
+          <!-- El idioma: el de la página y el de las narraciones. Al abrir,
+               el del teléfono; lo elegido aquí se recuerda. -->
+          <div id="menu-language" role="group" aria-label="Idioma">
+            <span id="menu-language-title">Idioma</span>
+            <div id="menu-language-options">
+              <button type="button" data-language="es" aria-pressed="true" lang="es">Español</button>
+              <button type="button" data-language="en" aria-pressed="false" lang="en">English</button>
             </div>
           </div>
           <button type="button" data-action="share-story">Historia</button>

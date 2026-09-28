@@ -43,6 +43,11 @@ const MANGROVE = '/audio/crab/ambience.mp3';
  * (1000×1432) y se comprobaron dibujándolas encima; aquí van divididas
  * entre 1000 y 1432.
  *
+ * EN INGLÉS (`english`), solo lo que se traduce: los párrafos, las
+ * descripciones y los nombres comunes. Los nombres propios —lugares,
+ * negocios, la web— se quedan como en el mapa; un texto que solo lleva
+ * nombres propios no necesita versión inglesa.
+ *
  * El sonido es el del LUGAR del que habla cada texto. No hay grabaciones
  * abiertas de marimba de chonta ni de currulao, así que la danza y el
  * directorio suenan a costa; si se consigue una grabación (Las Serranías
@@ -69,6 +74,24 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
           'fortalecer a las comunidades locales, sus saberes y su cultura.',
       },
     ],
+    english: {
+      label: 'Responsible tourism',
+      blocks: [
+        {
+          kind: 'paragraph',
+          text:
+            'When you choose responsible tourism, the ocean remains a refuge for whales, ' +
+            'the forest keeps breathing and communities can go on telling their own story.',
+        },
+        {
+          kind: 'paragraph',
+          text:
+            'Sustainable tourism turns every visit into an act of conservation, every ' +
+            'experience into learning and every encounter into a chance to strengthen ' +
+            'local communities, their knowledge and their culture.',
+        },
+      ],
+    },
     ambience: COAST,
   },
   {
@@ -99,6 +122,27 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
         ],
       },
     ],
+    // Los negocios conservan su nombre; solo la danza se describe.
+    english: {
+      label: 'Local tourism directory',
+      blocks: [
+        {
+          kind: 'directory',
+          entries: [
+            { name: 'Etnoaldea Kipara Té', handle: '@kiparatenuqui' },
+            { name: 'Lobos del Manglar', handle: '@lobosdelmanglar' },
+            { name: 'Vientos de Yubarta', handle: '@vientosdeyubarta' },
+            { name: 'Carlitours Nuquí', handle: '@carlitours.nuqui' },
+            { name: 'Museo Melelé', handle: '@museo_melele' },
+            { name: 'Escombros del Mar', handle: '@escombrosdelmarhostal' },
+            { name: 'Posada ecoturistica Chachita', handle: '@posadaecoturisticachachita' },
+            { name: 'Posada Sonona', handle: '@sononaecolodge' },
+            { name: 'Posada Nativa Jara', handle: '@posadanativajara.jovi' },
+            { name: 'Las Serranías traditional dance', handle: '@orfelinamarmolejo' },
+          ],
+        },
+      ],
+    },
     ambience: COAST,
   },
   {
@@ -112,6 +156,16 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
       { kind: 'pin', text: 'Escombros del Mar' },
       { kind: 'pin', text: 'Compañía de danza tradicional Las Serranía' },
     ],
+    english: {
+      label: 'Places in Nuquí and traditional dance',
+      blocks: [
+        { kind: 'pin', text: 'Vientos de Yubarta' },
+        { kind: 'pin', text: 'Carlitours Nuquí' },
+        { kind: 'pin', text: 'Museo Melelé' },
+        { kind: 'pin', text: 'Escombros del Mar' },
+        { kind: 'pin', text: 'Las Serranía traditional dance company' },
+      ],
+    },
     illustration: '/illustrations/danza.webp',
     ambience: COAST,
   },
@@ -152,6 +206,10 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
     label: 'Rana arlequín',
     area: { u0: 0.802, v0: 0.8122, u1: 0.94, v1: 0.8352 },
     blocks: [{ kind: 'species', name: 'Rana arlequín', scientific: 'Oophaga solanensis' }],
+    english: {
+      label: 'Harlequin frog',
+      blocks: [{ kind: 'species', name: 'Harlequin frog', scientific: 'Oophaga solanensis' }],
+    },
     illustration: '/illustrations/rana.webp',
     ambience: '/audio/frogs/ambience.mp3',
   },
@@ -160,6 +218,7 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
     label: 'Océano Pacífico',
     area: { u0: 0.072, v0: 0.5272, u1: 0.192, v1: 0.567 },
     blocks: [{ kind: 'sea', text: 'Océano Pacífico' }],
+    english: { label: 'Pacific Ocean', blocks: [{ kind: 'sea', text: 'Pacific Ocean' }] },
     ambience: SEA,
   },
   { id: 'jurubida', label: 'Jurubidá', area: { u0: 0.48, v0: 0.0433, u1: 0.605, v1: 0.0615 }, blocks: [{ kind: 'place', text: 'Jurubidá' }], ambience: COAST },

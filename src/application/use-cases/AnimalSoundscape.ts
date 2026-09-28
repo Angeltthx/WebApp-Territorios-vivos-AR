@@ -2,7 +2,8 @@ import type { ArModel } from '@domain/entities/ArModel';
 import type { ArSession } from '@domain/entities/ArSession';
 import type { MapText } from '@domain/value-objects/MapText';
 import type { ModelId } from '@domain/value-objects/ModelId';
-import { pickDifferent, type Narration, type NarrationCueSnapshot } from '@domain/value-objects/Soundscape';
+import { pickDifferent, resumePoint, type NarrationCueSnapshot } from '@domain/value-objects/Soundscape';
+import type { Language } from '@domain/value-objects/Language';
 import type { AudioPort } from '../ports/AudioPort';
 
 /** Temporizadores inyectables: las pruebas avanzan el tiempo a mano. */
@@ -82,6 +83,8 @@ export class AnimalSoundscape {
    * que ya no está, y no sigue.
    */
   private narrationRun = 0;
+  /** El trozo de narración que está sonando ahora, o null (pausa, callada). */
+  private voicePart: number | null = null;
   /** El animal en primer plano, para poder narrarlo a petición. */
   private focusedModel: ArModel | null = null;
   /** Animales cuya narración ya arrancó una vez: no vuelve a sonar sola. */
@@ -93,6 +96,8 @@ export class AnimalSoundscape {
    */
   private inCue = false;
   private readonly narrationListeners: ((state: NarrationState) => void)[] = [];
+  /** En qué idioma narra (el que eligió el usuario, o el de su teléfono). */
+  private language: Language = 'es';
 
   constructor(
     private readonly audio: AudioPort,
@@ -123,12 +128,36 @@ export class AnimalSoundscape {
     this.focusedId = model.id.value;
     this.focusedModel = model;
     if (soundscape.ambience !== null) this.audio.startAmbience(soundscape.ambience);
-    if (soundscape.narration === null || this.narrated.has(model.id.value)) {
+    if (soundscape.narrationIn(this.language) === null || this.narrated.has(model.id.value)) {
       this.scheduleCall(model, FIRST_CALL_MS);
       this.emitNarration();
       return;
     }
     this.startNarration(model, NARRATION_START_MS);
+  }
+
+  /**
+   * Cambia el idioma de la narración. Si está hablando, SIGUE en el otro
+   * idioma desde el principio de la frase que estaba diciendo (las dos
+   * narraciones van frase a frase: ver `resumePoint`). Si está en una pausa
+   * —el animal actuando— o a punto de empezar, el trozo siguiente ya sale en
+   * el nuevo idioma. Antes se detenía y había que volver a darle al botón.
+   */
+  setLanguage(language: Language): void {
+    if (language === this.language) return;
+    const model = this.focusedModel;
+    const before = model?.soundscape?.narrationIn(this.language) ?? null;
+    this.language = language;
+    const after = model?.soundscape?.narrationIn(language) ?? null;
+    const part = this.voicePart;
+    if (this.narrating && model !== null && part !== null && before !== null && after !== null) {
+      const from = resumePoint(before, after, part, this.audio.voicePosition() ?? 0);
+      this.narrationRun += 1;
+      this.narrate(model, part, this.narrationRun, from);
+      return;
+    }
+    if (this.narrating && after === null) this.stopNarration();
+    else if (model !== null) this.emitNarration();
   }
 
   /** El botón de la ficha: escucharla si está callada, detenerla si suena. */
@@ -140,7 +169,7 @@ export class AnimalSoundscape {
   /** Narra el animal en primer plano desde el principio. */
   playNarration(): void {
     const model = this.focusedModel;
-    if (model === null || this.narrating || model.soundscape?.narration == null) return;
+    if (model === null || this.narrating || model.soundscape?.narrationIn(this.language) == null) return;
     if (!this.isStillFocused(model)) return;
     this.clearTimer();
     this.startNarration(model, 0);
@@ -158,6 +187,7 @@ export class AnimalSoundscape {
     this.audio.stopVoice();
     this.narrating = false;
     this.inCue = false;
+    this.voicePart = null;
     this.emitNarration();
     this.scheduleCall(model, CALLS_AFTER_STOP_MS);
   }
@@ -181,6 +211,7 @@ export class AnimalSoundscape {
     const hadModel = this.focusedModel !== null;
     this.narrating = false;
     this.inCue = false;
+    this.voicePart = null;
     this.focusedModel = null;
     if (wasNarrating || hadModel) this.emitNarration();
     if (this.focusedId === null) return;
@@ -221,7 +252,7 @@ export class AnimalSoundscape {
    * abandona y el animal vuelve a sus llamadas: mejor eso que quedarse mudo.
    */
   private startNarration(model: ArModel, delayMs: number): void {
-    const narration = model.soundscape?.narration ?? null;
+    const narration = model.soundscape?.narrationIn(this.language) ?? null;
     if (narration === null) return;
     this.narrated.add(model.id.value);
     this.narrationRun += 1;
@@ -230,17 +261,25 @@ export class AnimalSoundscape {
     this.emitNarration();
     this.timer = this.timers.set(() => {
       this.timer = null;
-      this.narrate(model, narration, 0, run);
+      this.narrate(model, 0, run);
     }, delayMs);
   }
 
-  private narrate(model: ArModel, narration: Narration, part: number, run: number): void {
+  /**
+   * Un trozo de la narración, en el idioma de AHORA (se busca en cada trozo:
+   * si cambia en una pausa, el siguiente ya sale en el nuevo), desde
+   * `fromSeconds` si se retoma tras cambiar de idioma.
+   */
+  private narrate(model: ArModel, part: number, run: number, fromSeconds = 0): void {
     if (run !== this.narrationRun || !this.isStillFocused(model)) return;
-    const url = narration.parts[part];
-    if (url === undefined) return;
+    const narration = model.soundscape?.narrationIn(this.language) ?? null;
+    const url = narration?.parts[part];
+    if (narration === null || url === undefined) return;
     this.inCue = false;
-    void this.audio.playVoice(url).then((ended) => {
+    this.voicePart = part;
+    void this.audio.playVoice(url, fromSeconds).then((ended) => {
       if (run !== this.narrationRun || !this.isStillFocused(model)) return;
+      this.voicePart = null;
       // Con la misma ronda, un `false` no es que alguien la parara (parar o
       // cerrar cambian la ronda): es que el trozo no se pudo cargar. Si era
       // el primero, esta vez no cuenta como escuchada y la próxima vuelve a
@@ -257,7 +296,7 @@ export class AnimalSoundscape {
       this.perform(model, cue);
       this.timer = this.timers.set(() => {
         this.timer = null;
-        this.narrate(model, narration, part + 1, run);
+        this.narrate(model, part + 1, run);
       }, cue.holdSeconds * 1000);
     });
   }
@@ -289,7 +328,7 @@ export class AnimalSoundscape {
 
   private emitNarration(): void {
     const state = {
-      available: this.focusedModel?.soundscape?.narration != null,
+      available: this.focusedModel?.soundscape?.narrationIn(this.language) != null,
       playing: this.narrating,
     };
     for (const listener of this.narrationListeners) listener(state);
@@ -323,7 +362,7 @@ export class AnimalSoundscape {
  * el resto. Así, aunque la red vaya lenta, el primer descubrimiento ya
  * tiene con qué sonar.
  */
-export function soundPreloadOrder(models: readonly ArModel[]): readonly string[] {
+export function soundPreloadOrder(models: readonly ArModel[], language: Language = 'es'): readonly string[] {
   const first: string[] = [];
   const voices: string[] = [];
   const rest: string[] = [];
@@ -340,7 +379,8 @@ export function soundPreloadOrder(models: readonly ArModel[]): readonly string[]
     // abre un animal siempre narra, y si el trozo no ha llegado la voz entra
     // tarde (una voz nunca se descarta por tardar, pero tampoco debe hacerse
     // esperar). El resto de trozos, al final: da tiempo mientras habla.
-    const [opening, ...later] = soundscape.narration?.parts ?? [];
+    // Solo la del idioma en uso: la del otro se baja al cambiarlo.
+    const [opening, ...later] = soundscape.narrationIn(language)?.parts ?? [];
     if (opening !== undefined) voices.push(opening);
     rest.push(...soundscape.taps, ...others, ...later);
   }

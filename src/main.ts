@@ -1,5 +1,6 @@
 import { buildContainer } from '@infrastructure/di/container';
 import { ArView } from '@ui/ArView';
+import type { Language } from '@domain/value-objects/Language';
 import { chooseLongSideFov } from '@infrastructure/mindar/CameraModel';
 
 /**
@@ -37,6 +38,8 @@ if (root === null || arContainer === null) {
 }
 
 let view: ArView;
+/** El idioma en uso; lo fija la vista (el guardado, o el del navegador). */
+let language: Language = 'es';
 let gesturesAttached = false;
 
 const {
@@ -55,6 +58,7 @@ const {
   imageTargetSrc: TARGET_SRC,
   targetAspect: TARGET_ASPECT,
   cameraFov: cameraFov(),
+  language: () => language,
   onSessionChange: (session) => view?.render(session),
 });
 
@@ -90,6 +94,13 @@ view = new ArView(root, {
   // El volumen del menú. No necesita gesto: solo mueve una ganancia, y si el
   // audio aún no arrancó, se guarda para cuando lo haga.
   onVolumeChange: (level) => audio.setVolume(level),
+
+  // El idioma: la voz de las narraciones lo sigue (la vista ya cambió sus
+  // textos). Se dispara también al construir la vista, con el inicial.
+  onLanguageChange: (chosen) => {
+    language = chosen;
+    narration.setLanguage(chosen);
+  },
 
   onStart: async () => {
     const session = await startArExperience.execute('whale');

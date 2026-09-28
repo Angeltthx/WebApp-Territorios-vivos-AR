@@ -65,6 +65,9 @@ const CLIP_MAX_DELAY_S = 1.5;
 interface Voice {
   /** null mientras el trozo se descarga. */
   source: AudioBufferSourceNode | null;
+  /** Hora del contexto a la que empezó a sonar, y desde qué segundo del trozo. */
+  startedAt: number | null;
+  readonly from: number;
   readonly gain: GainNode;
   readonly finish: (ended: boolean) => void;
 }
@@ -228,7 +231,7 @@ export class WebAudioAdapter implements AudioPort {
     });
   }
 
-  playVoice(url: string): Promise<boolean> {
+  playVoice(url: string, fromSeconds = 0): Promise<boolean> {
     this.stopVoice();
     const context = this.ensureRunning();
     if (context === null) return Promise.resolve(false);
@@ -241,7 +244,7 @@ export class WebAudioAdapter implements AudioPort {
       };
       // Se registra ya, antes de cargar: así se sabe si, mientras cargaba,
       // otra voz o un stop la dejaron fuera.
-      const pending: Voice = { source: null, gain: context.createGain(), finish };
+      const pending: Voice = { source: null, startedAt: null, from: Math.max(0, fromSeconds), gain: context.createGain(), finish };
       this.voice = pending;
       void this.load(url).then((buffer) => {
         if (this.voice !== pending || this.context !== context) return finish(false);
@@ -263,9 +266,24 @@ export class WebAudioAdapter implements AudioPort {
           }
           finish(true);
         };
-        source.start();
+        // Desde la frase en la que iba (cambio de idioma), con un fundido
+        // de entrada cortísimo para que no chasquee al empezar a media onda.
+        const from = Math.min(pending.from, Math.max(0, buffer.duration - 0.05));
+        if (from > 0) {
+          pending.gain.gain.setValueAtTime(0, context.currentTime);
+          pending.gain.gain.linearRampToValueAtTime(1, context.currentTime + 0.06);
+        }
+        pending.startedAt = context.currentTime;
+        source.start(0, from);
       });
     });
+  }
+
+  voicePosition(): number | null {
+    const voice = this.voice;
+    const context = this.context;
+    if (voice === null || context === null || voice.startedAt === null) return null;
+    return voice.from + (context.currentTime - voice.startedAt);
   }
 
   setVolume(level: number): void {

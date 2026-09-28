@@ -3,6 +3,7 @@ import { MarkerSpot } from '../value-objects/MarkerSpot';
 import { ModelId } from '../value-objects/ModelId';
 import { ModelSource } from '../value-objects/ModelSource';
 import { Scale } from '../value-objects/Scale';
+import type { Language } from '../value-objects/Language';
 import { SoundProfile, type SoundSnapshot } from '../value-objects/SoundProfile';
 import { Soundscape, type SoundscapeSnapshot } from '../value-objects/Soundscape';
 import {
@@ -20,6 +21,15 @@ export interface ArModelSnapshot {
   readonly description: string | readonly string[];
   /** Nombre científico y nombre común, bajo el título de la ficha. */
   readonly species?: string;
+  /**
+   * La ficha en inglés: nombre, línea de especie y párrafos. Sin ella, la
+   * ficha se enseña en español también en inglés.
+   */
+  readonly english?: {
+    readonly name: string;
+    readonly species?: string;
+    readonly description: string | readonly string[];
+  };
   readonly source: ModelSource;
   /** Timbre sintetizado: respaldo si el animal no tiene `soundscape`. */
   readonly sound: SoundSnapshot;
@@ -77,8 +87,15 @@ export class ArModel {
     readonly outlineShape: readonly MarkerSpot[],
     readonly pose: IconPose,
     readonly defaultScale: Scale,
+    private readonly english: CardText | null,
   ) {
     Object.freeze(this);
+  }
+
+  /** Nombre, especie y párrafos de la ficha en ese idioma (español si no hay traducción). */
+  cardIn(language: Language): CardText {
+    if (language === 'en' && this.english !== null) return this.english;
+    return { name: this.name, species: this.species, paragraphs: this.paragraphs };
   }
 
   static fromSnapshot(snapshot: ArModelSnapshot): ArModel {
@@ -87,17 +104,17 @@ export class ArModel {
       throw new RangeError('ArModel requiere un nombre no vacío');
     }
     const view = snapshot.view ?? 'front';
-    const paragraphs = (typeof snapshot.description === 'string' ? [snapshot.description] : snapshot.description)
-      .map((paragraph) => paragraph.trim())
-      .filter((paragraph) => paragraph.length > 0);
-    if (paragraphs.length === 0) {
-      throw new RangeError(`"${name}" necesita al menos un párrafo de descripción`);
-    }
+    const paragraphs = paragraphsOf(snapshot.description, name);
     const species = snapshot.species?.trim() || null;
+    const english = snapshot.english === undefined ? null : Object.freeze({
+      name: snapshot.english.name.trim() || name,
+      species: snapshot.english.species?.trim() || species,
+      paragraphs: paragraphsOf(snapshot.english.description, name),
+    });
     return new ArModel(
       ModelId.of(snapshot.id),
       name,
-      Object.freeze(paragraphs),
+      paragraphs,
       species,
       snapshot.source,
       SoundProfile.of(snapshot.sound),
@@ -115,6 +132,24 @@ export class ArModel {
         snapshot.focusSize ?? 1,
       ),
       Scale.of(snapshot.defaultScale ?? 1),
+      english,
     );
   }
+}
+
+/** Lo que dice la ficha de un animal, en un idioma. */
+export interface CardText {
+  readonly name: string;
+  readonly species: string | null;
+  readonly paragraphs: readonly string[];
+}
+
+function paragraphsOf(description: string | readonly string[], name: string): readonly string[] {
+  const paragraphs = (typeof description === 'string' ? [description] : description)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph.length > 0);
+  if (paragraphs.length === 0) {
+    throw new RangeError(`"${name}" necesita al menos un párrafo de descripción`);
+  }
+  return Object.freeze(paragraphs);
 }

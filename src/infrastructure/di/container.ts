@@ -8,6 +8,7 @@ import { PlayGestureSound } from '@application/use-cases/PlayGestureSound';
 import { StartArExperience } from '@application/use-cases/StartArExperience';
 import { TransformPlacement } from '@application/use-cases/TransformPlacement';
 import type { ArSession } from '@domain/entities/ArSession';
+import type { Language } from '@domain/value-objects/Language';
 import { ConsoleAnalyticsAdapter } from '../analytics/ConsoleAnalyticsAdapter';
 import { WebAudioAdapter } from '../audio/WebAudioAdapter';
 import { PointerInteractionAdapter } from '../interaction/PointerInteractionAdapter';
@@ -28,6 +29,8 @@ export interface ContainerConfig {
    * teléfono (ver CameraModel).
    */
   cameraFov: number | null;
+  /** El idioma en uso (lo decide la vista): qué narraciones se bajan primero. */
+  language: () => Language;
   onSessionChange: (session: ArSession) => void;
 }
 
@@ -71,6 +74,7 @@ export function buildContainer(config: ContainerConfig) {
       tutorial.update(session);
       config.onSessionChange(session);
     },
+    config.language,
   );
 
   const getSession = () => startArExperience.current;

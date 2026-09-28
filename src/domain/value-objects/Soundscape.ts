@@ -1,3 +1,5 @@
+import type { Language } from './Language';
+
 /**
  * Lo que se OYE de un animal, con grabaciones reales (ver
  * `public/audio/CREDITOS.md`), frente a `SoundProfile`, que es un timbre
@@ -10,7 +12,8 @@
  *   - `splash`: el chapuzón de los que caen al agua (ballena, tortuga).
  *     Suena en el fotograma exacto en que el salpicón toca el agua, con
  *     más o menos volumen según lo fuerte que sea.
- *   - `narration`: la voz que lo cuenta al abrir su ficha (ver Narration).
+ *   - `narration`: la voz que lo cuenta al abrir su ficha (ver Narration),
+ *     en español; `narrationEn`, la misma en inglés.
  *   - `ambience`: el lugar donde vive (el mar, el manglar, la selva), en
  *     bucle y bajito mientras está en primer plano.
  *
@@ -22,6 +25,8 @@ export interface SoundscapeSnapshot {
   readonly ambience?: string;
   readonly splash?: string;
   readonly narration?: NarrationSnapshot;
+  /** La misma narración, grabada en inglés por el equipo. */
+  readonly narrationEn?: NarrationSnapshot;
 }
 
 /**
@@ -45,6 +50,14 @@ export interface NarrationSnapshot {
   readonly parts: readonly string[];
   /** Lo que pasa ENTRE un trozo y el siguiente: uno menos que trozos. */
   readonly cues: readonly NarrationCueSnapshot[];
+  /**
+   * Dónde empieza cada frase de cada trozo, en segundos desde el inicio del
+   * trozo. Las dos narraciones (español e inglés) dicen lo mismo frase a
+   * frase, así que la frase N de una es la frase N de la otra: es lo que
+   * permite cambiar de idioma a media narración y seguir en la MISMA frase
+   * (ver `resumePoint`).
+   */
+  readonly sentences?: readonly (readonly number[])[];
 }
 
 /**
@@ -58,6 +71,7 @@ export class Narration {
   private constructor(
     readonly parts: readonly string[],
     readonly cues: readonly Readonly<NarrationCueSnapshot>[],
+    readonly sentences: readonly (readonly number[])[] | null,
   ) {
     Object.freeze(this.parts);
     Object.freeze(this.cues);
@@ -81,7 +95,18 @@ export class Narration {
       }
       return Object.freeze({ ...cue });
     });
-    return new Narration(parts, cues);
+    const sentences = snapshot.sentences ?? null;
+    if (sentences !== null) {
+      if (sentences.length !== parts.length) {
+        throw new RangeError(`Narración: frases de ${sentences.length} trozos para ${parts.length} trozos`);
+      }
+      for (const starts of sentences) {
+        if (starts.length === 0 || starts.some((start, i) => !Number.isFinite(start) || start < 0 || (i > 0 && start <= starts[i - 1]!))) {
+          throw new RangeError('Narración: los inicios de frase tienen que ir en orden, desde 0');
+        }
+      }
+    }
+    return new Narration(parts, cues, sentences === null ? null : Object.freeze(sentences.map((s) => Object.freeze([...s]))));
   }
 }
 
@@ -94,6 +119,7 @@ export class Soundscape {
     readonly ambience: string | null,
     readonly splash: string | null,
     readonly narration: Narration | null,
+    readonly narrationEn: Narration | null,
   ) {
     Object.freeze(this.calls);
     Object.freeze(this.taps);
@@ -116,7 +142,16 @@ export class Soundscape {
     const splash = snapshot.splash?.trim() ?? null;
     if (splash !== null && splash.length === 0) throw new RangeError('Salpicón: ruta vacía');
     const narration = snapshot.narration === undefined ? null : Narration.of(snapshot.narration);
-    return new Soundscape(calls, clean(snapshot.taps ?? [], 'Toques'), ambience, splash, narration);
+    const narrationEn = snapshot.narrationEn === undefined ? null : Narration.of(snapshot.narrationEn);
+    return new Soundscape(calls, clean(snapshot.taps ?? [], 'Toques'), ambience, splash, narration, narrationEn);
+  }
+
+  /**
+   * La narración en ese idioma. Sin grabación en inglés, la española: mejor
+   * oír la voz en otro idioma que no oír nada.
+   */
+  narrationIn(language: Language): Narration | null {
+    return language === 'en' ? this.narrationEn ?? this.narration : this.narration;
   }
 
   /** Todas las rutas, para descargarlas por adelantado. */
@@ -127,6 +162,7 @@ export class Soundscape {
       ...(this.ambience === null ? [] : [this.ambience]),
       ...(this.splash === null ? [] : [this.splash]),
       ...(this.narration?.parts ?? []),
+      ...(this.narrationEn?.parts ?? []),
     ];
   }
 }
@@ -144,4 +180,21 @@ export function pickDifferent<T>(
   if (options.length === 0) return null;
   const pool = options.length > 1 ? options.filter((option) => option !== previous) : options;
   return pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))] ?? null;
+}
+
+/**
+ * Cambiar de idioma a media narración: en qué segundo del MISMO trozo de la
+ * otra narración hay que seguir. Se busca la frase que estaba sonando
+ * (`seconds` en `from`) y se vuelve al principio de esa misma frase en
+ * `to` —empezar a media frase en otro idioma no se entendería—. Sin los
+ * inicios de frase de alguna de las dos, desde el principio del trozo.
+ */
+export function resumePoint(from: Narration, to: Narration, part: number, seconds: number): number {
+  const fromStarts = from.sentences?.[part];
+  const toStarts = to.sentences?.[part];
+  if (fromStarts === undefined || toStarts === undefined || fromStarts.length !== toStarts.length) return 0;
+  let sentence = 0;
+  // Un pelo de margen: justo al empezar una frase, es esa (no la anterior).
+  for (let i = 0; i < fromStarts.length; i += 1) if (fromStarts[i]! <= seconds + 0.15) sentence = i;
+  return toStarts[sentence]!;
 }
