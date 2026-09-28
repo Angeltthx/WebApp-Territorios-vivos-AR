@@ -70,6 +70,33 @@ const used = new Map();
 const report = [];
 const narrations = [];
 
+/**
+ * Una narración, normalizada ENTERA y cortada después en sus partes (ver
+ * el comentario de arriba del bucle). `prefix`: `narration` para la voz en
+ * español, `narration-en` para la inglesa.
+ */
+function cutNarration(animal, { file, cuts }, prefix) {
+  if (!existsSync(file)) throw new Error(`${animal}: falta la narración ${file}`);
+  const whole = `${SRC}/.cache/${prefix}-${animal}.wav`;
+  execFileSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-i', file,
+    '-af', 'highpass=f=70,loudnorm=I=-16:TP=-1.5:LRA=11', '-ac', '1', '-ar', '44100', whole], { stdio: 'inherit' });
+  const bounds = [0, ...cuts, null];
+  for (let part = 0; part < bounds.length - 1; part += 1) {
+    const start = bounds[part];
+    const end = bounds[part + 1];
+    const out = `${OUT}/${animal}/${prefix}-${part + 1}.mp3`;
+    const args = ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(start)];
+    if (end !== null) args.push('-t', String(end - start));
+    const fadeOut = end === null ? 'areverse,afade=t=in:d=0.3,areverse' : 'areverse,afade=t=in:d=0.015,areverse';
+    args.push('-i', whole, '-af', `afade=t=in:d=0.015,${fadeOut}`, '-ac', '1', '-ar', '44100',
+      '-codec:a', 'libmp3lame', '-b:a', '64k', out);
+    execFileSync(ffmpeg, args, { stdio: 'inherit' });
+    narrations.push(out);
+    report.push(out);
+  }
+}
+
+
 for (const [animal, set] of Object.entries(clips)) {
   mkdirSync(`${OUT}/${animal}`, { recursive: true });
 
@@ -128,27 +155,10 @@ for (const [animal, set] of Object.entries(clips)) {
   // suenen exactamente al mismo volumen; cada corte cae en un silencio
   // entre dos frases (medido: 0.3–0.5 s), así que el fundido de 15 ms no
   // se oye.
-  if (set.narration !== undefined) {
-    const { file, cuts } = set.narration;
-    if (!existsSync(file)) throw new Error(`${animal}: falta la narración ${file}`);
-    const whole = `${SRC}/.cache/narration-${animal}.wav`;
-    execFileSync(ffmpeg, ['-hide_banner', '-loglevel', 'error', '-y', '-i', file,
-      '-af', 'highpass=f=70,loudnorm=I=-16:TP=-1.5:LRA=11', '-ac', '1', '-ar', '44100', whole], { stdio: 'inherit' });
-    const bounds = [0, ...cuts, null];
-    for (let part = 0; part < bounds.length - 1; part += 1) {
-      const start = bounds[part];
-      const end = bounds[part + 1];
-      const out = `${OUT}/${animal}/narration-${part + 1}.mp3`;
-      const args = ['-hide_banner', '-loglevel', 'error', '-y', '-ss', String(start)];
-      if (end !== null) args.push('-t', String(end - start));
-      const fadeOut = end === null ? 'areverse,afade=t=in:d=0.3,areverse' : 'areverse,afade=t=in:d=0.015,areverse';
-      args.push('-i', whole, '-af', `afade=t=in:d=0.015,${fadeOut}`, '-ac', '1', '-ar', '44100',
-        '-codec:a', 'libmp3lame', '-b:a', '64k', out);
-      execFileSync(ffmpeg, args, { stdio: 'inherit' });
-      narrations.push(out);
-      report.push(out);
-    }
-  }
+  // En español (`narration`) y en inglés (`narrationEn`): las mismas dos
+  // partes, cortadas en la frase equivalente de cada grabación.
+  if (set.narration !== undefined) cutNarration(animal, set.narration, 'narration');
+  if (set.narrationEn !== undefined) cutNarration(animal, set.narrationEn, 'narration-en');
 
   // Ambiente: una o varias capas mezcladas (el cangrejo es playa + manglar).
   const layers = await Promise.all(set.ambience.map(async (layer) => ({ ...layer, file: await cached(layer.src) })));
@@ -175,7 +185,7 @@ for (const [key, outs] of used) {
   credits.push(`  - Usado en: ${[...new Set(outs)].map((o) => o.replace(`${OUT}/`, '')).join(', ')}`);
 }
 if (narrations.length > 0) {
-  credits.push('- **Narraciones** — grabación propia del equipo de Territorios Vivos (`audios/`).');
+  credits.push('- **Narraciones** (español e inglés) — grabación propia del equipo de Territorios Vivos (`audios/`).');
   credits.push(`  - Usado en: ${narrations.map((o) => o.replace(`${OUT}/`, '')).join(', ')}`);
 }
 writeFileSync(`${OUT}/CREDITOS.md`, credits.join('\n') + '\n');

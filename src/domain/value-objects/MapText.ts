@@ -1,3 +1,5 @@
+import type { Language } from './Language';
+
 /**
  * Un texto IMPRESO en el mapa que se puede abrir para leerlo en grande.
  *
@@ -49,6 +51,15 @@ export interface MapTextSnapshot {
    * los bailarines junto a la danza. Se enseña en grande encima del texto.
    */
   readonly illustration?: string;
+  /**
+   * El texto en inglés. Solo lo que cambia: los nombres propios (lugares,
+   * negocios, la web) se quedan como están en el mapa. Sin él, en inglés se
+   * enseña el español.
+   */
+  readonly english?: {
+    readonly label?: string;
+    readonly blocks: readonly MapTextBlock[];
+  };
 }
 
 export class MapText {
@@ -59,8 +70,18 @@ export class MapText {
     readonly blocks: readonly MapTextBlock[],
     readonly ambience: string | null,
     readonly illustration: string | null,
+    private readonly english: { readonly label: string; readonly blocks: readonly MapTextBlock[] } | null,
   ) {
     Object.freeze(this);
+  }
+
+  /** Lo que se lee en grande, en ese idioma. */
+  blocksIn(language: Language): readonly MapTextBlock[] {
+    return language === 'en' && this.english !== null ? this.english.blocks : this.blocks;
+  }
+
+  labelIn(language: Language): string {
+    return language === 'en' && this.english !== null ? this.english.label : this.label;
   }
 
   static of(snapshot: MapTextSnapshot): MapText {
@@ -71,26 +92,38 @@ export class MapText {
     if (![u0, v0, u1, v1].every(inside) || u0 >= u1 || v0 >= v1) {
       throw new RangeError(`Zona inválida para "${id}": debe ir de arriba-izquierda a abajo-derecha, en 0–1`);
     }
-    if (snapshot.blocks.length === 0) throw new RangeError(`"${id}" no tiene texto`);
-    const blank = (text: string) => text.trim().length === 0;
-    for (const block of snapshot.blocks) {
-      const empty = block.kind === 'directory'
-        ? block.entries.length === 0 || block.entries.some((entry) => blank(entry.name))
-        : block.kind === 'species' ? blank(block.name) : blank(block.text);
-      if (empty) throw new RangeError(`"${id}" tiene un bloque '${block.kind}' vacío`);
-    }
+    checkBlocks(id, snapshot.blocks);
+    if (snapshot.english !== undefined) checkBlocks(`${id} (inglés)`, snapshot.english.blocks);
+    const label = snapshot.label.trim() || id;
     return new MapText(
       id,
-      snapshot.label.trim() || id,
+      label,
       Object.freeze({ u0, v0, u1, v1 }),
       Object.freeze([...snapshot.blocks]),
       snapshot.ambience?.trim() || null,
       snapshot.illustration?.trim() || null,
+      snapshot.english === undefined
+        ? null
+        : Object.freeze({
+            label: snapshot.english.label?.trim() || label,
+            blocks: Object.freeze([...snapshot.english.blocks]),
+          }),
     );
   }
 
   /** Centro de la zona, en coordenadas de la imagen. */
   get center(): { readonly u: number; readonly v: number } {
     return { u: (this.area.u0 + this.area.u1) / 2, v: (this.area.v0 + this.area.v1) / 2 };
+  }
+}
+
+function checkBlocks(id: string, blocks: readonly MapTextBlock[]): void {
+  if (blocks.length === 0) throw new RangeError(`"${id}" no tiene texto`);
+  const blank = (text: string) => text.trim().length === 0;
+  for (const block of blocks) {
+    const empty = block.kind === 'directory'
+      ? block.entries.length === 0 || block.entries.some((entry) => blank(entry.name))
+      : block.kind === 'species' ? blank(block.name) : blank(block.text);
+    if (empty) throw new RangeError(`"${id}" tiene un bloque '${block.kind}' vacío`);
   }
 }

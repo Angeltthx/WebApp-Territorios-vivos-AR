@@ -38,7 +38,9 @@ export interface TutorialState {
  *     para ver su animación». Se va en cuanto lo toca (su gesto). Solo la
  *     primera vez que se abre cada animal.
  *  3. `closeFocus` — al acabar la narración (o al detenerla), una mano
- *     señala la ✕: «Toca la ✕ para cerrar».
+ *     señala la ✕: «Toca la ✕ para cerrar». UNA sola vez, con el primer
+ *     animal: al principio salía con cada uno, y a la tercera se hacía
+ *     pesado —cerrar ya se aprendió—.
  *  4. Al cerrar, enseguida, vuelta al paso 1 con otro que falte.
  *
  * (Hubo un paso de doble toque entre el 1 y el 2, cuando un toque solo
@@ -69,8 +71,8 @@ export class Tutorial {
   /** El animal abierto ahora, si lo hay. */
   private focusedAnimal: string | null = null;
   private narrating = false;
-  /** Animales en cuya ficha ya se señaló la ✕ (una vez por animal). */
-  private readonly closeTaught = new Set<string>();
+  /** Ya se señaló la ✕ una vez (con el primer animal): no se repite. */
+  private closeTaught = false;
   /** Animales a los que ya se enseñó a tocar en primer plano (una vez por animal). */
   private readonly gestureTaught = new Set<string>();
   private readonly opened = new Set<string>();
@@ -146,22 +148,21 @@ export class Tutorial {
     }
   }
 
-  /**
-   * La narración de la ficha abierta cambió. Cuando CALLA —acabó, o la
-   * detuvo—, la mano señala la ✕. Una vez por animal: la primera vez que
-   * se abre, que es cuando narra solo.
-   */
   /** Tocó al animal que está en primer plano (y este hizo su gesto). */
   focusedAnimalTapped(): void {
     if (this.step === 'tapFocused') this.hide();
   }
 
+  /**
+   * La narración de la ficha abierta cambió. Cuando CALLA —acabó, o la
+   * detuvo—, la mano señala la ✕, una sola vez en toda la sesión.
+   */
   narrationChanged(playing: boolean): void {
     const wasPlaying = this.narrating;
     this.narrating = playing;
     if (!this.busy || this.focusedAnimal === null || !wasPlaying || playing) return;
-    if (this.closeTaught.has(this.focusedAnimal)) return;
-    this.closeTaught.add(this.focusedAnimal);
+    if (this.closeTaught) return;
+    this.closeTaught = true;
     this.show('closeFocus');
   }
 
@@ -211,7 +212,7 @@ export class Tutorial {
     this.finished = false;
     this.opened.clear();
     this.read.clear();
-    this.closeTaught.clear();
+    this.closeTaught = false;
     this.gestureTaught.clear();
     this.focusedAnimal = null;
     this.narrating = false;

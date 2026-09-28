@@ -106,6 +106,16 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       'El macho canta bajo el agua durante horas: la melodía más larga del reino ' +
         'animal. Y la compone frente a estas costas.',
     ],
+    english: {
+      name: 'Humpback whale',
+      species: 'Megaptera novaeangliae / Humpback whale',
+      description: [
+        'Every year it travels more than 8,000 km from Antarctica to these warm waters ' +
+          'to give birth. Nuquí is its maternity ward.',
+        'The male sings underwater for hours: the longest melody in the animal ' +
+          'kingdom. And he composes it right off these shores.',
+      ],
+    },
     // Canto de jorobada (Parques Nacionales de EE. UU. y CC0), su soplido al
     // salir a respirar y un chapuzón para el salto, y el mar de fondo.
     soundscape: {
@@ -130,6 +140,15 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       narration: {
         parts: ['/audio/whale/narration-1.mp3', '/audio/whale/narration-2.mp3'],
         cues: [{ action: 'call', clip: '/audio/whale/call-1.mp3', holdSeconds: 6 }],
+        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
+        sentences: [[0, 4.61, 10.25, 13.29, 18.79, 21.91], [0.18, 3.58]],
+      },
+      // La misma en inglés, cortada en la frase equivalente (clips.json).
+      narrationEn: {
+        parts: ['/audio/whale/narration-en-1.mp3', '/audio/whale/narration-en-2.mp3'],
+        cues: [{ action: 'call', clip: '/audio/whale/call-1.mp3', holdSeconds: 6 }],
+        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
+        sentences: [[0, 4.01, 10.91, 14.85, 19.23, 22.31], [0, 4.48]],
       },
     },
     source: ModelSource.gltf('/models/Ballena_Ani.glb'),
@@ -214,6 +233,16 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       'Dispersa las semillas de los árboles gigantes al comer sus frutos. ' +
         'Cada vuelo suyo siembra selva.',
     ],
+    english: {
+      name: 'Baudó guan',
+      species: 'Penelope ortoni / Baudó guan',
+      description: [
+        'Endemic to the Chocó biogeographic region: it lives nowhere else on the planet. ' +
+          'Its call tells us the forest is healthy.',
+        'It spreads the seeds of giant trees by eating their fruit. ' +
+          'Every flight it takes plants new forest.',
+      ],
+    },
     // No hay grabaciones abiertas de Penelope ortoni (las de xeno-canto no se
     // pueden descargar sin cuenta): son pavas del MISMO GÉNERO, de los Andes
     // de Colombia y Ecuador, cuyo llamado es muy parecido. El ambiente sí es
@@ -238,6 +267,15 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       narration: {
         parts: ['/audio/bird/narration-1.mp3', '/audio/bird/narration-2.mp3'],
         cues: [{ action: 'gesture', holdSeconds: 5.4 }],
+        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
+        sentences: [[0, 7.01, 12.49], [0.09, 3.63, 8.99]],
+      },
+      // La misma en inglés, cortada en la frase equivalente (clips.json).
+      narrationEn: {
+        parts: ['/audio/bird/narration-en-1.mp3', '/audio/bird/narration-en-2.mp3'],
+        cues: [{ action: 'gesture', holdSeconds: 5.4 }],
+        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
+        sentences: [[0, 7.81, 12.93], [0.17, 2.83, 8.89]],
       },
     },
     source: ModelSource.gltf('/models/Pava_Ani.glb'),
@@ -303,6 +341,16 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       'Cava túneles que airean el suelo del bosque costero. Cada madriguera suya ' +
         'ayuda a que el manglar respire.',
     ],
+    english: {
+      name: 'Red ghost crab',
+      species: 'Ocypode gaudichaudii / Red ghost crab',
+      description: [
+        'Fiery orange on legs the colour of earth: born in the sea, it lives in the forest. ' +
+          'It only goes down to the shore to release its young into the waves.',
+        'It digs tunnels that let air into the soil of the coastal forest. Every burrow ' +
+          'it builds helps the mangrove breathe.',
+      ],
+    },
     // Un cangrejo no tiene voz: suena al moverse. Sus pasos (uno de ellos,
     // recreado) y, de fondo, la playa con el manglar detrás.
     soundscape: {
@@ -322,6 +370,15 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       narration: {
         parts: ['/audio/crab/narration-1.mp3', '/audio/crab/narration-2.mp3'],
         cues: [{ action: 'gesture', holdSeconds: 3.1 }],
+        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
+        sentences: [[0, 3.57], [0.12, 5, 10.18, 13.98, 19.86]],
+      },
+      // La misma en inglés, cortada en la frase equivalente (clips.json).
+      narrationEn: {
+        parts: ['/audio/crab/narration-en-1.mp3', '/audio/crab/narration-en-2.mp3'],
+        cues: [{ action: 'gesture', holdSeconds: 3.1 }],
+        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
+        sentences: [[0, 2.89], [0.01, 4.65, 9.85, 13.57, 18.17]],
       },
     },
     source: ModelSource.gltf('/models/Cangrejo_Ani.glb'),
@@ -399,6 +456,21 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         'como una brújula viva. Lleva más de cien millones de años surcando estos ' +
         'mares, desde mucho antes que nosotros.',
     ],
+    english: {
+      name: 'Olive ridley sea turtle',
+      species: 'Lepidochelys olivacea / Olive ridley sea turtle',
+      description: [
+        'It roams the oceans for 50 years and always remembers the way back. ' +
+          'Its shell, made of scutes that overlap like roof tiles, is unique: no two ' +
+          'are alike in the whole sea.',
+        'It is the gardener of the reefs: with a beak curved like a bird\'s it eats ' +
+          'sponges no one else touches, and so keeps the coral alive. Without it, the ' +
+          'reef would suffocate.',
+        'It can cross entire oceans guided by the Earth\'s magnetic field, like a living ' +
+          'compass. It has been sailing these seas for more than a hundred million years, ' +
+          'since long before us.',
+      ],
+    },
     // Tampoco tiene voz: burbujas bajo el agua, el sonido de sumergirse para
     // su buceo y, de fondo, un hidrófono en un arrecife del Caribe.
     soundscape: {
@@ -420,6 +492,15 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       narration: {
         parts: ['/audio/turtle/narration-1.mp3', '/audio/turtle/narration-2.mp3'],
         cues: [{ action: 'gesture', holdSeconds: 5 }],
+        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
+        sentences: [[0, 3.83], [0.13, 3.01, 12.49, 16.31, 24.69, 32.11, 40.33, 46.17]],
+      },
+      // La misma en inglés, cortada en la frase equivalente (clips.json).
+      narrationEn: {
+        parts: ['/audio/turtle/narration-en-1.mp3', '/audio/turtle/narration-en-2.mp3'],
+        cues: [{ action: 'gesture', holdSeconds: 5 }],
+        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
+        sentences: [[0, 3.55], [0.15, 2.39, 8.63, 11.33, 17.21, 23.07, 30.43, 34.93]],
       },
     },
     source: ModelSource.gltf('/models/Tortuga_Ani.glb'),

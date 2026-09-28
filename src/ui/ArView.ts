@@ -1,15 +1,8 @@
 import type { MapText, MapTextBlock } from '@domain/value-objects/MapText';
 import type { ArModel } from '@domain/entities/ArModel';
-import type { ArSession, SessionStatus } from '@domain/entities/ArSession';
-
-const HINTS: Record<SessionStatus, string> = {
-  idle: 'Preparando la experiencia…',
-  preparing: 'Preparando la escena…',
-  searching: 'Apunta la cámara al mapa de Nuquí',
-  tracking: 'Toca un animal para conocerlo',
-  lost: 'Mapa fuera de encuadre. Vuelve a apuntar',
-  error: 'Ocurrió un problema',
-};
+import type { ArSession } from '@domain/entities/ArSession';
+import { detectLanguage, isLanguage, type Language } from '@domain/value-objects/Language';
+import { STRINGS, writeRich, type Strings } from './i18n';
 
 /**
  * La pantalla inicial no se va sola: se va cuando alguien pulsa «Iniciar
@@ -68,7 +61,16 @@ export interface ArViewCallbacks {
    * vez en este teléfono.
    */
   onVolumeChange: (level: number) => void;
+  /**
+   * El idioma en que tiene que sonar y leerse todo. Se dispara también al
+   * construir la vista, con el elegido la última vez en este teléfono o,
+   * si nunca se eligió, el del navegador.
+   */
+  onLanguageChange: (language: Language) => void;
 }
+
+/** Dónde se recuerda el idioma elegido en el menú, en este navegador. */
+const LANGUAGE_KEY = 'territorios-vivos:idioma';
 
 /** Dónde se recuerda el volumen elegido, en este navegador. */
 const VOLUME_KEY = 'territorios-vivos:volumen';
@@ -128,6 +130,12 @@ export class ArView {
   private readonly onVolumeChange: (level: number) => void;
   /** Nivel elegido con la barra, 0–1, y si está silenciado encima. */
   private level = 1;
+  /** El idioma de la interfaz, y sus textos. */
+  private language: Language = 'es';
+  private strings: Strings = STRINGS.es;
+  private readonly onLanguageChange: (language: Language) => void;
+  /** El último estado de la narración, para repintar su botón al cambiar de idioma. */
+  private narrationState: NarrationView = { available: false, playing: false };
   private muted = false;
   private readonly reading: HTMLElement;
   private readonly readingCard: HTMLElement;
@@ -194,6 +202,23 @@ export class ArView {
     this.soundLevel = this.require<HTMLInputElement>(root, '#sound-level');
     this.onVolumeChange = callbacks.onVolumeChange;
     this.restoreVolume();
+
+    // El idioma, en el mismo menú: se elige, se aplica al momento (textos
+    // y narración) y se recuerda. La primera vez, el del navegador.
+    this.onLanguageChange = callbacks.onLanguageChange;
+    for (const option of root.querySelectorAll<HTMLButtonElement>('[data-language]')) {
+      option.addEventListener('click', () => {
+        const chosen = option.dataset['language'];
+        if (!isLanguage(chosen)) return;
+        try {
+          window.localStorage.setItem(LANGUAGE_KEY, chosen);
+        } catch {
+          // Sin almacenamiento: se aplica igual, solo que no se recuerda.
+        }
+        this.setLanguage(chosen);
+      });
+    }
+    this.setLanguage(this.initialLanguage(root.ownerDocument.defaultView?.navigator));
     this.soundToggle.addEventListener('click', () => {
       if (this.muted || this.level === 0) {
         this.muted = false;
@@ -275,8 +300,8 @@ export class ArView {
       this.boot.dataset['starting'] = 'true';
       this.bootStatus.hidden = false;
       this.bootStatusText.textContent = this.modelsReady
-        ? 'Encendiendo la cámara…'
-        : 'Cargando los animales…';
+        ? this.strings.bootCamera
+        : this.strings.bootLoading;
       callbacks.onStart();
     });
 
@@ -294,16 +319,17 @@ export class ArView {
    * pasando, no solo qué hace.
    */
   setNarration(state: NarrationView): void {
+    this.narrationState = state;
     this.narrationButton.hidden = !state.available;
     this.narrationButton.dataset['playing'] = state.playing ? 'true' : 'false';
     this.narrationButton.setAttribute('aria-pressed', state.playing ? 'true' : 'false');
-    this.narrationLabel.textContent = state.playing ? 'Detener narración' : 'Escuchar narración';
+    this.narrationLabel.textContent = state.playing ? this.strings.narrationStop : this.strings.narrationPlay;
   }
 
   private applyVolume(): void {
     this.soundLevel.value = String(Math.round((this.muted ? 0 : this.level) * 100));
     this.soundToggle.setAttribute('aria-pressed', this.muted ? 'true' : 'false');
-    this.soundToggle.setAttribute('aria-label', this.muted ? 'Activar el sonido' : 'Silenciar');
+    this.soundToggle.setAttribute('aria-label', this.muted ? this.strings.unmute : this.strings.mute);
     this.onVolumeChange(this.muted ? 0 : this.level);
     try {
       window.localStorage.setItem(VOLUME_KEY, JSON.stringify({ level: this.level, muted: this.muted }));
@@ -333,6 +359,64 @@ export class ArView {
     if (this.lastSession !== null) this.syncTransientHints(this.lastSession);
   }
 
+  /**
+   * El idioma: los textos fijos de la página, los que dependen del estado
+   * (la píldora, el tutorial, la narración) y, si hay una ficha o un texto
+   * abiertos, esos también. Avisa hacia fuera para que la voz cambie.
+   */
+  setLanguage(language: Language): void {
+    this.language = language;
+    this.strings = STRINGS[language];
+    const t = this.strings;
+    const document = this.focus.ownerDocument;
+    document.documentElement.lang = language;
+    const text = (selector: string, value: string) => {
+      const element = document.querySelector(selector);
+      if (element !== null) element.textContent = value;
+    };
+    const label = (selector: string, value: string) => document.querySelector(selector)?.setAttribute('aria-label', value);
+    text('#guide-title', t.guideTitle);
+    const mission = document.querySelector<HTMLElement>('#guide-mission');
+    if (mission !== null) writeRich(mission, t.guideMission);
+    text('#focus-tap-hint-label', t.tapFocused);
+    text('#close-hint-label', t.closeHint);
+    text('#menu-sound-title', t.sound);
+    text('#menu-language-title', t.language);
+    text('#retry', t.retry);
+    text('[data-action="share-story"]', t.menuStory);
+    text('[data-action="social"]', t.menuSocial);
+    text('[data-action="soon"]', t.menuSoon);
+    label('#start', t.start);
+    label('#focus-close', t.closeCard);
+    label('#reading-close', t.closeText);
+    label('#menu-button', t.openMenu);
+    label('#help', t.showGuide);
+    label('#menu-sound', t.volume);
+    label('#sound-level', t.volume);
+    label('#menu-language', t.language);
+    for (const option of document.querySelectorAll<HTMLElement>('[data-language]')) {
+      option.setAttribute('aria-pressed', option.dataset['language'] === language ? 'true' : 'false');
+    }
+    this.soundToggle.setAttribute('aria-label', this.muted ? t.unmute : t.mute);
+    this.setNarration(this.narrationState);
+    this.writeTutorial();
+    if (!this.bootStatus.hidden) this.bootStatusText.textContent = this.modelsReady ? t.bootCamera : t.bootLoading;
+    if (this.lastSession !== null) this.render(this.lastSession);
+    this.onLanguageChange(language);
+  }
+
+  /** El elegido la última vez en este navegador; si no, el del navegador. */
+  private initialLanguage(navigator: Navigator | undefined): Language {
+    try {
+      const saved = window.localStorage.getItem(LANGUAGE_KEY);
+      if (isLanguage(saved)) return saved;
+    } catch {
+      // Sin almacenamiento: se detecta cada vez.
+    }
+    const preferred = navigator?.languages?.length ? navigator.languages : [navigator?.language ?? ''];
+    return detectLanguage(preferred);
+  }
+
   /** Los textos del mapa que se pueden abrir en grande. */
   setMapTexts(texts: readonly MapText[]): void {
     this.mapTexts = texts;
@@ -346,7 +430,7 @@ export class ArView {
     // dice a quien espera que la barra avanza, y a quien depura DÓNDE se
     // está yendo el tiempo: el mensaje que se queda puesto es el culpable.
     if (this.bootStatus.hidden) return;
-    this.bootStatusText.textContent = 'Encendiendo la cámara…';
+    this.bootStatusText.textContent = this.strings.bootCamera;
   }
 
   /**
@@ -364,7 +448,9 @@ export class ArView {
 
   render(session: ArSession): void {
     this.lastSession = session;
-    this.hint.textContent = session.error?.message ?? HINTS[session.status];
+    const error = session.error;
+    this.hint.textContent =
+      error === null ? this.strings.hints[session.status] : this.strings.errors[error.code] ?? error.message;
     this.hint.dataset['tone'] = session.status === 'error' ? 'error' : 'normal';
 
     // Un error puede llegar antes de que termine la bienvenida (por ejemplo
@@ -432,14 +518,17 @@ export class ArView {
     const focused = session.discovery.focused;
     const show = focused !== null;
 
-    if (focused !== null && this.focus.dataset['modelId'] !== focused.value) {
+    const cardKey = focused === null ? null : `${focused.value}:${this.language}`;
+    if (focused !== null && this.focus.dataset['card'] !== cardKey) {
+      this.focus.dataset['card'] = cardKey ?? '';
       this.focus.dataset['modelId'] = focused.value;
       const model = this.catalog.find((candidate) => candidate.id.equals(focused));
-      this.focusName.textContent = model?.name ?? '';
-      this.focusSpecies.textContent = model?.species ?? '';
+      const card = model?.cardIn(this.language);
+      this.focusName.textContent = card?.name ?? '';
+      this.focusSpecies.textContent = card?.species ?? '';
       // Un <p> por párrafo, con textContent: el texto del catálogo nunca se
       // interpreta como HTML.
-      this.focusInfo.replaceChildren(...(model?.paragraphs ?? []).map((text) => {
+      this.focusInfo.replaceChildren(...(card?.paragraphs ?? []).map((text) => {
         const paragraph = document.createElement('p');
         paragraph.textContent = text;
         return paragraph;
@@ -529,19 +618,18 @@ export class ArView {
   /** Escribe el paso del tutorial. Solo cuando cambia: no en cada pintado. */
   private writeTutorial(): void {
     const { step, remaining, returning } = this.tutorial;
-    const [title, before, strong, after] =
-      step === 'tapText'
-        ? ['Toca un punto amarillo', 'Cada uno cuenta algo del ', 'Chocó', '']
-        : step === 'explore'
-          ? ['Explora el resto de Nuquí', 'Toca los ', 'puntos amarillos', ' que quieras']
-          : returning
-            ? ['Toca otro animal', remaining === 1 ? 'Te falta ' : 'Te faltan ', `${remaining}`, ' por conocer']
-            : ['Toca un animal', 'Toca la ', 'silueta dorada', ' para conocerlo'];
     if (step === 'off') return;
+    const t = this.strings;
+    const [title, sub] =
+      step === 'tapText'
+        ? [t.tapTextTitle, t.tapText]
+        : step === 'explore'
+          ? [t.exploreTitle, t.explore]
+          : returning
+            ? [t.tapAnotherTitle, t.remaining(remaining)]
+            : [t.tapAnimalTitle, t.tapAnimal];
     this.approachTitle.textContent = title;
-    const emphasis = document.createElement('strong');
-    emphasis.textContent = strong;
-    this.approachSub.replaceChildren(before, emphasis, after);
+    writeRich(this.approachSub, sub);
   }
 
   private toggleMenu(): void {
@@ -650,15 +738,18 @@ export class ArView {
    */
   private syncReading(session: ArSession): void {
     const id = session.discovery.reading;
-    if (id !== null && this.reading.dataset['textId'] !== id) {
+    const readingKey = id === null ? null : `${id}:${this.language}`;
+    if (id !== null && this.reading.dataset['reading'] !== readingKey) {
+      this.reading.dataset['reading'] = readingKey ?? '';
       this.reading.dataset['textId'] = id;
       const text = this.mapTexts.find((candidate) => candidate.id === id);
+      const shown = text?.blocksIn(this.language) ?? [];
       // Un solo rótulo (un pueblo, el océano, una especie) va centrado; los
       // párrafos y las listas se leen mejor alineados a la izquierda.
-      const lone = text !== undefined && text.blocks.length === 1 && text.blocks[0]!.kind !== 'paragraph'
-        && text.blocks[0]!.kind !== 'directory' && text.blocks[0]!.kind !== 'pin';
+      const lone = shown.length === 1 && shown[0]!.kind !== 'paragraph'
+        && shown[0]!.kind !== 'directory' && shown[0]!.kind !== 'pin';
       this.readingCard.dataset['centered'] = lone ? 'true' : 'false';
-      const blocks = (text?.blocks ?? []).map(renderBlock);
+      const blocks = shown.map(renderBlock);
       if (text?.illustration) {
         // El dibujo del mapa, recortado sin fondo, encima de su texto.
         const image = document.createElement('img');
@@ -670,9 +761,12 @@ export class ArView {
       }
       this.readingCard.replaceChildren(...blocks);
       this.readingCard.scrollTop = 0;
-      this.reading.setAttribute('aria-label', text?.label ?? 'Texto del mapa');
+      this.reading.setAttribute('aria-label', text?.labelIn(this.language) ?? this.strings.mapText);
     }
-    if (id === null) delete this.reading.dataset['textId'];
+    if (id === null) {
+      delete this.reading.dataset['textId'];
+      delete this.reading.dataset['reading'];
+    }
     const show = id !== null;
     this.reading.dataset['visible'] = show ? 'true' : 'false';
     this.reading.setAttribute('aria-hidden', show ? 'false' : 'true');

@@ -43,6 +43,7 @@ await Promise.all(sizes.map(async ([width, height]) => {
     onPrepare() {}, onStart() {}, onCloseFocus() {},
     onToggleNarration() { playing = !playing; view.setNarration({ available: true, playing }); },
     onVolumeChange() {},
+    onLanguageChange() {},
   });
   view.setCatalog(catalog);
   view.setMapTexts(mapTexts);

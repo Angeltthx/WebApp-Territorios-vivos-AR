@@ -57,6 +57,12 @@
       "cuts": [
         25.21
       ]
+    },
+    "narrationEn": {
+      "file": "audios/WHALE.mp3",
+      "cuts": [
+        25.71
+      ]
     }
   },
   "crab": {
@@ -112,6 +118,12 @@
       "cuts": [
         8.91
       ]
+    },
+    "narrationEn": {
+      "file": "audios/CRAB.mp3",
+      "cuts": [
+        7.82
+      ]
     }
   },
   "turtle": {
@@ -162,6 +174,12 @@
       "file": "audios/TORTUGA.mp3",
       "cuts": [
         11.38
+      ]
+    },
+    "narrationEn": {
+      "file": "audios/TORTLUE.mp3",
+      "cuts": [
+        8.28
       ]
     }
   },
@@ -217,6 +235,12 @@
       "file": "audios/PAVA..mp3",
       "cuts": [
         18.1
+      ]
+    },
+    "narrationEn": {
+      "file": "audios/CHOCO GUAN.mp3",
+      "cuts": [
+        18.5
       ]
     }
   },

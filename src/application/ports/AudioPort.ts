@@ -32,7 +32,13 @@ export interface AudioPort {
    * (`stopVoice`) o no se pudo cargar: quien encadena trozos solo sigue con
    * `true`. Nunca se descarta por llegar tarde, a diferencia de un toque.
    */
-  playVoice(url: string): Promise<boolean>;
+  playVoice(url: string, fromSeconds?: number): Promise<boolean>;
+  /**
+   * Por qué segundo va el trozo de narración que suena, o null si no suena
+   * ninguno (cargando, en una pausa, callada). Sirve para seguir en la misma
+   * frase al cambiar de idioma.
+   */
+  voicePosition(): number | null;
   /** Corta la narración con un fundido corto. */
   stopVoice(): void;
   /**

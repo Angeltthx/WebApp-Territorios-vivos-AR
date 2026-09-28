@@ -1,5 +1,6 @@
 import { ArSession } from '@domain/entities/ArSession';
 import { soundPreloadOrder } from './AnimalSoundscape';
+import type { Language } from '@domain/value-objects/Language';
 import type { ArModel } from '@domain/entities/ArModel';
 import { Placement } from '@domain/entities/Placement';
 import { ModelId } from '@domain/value-objects/ModelId';
@@ -41,6 +42,8 @@ export class StartArExperience {
     private readonly models: ModelRepository,
     private readonly analytics: AnalyticsPort,
     private readonly onSessionChange: SessionListener,
+    /** El idioma en uso: decide qué narraciones se descargan primero. */
+    private readonly language: () => Language = () => 'es',
   ) {}
 
   get current(): ArSession {
@@ -87,7 +90,7 @@ export class StartArExperience {
     await this.scene.preload(catalog);
     // Las grabaciones, después de lo que hace falta para ver algo: modelos
     // y mapa van primero. Una a una y en segundo plano (ver AudioPort).
-    this.audio.preload(soundPreloadOrder(catalog));
+    this.audio.preload(soundPreloadOrder(catalog, this.language()));
     this.scene.setStabilization(this.session.stabilization);
 
     return { catalog, initial };

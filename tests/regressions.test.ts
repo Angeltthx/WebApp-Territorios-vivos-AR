@@ -1673,6 +1673,7 @@ test('el tutorial, animal por animal: un toque lo abre, la ✕ al callar la narr
   }));
   const last = () => states.at(-1)!;
   let state = ArSession.idle().searching(Placement.initial(model.id, model.defaultScale));
+  let first = true;
   const openAndHear = (id: string) => {
     state = state.withDiscovery(state.discovery.unlock(ModelId.of(id)));
     tutorial.update(state);
@@ -1685,8 +1686,9 @@ test('el tutorial, animal por animal: un toque lo abre, la ✕ al callar la narr
     tutorial.focusedAnimalTapped();
     assert.equal(last().step, 'off');
     tutorial.narrationChanged(false);
-    // Calló: la mano señala la ✕.
-    assert.equal(last().step, 'closeFocus');
+    // Calló: la mano señala la ✕… solo la primera vez.
+    assert.equal(last().step, first ? 'closeFocus' : 'off');
+    first = false;
     state = state.withDiscovery(state.discovery.focus(null));
     tutorial.update(state);
   };
@@ -1820,4 +1822,120 @@ test('si no toca al animal en primer plano, al callar la narración la mano pasa
   // Tocarlo ahora no quita la ✕.
   tutorial.focusedAnimalTapped();
   assert.equal(tutorial.state.step, 'closeFocus');
+});
+
+test('el idioma del teléfono decide: inglés si lo prefiere; si no, español', async () => {
+  const { detectLanguage } = await import('../src/domain/value-objects/Language');
+  assert.equal(detectLanguage(['en-US', 'es-CO']), 'en');
+  assert.equal(detectLanguage(['es-CO', 'en']), 'es');
+  assert.equal(detectLanguage(['fr-FR', 'en-GB']), 'en');
+  assert.equal(detectLanguage(['fr-FR', 'de']), 'es');
+  assert.equal(detectLanguage([]), 'es');
+});
+
+test('cada animal y cada texto con párrafos tiene su versión en inglés, y su narración inglesa existe', () => {
+  for (const entry of NUQUI_CATALOG) {
+    const animal = ArModel.fromSnapshot(entry);
+    const es = animal.cardIn('es');
+    const en = animal.cardIn('en');
+    assert.notEqual(en.name, es.name, `${entry.id} sin nombre en inglés`);
+    assert.equal(en.paragraphs.length, es.paragraphs.length, `${entry.id}: distinto número de párrafos`);
+    const narration = animal.soundscape?.narrationIn('en');
+    assert.ok(narration && narration !== animal.soundscape?.narrationIn('es'), `${entry.id} sin narración inglesa`);
+    for (const part of narration.parts) assert.ok(existsSync(`public${part}`), `falta ${part}`);
+    // Mismas pausas: el animal actúa en el mismo punto de la historia.
+    assert.deepEqual(narration.cues, animal.soundscape!.narrationIn('es')!.cues);
+  }
+  for (const snapshot of NUQUI_MAP_TEXTS) {
+    const text = MapText.of(snapshot);
+    const translatable = text.blocks.some((block) => block.kind === 'paragraph' || block.kind === 'species' || block.kind === 'sea');
+    if (translatable) assert.notDeepEqual(text.blocksIn('en'), text.blocks, `${text.id} sin versión inglesa`);
+  }
+  // Sin traducción, en inglés se enseña el español (mejor eso que nada).
+  const plain = MapText.of(NUQUI_MAP_TEXTS.find((snapshot) => snapshot.id === 'nuqui')!);
+  assert.equal(plain.blocksIn('en'), plain.blocks);
+});
+
+test('en inglés narra la voz inglesa; cambiar de idioma a media narración sigue en la MISMA frase', async () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const turtle = voiced('turtle', {
+    soundscape: {
+      calls: ['/turtle/c1'], ambience: '/turtle/amb',
+      narration: {
+        parts: ['/turtle/n1', '/turtle/n2'], cues: [{ action: 'gesture', holdSeconds: 5 }],
+        sentences: [[0, 4, 9], [0, 3]],
+      },
+      narrationEn: {
+        parts: ['/turtle/en1', '/turtle/en2'], cues: [{ action: 'gesture', holdSeconds: 5 }],
+        sentences: [[0, 3.5, 8], [0, 2.5]],
+      },
+    },
+  });
+  let state = ArSession.idle().searching(Placement.initial(turtle.id, turtle.defaultScale)).tracking();
+  state = state.withDiscovery(state.discovery.unlock(turtle.id));
+  const h = soundHarness();
+  let position: number | null = null;
+  const finishes: ((ended: boolean) => void)[] = [];
+  h.audio.playVoice = (url: string, from = 0) => {
+    h.log.push(`voice ${url} @${from}`);
+    return new Promise((resolve) => { finishes.push(resolve); });
+  };
+  (h.audio as unknown as { voicePosition(): number | null }).voicePosition = () => position;
+  const sounds = new AnimalSoundscape(h.audio as never, () => state, h.timers);
+  const playing: boolean[] = [];
+  sounds.onNarrationChange((narration) => playing.push(narration.playing));
+  sounds.setLanguage('en');
+  sounds.focusOpened(turtle);
+  h.fire();
+  await flush();
+  assert.equal(h.log.at(-1), 'voice /turtle/en1 @0');
+  // A los 5 s del trozo en inglés va por la 2.ª frase (empieza en 3.5):
+  // en español sigue desde el principio de esa misma frase (4 s).
+  position = 5;
+  sounds.setLanguage('es');
+  assert.equal(h.log.at(-1), 'voice /turtle/n1 @4');
+  assert.equal(playing.at(-1), true, 'la narración no debe detenerse');
+  // El trozo viejo acaba (cortado) sin efectos; el nuevo sigue su curso.
+  finishes[0]!(false);
+  await flush();
+  assert.ok(!h.log.includes('voice off'));
+  finishes[1]!(true);
+  await flush();
+  // En la pausa (el animal actúa) cambia otra vez: el trozo 2 ya sale en inglés.
+  sounds.setLanguage('en');
+  h.fire();
+  await flush();
+  assert.equal(h.log.at(-1), 'voice /turtle/en2 @0');
+  // Y se descarga primero la del idioma en uso.
+  const order = soundPreloadOrder([turtle], 'en');
+  assert.ok(order.includes('/turtle/en1') && !order.includes('/turtle/n1'));
+});
+
+test('las frases de cada narración española e inglesa van a la par', () => {
+  for (const entry of NUQUI_CATALOG) {
+    const soundscape = ArModel.fromSnapshot(entry).soundscape!;
+    const es = soundscape.narrationIn('es')!;
+    const en = soundscape.narrationIn('en')!;
+    assert.ok(es.sentences && en.sentences, `${entry.id} sin inicios de frase`);
+    es.sentences.forEach((starts, part) => {
+      assert.equal(starts.length, en.sentences![part]!.length, `${entry.id}, trozo ${part + 1}: distinto número de frases`);
+    });
+  }
+});
+
+test('la mano de la ✕ sale una sola vez en la sesión, no con cada animal', () => {
+  const timers = { set: () => 1, clear: () => {} };
+  const tutorial = new Tutorial(['whale', 'crab'], ['turismo'], timers);
+  let state = ArSession.idle().searching(Placement.initial(model.id, model.defaultScale)).tracking();
+  tutorial.update(state);
+  for (const [id, expected] of [['whale', 'closeFocus'], ['crab', 'off']] as const) {
+    state = state.withDiscovery(state.discovery.unlock(ModelId.of(id)));
+    tutorial.update(state);
+    tutorial.focusedAnimalTapped();
+    tutorial.narrationChanged(true);
+    tutorial.narrationChanged(false);
+    assert.equal(tutorial.state.step, expected, `${id}`);
+    state = state.withDiscovery(state.discovery.focus(null));
+    tutorial.update(state);
+  }
 });
