@@ -56,7 +56,7 @@ export function buildContainer(config: ContainerConfig) {
   const models = new StaticModelRepository(NUQUI_CATALOG);
 
   // El tutorial: la mano sobre el mapa (escena) y el cartel (vista) siguen
-  // el mismo reloj. Recorre los cuatro animales y luego los textos.
+  // el mismo reloj. Recorre los cinco animales y luego los textos.
   const tutorial = new Tutorial(
     NUQUI_CATALOG.map((entry) => entry.id),
     mapTexts.all.map((text) => text.id),
@@ -99,7 +99,7 @@ export function buildContainer(config: ContainerConfig) {
   );
   const closeFocus = new CloseFocus(scene, sounds, analytics, getSession, emit);
 
-  // Con los cuatro animales encontrados, los textos del mapa se leen en grande.
+  // Con los cinco animales encontrados, los textos del mapa se leen en grande.
   const openMapText = new OpenMapText(scene, mapTexts, models, sounds, analytics, getSession, emit);
 
   // Cada sonido de un gesto suena en su fotograma: el del toque cuando la
@@ -109,8 +109,9 @@ export function buildContainer(config: ContainerConfig) {
   // En las pausas de la narración, el animal hace su gesto: el mismo que
   // al tocarlo, con su sonido en su momento.
   sounds.setPerformer((id) => scene.pulse(id));
-  // Cuando la narración calla, el tutorial señala la ✕.
-  sounds.onNarrationChange(({ playing }) => tutorial.narrationChanged(playing));
+  // Cuando la narración calla, el tutorial señala la ✕ (sin narración, al
+  // tocar al animal).
+  sounds.onNarrationChange(({ playing, available }) => tutorial.narrationChanged(playing, available));
   scene.onSplash((modelId, strength) => void gestureSound.splashed(modelId, strength));
 
   return {

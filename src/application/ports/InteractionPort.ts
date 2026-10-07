@@ -2,9 +2,11 @@ export interface InteractionHandlers {
   /**
    * Toque sobre uno de los iconos (no sobre el fondo ni sobre el mapa).
    * Recibe el id del icono tocado: con varios en pantalla a la vez, saber
-   * "se tocó algo" ya no basta.
+   * "se tocó algo" ya no basta. `instance`: cuál de sus ejemplares, si el
+   * animal tiene varios (las dos ranas); sin él, el principal o el que
+   * esté libre.
    */
-  onTapModel(modelId: string): void;
+  onTapModel(modelId: string, instance?: number): void;
   /**
    * Toque sobre un texto del mapa marcado con destellos (solo existen
    * cuando ya se encontraron todos los animales).

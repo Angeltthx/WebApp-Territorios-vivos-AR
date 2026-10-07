@@ -40,6 +40,8 @@ export class IconAnimator {
     private readonly root: Object3D,
     clips: readonly AnimationClip[],
     private readonly sequence: AnimationSequence | null,
+    /** De dónde sale el azar de `wander` (los tests lo fijan). */
+    private readonly random: () => number = Math.random,
   ) {
     if (sequence === null || clips.length === 0) {
       this.mixer = null;
@@ -74,6 +76,14 @@ export class IconAnimator {
   start(): void {
     if (this.running || this.ambientCount === 0) return;
     this.running = true;
+    // A su aire: un paso al azar, empezado por un instante al azar. Dos
+    // animales iguales descubiertos a la vez no arrancan sincronizados.
+    if (this.sequence?.wander === true) {
+      this.play(this.pickNext(), 'ambient');
+      const entry = this.actions[this.current];
+      if (entry !== undefined) entry.action.time = this.random() * entry.action.getClip().duration;
+      return;
+    }
     const entrance = this.sequence?.entranceClip ?? null;
     if (entrance === null) {
       this.play(0, 'ambient');
@@ -100,6 +110,21 @@ export class IconAnimator {
     const wasRunning = this.running;
     this.running = true;
     this.play(index, 'tap', wasRunning);
+  }
+
+  /**
+   * Si está haciendo el gesto de toque, se lo hayan pedido o le haya tocado
+   * en su bucle (`wander` puede incluirlo): una rana que ya está saltando
+   * por su cuenta no vuelve a saltar porque la toquen.
+   */
+  get isPerformingTapClip(): boolean {
+    // Solo con `wander`: ahí el clip de toque en el bucle es un gesto (la
+    // rana salta sola). El cangrejo y la tortuga también tienen su clip de
+    // toque en el bucle, pero es su forma de moverse (Walk, Swin), y tocarlos
+    // mientras caminan o nadan sí tiene que responder.
+    const tapClip = this.sequence?.tapClip ?? null;
+    return this.sequence?.wander === true && this.running && tapClip !== null &&
+      this.actions[this.current]?.name === tapClip;
   }
 
   /** Si está respondiendo a un toque. */
@@ -142,12 +167,30 @@ export class IconAnimator {
       : this.mode === 'entrance' ? 1 : active.loops;
     if (this.completedLoops < loops) return;
 
-    if (this.mode === 'ambient') {
+    if (this.sequence?.wander === true) {
+      this.play(this.pickNext(), 'ambient', true);
+    } else if (this.mode === 'ambient') {
       this.play((this.current + 1) % this.ambientCount, 'ambient', true);
     } else {
       this.play(this.resumeIndex, 'ambient', true);
     }
   };
+
+  /**
+   * El paso siguiente de `wander`: cualquiera de los ambientales, menos
+   * repetir seguido el clip de toque (dos saltos seguidos ya no se leen
+   * como «de vez en cuando»).
+   */
+  private pickNext(): number {
+    const tapClip = this.sequence?.tapClip ?? null;
+    const justDidIt = this.actions[this.current]?.name === tapClip && this.running && this.completedLoops > 0;
+    const options = this.actions
+      .slice(0, this.ambientCount)
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => !(justDidIt && entry.name === tapClip));
+    const pool = options.length > 0 ? options : [{ index: 0 }];
+    return pool[Math.min(pool.length - 1, Math.floor(this.random() * pool.length))]!.index;
+  }
 
   private indexOf(name: string): number {
     return this.actions.findIndex((entry) => entry.name === name);

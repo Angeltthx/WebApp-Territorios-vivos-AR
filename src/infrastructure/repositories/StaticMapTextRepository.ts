@@ -201,18 +201,8 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
     ],
     ambience: SEA,
   },
-  {
-    id: 'rana',
-    label: 'Rana arlequín',
-    area: { u0: 0.802, v0: 0.8122, u1: 0.94, v1: 0.8352 },
-    blocks: [{ kind: 'species', name: 'Rana arlequín', scientific: 'Oophaga solanensis' }],
-    english: {
-      label: 'Harlequin frog',
-      blocks: [{ kind: 'species', name: 'Harlequin frog', scientific: 'Oophaga solanensis' }],
-    },
-    illustration: '/illustrations/rana.webp',
-    ambience: '/audio/frogs/ambience.mp3',
-  },
+  // La etiqueta «RANA ARLEQUÍN / Oophaga solanensis» fue un texto de aquí
+  // hasta que la rana pasó a ser el quinto animal: ahora es su ficha.
   {
     id: 'oceano',
     label: 'Océano Pacífico',

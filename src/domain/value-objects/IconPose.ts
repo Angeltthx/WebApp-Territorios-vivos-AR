@@ -4,7 +4,7 @@ import { Scale } from './Scale';
  * Desde qué cara se mira un icono cuando el mapa está sobre la mesa.
  *
  *  - `front` el icono se levanta del papel MIRANDO A QUIEN SOSTIENE EL
- *            teléfono. Es la que usan hoy los cuatro animales: da una
+ *            teléfono. Es la que usan hoy los cinco animales: da una
  *            lectura uniforme, y como el dedo los hace girar sobre su eje
  *            vertical, quien quiera verlos de lado los gira y ya.
  *  - `top`   el icono se apoya sobre el papel y se ve DESDE ARRIBA (su

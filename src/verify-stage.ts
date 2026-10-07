@@ -86,7 +86,7 @@ for (const model of models) {
 }
 
 new PointerInteractionAdapter(runtime as never, adapter).attach({
-  onTapModel: (id) => adapter.pulse(ModelId.of(id)),
+  onTapModel: (id, instance) => adapter.pulse(ModelId.of(id), instance),
   onTapText: () => {},
   onRotate: (id, yaw, pitch) => {
     placement = placement.rotatedBy(ModelId.of(id), yaw, pitch);

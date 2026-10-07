@@ -33,9 +33,12 @@ Generado por `npm run build-audio`. No editar a mano.
 - **Penelope barbata - Bearded Guan (XC251314)** — Niels Krabbe (xeno-canto). Licencia: CC BY-SA 3.0. https://commons.wikimedia.org/wiki/File:Penelope_barbata_-_Bearded_Guan_XC251314.mp3
   - Usado en: bird/call-5.mp3
 - **Jungle_Choco 01.wav** — jaime_enrique. Licencia: CC0. https://freesound.org/s/424763/
-  - Usado en: bird/ambience.mp3, coast/ambience.mp3, frogs/ambience.mp3
+  - Usado en: bird/ambience.mp3, coast/ambience.mp3, frog/ambience.mp3
 - **Oophaga pumilio call (macho)** — Captainstork. Licencia: CC BY 3.0. https://commons.wikimedia.org/wiki/File:Oophaga_pumilio_call.ogg
   - Nota: Rana del mismo género que la rana arlequín del mapa (Oophaga solanensis), de la que no hay grabaciones abiertas.
-  - Usado en: frogs/ambience.mp3
+  - Usado en: frog/call-1.mp3, frog/call-2.mp3, frog/call-3.mp3, frog/ambience.mp3
+- **Rustling leaves** — Gravity Sound. Licencia: CC BY 4.0. https://commons.wikimedia.org/wiki/File:Rustling_leaves_(Gravity_Sound).wav
+  - Nota: Hojas removidas: lo que suena cuando la rana cae del salto sobre su hoja.
+  - Usado en: frog/tap-1.mp3, frog/tap-2.mp3
 - **Narraciones** (español e inglés) — grabación propia del equipo de Territorios Vivos (`audios/`).
   - Usado en: whale/narration-1.mp3, whale/narration-2.mp3, whale/narration-en-1.mp3, whale/narration-en-2.mp3, crab/narration-1.mp3, crab/narration-2.mp3, crab/narration-en-1.mp3, crab/narration-en-2.mp3, turtle/narration-1.mp3, turtle/narration-2.mp3, turtle/narration-en-1.mp3, turtle/narration-en-2.mp3, bird/narration-1.mp3, bird/narration-2.mp3, bird/narration-en-1.mp3, bird/narration-en-2.mp3

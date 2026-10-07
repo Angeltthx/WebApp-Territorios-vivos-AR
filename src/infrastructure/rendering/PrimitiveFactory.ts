@@ -31,6 +31,8 @@ export function createPrimitive(shape: PrimitiveShape, colorHex: number): Object
       return buildCrab(colorHex);
     case 'turtle':
       return buildTurtle(colorHex);
+    case 'frog':
+      return buildFrog(colorHex);
   }
 }
 
@@ -194,6 +196,45 @@ function buildTurtle(colorHex: number): Object3D {
     back.position.set(-0.058, -0.006, side * 0.052);
     back.rotation.y = side * 0.8;
     group.add(back);
+  }
+
+  return group;
+}
+
+/** Rana arlequín: cuerpo rechoncho, ojos saltones y patas dobladas. */
+function buildFrog(colorHex: number): Object3D {
+  const group = new Group();
+  const hide = skin(colorHex, 0.35);
+  const spot = skin(0x1b1b1b, 0.4);
+
+  group.add(blob(0.05, [1.15, 0.62, 0.95], hide));
+
+  // Manchas negras sobre el lomo: el dibujo de la arlequín.
+  for (const [x, z] of [[0.012, 0.018], [-0.02, -0.012], [-0.004, -0.03], [0.026, -0.016]] as const) {
+    const patch = blob(0.012, [1.2, 0.35, 1], spot);
+    patch.position.set(x, 0.028, z);
+    group.add(patch);
+  }
+
+  const head = blob(0.034, [1, 0.7, 1.05], hide);
+  head.position.set(0.05, 0.006, 0);
+  group.add(head);
+
+  for (const side of [-1, 1]) {
+    const eye = blob(0.011, [1, 1, 1], spot);
+    eye.position.set(0.06, 0.026, side * 0.02);
+    group.add(eye);
+
+    // Patas traseras recogidas, listas para saltar; las delanteras, cortas.
+    const thigh = blob(0.02, [1.7, 0.6, 0.8], hide);
+    thigh.position.set(-0.042, -0.012, side * 0.044);
+    thigh.rotation.y = side * 0.6;
+    group.add(thigh);
+
+    const arm = blob(0.011, [1.5, 0.5, 0.6], hide);
+    arm.position.set(0.042, -0.022, side * 0.036);
+    arm.rotation.y = side * -0.5;
+    group.add(arm);
   }
 
   return group;

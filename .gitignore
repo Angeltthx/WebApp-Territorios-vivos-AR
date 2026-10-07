@@ -13,8 +13,7 @@ dist/
 audio-src/.cache/
 .preview/
 
-# Entregas pendientes de integrar (rana y narraciones regrabadas): se quedan
-# en local hasta que tengan su propia rama.
-Rana_Ani.glb
+# Material de referencia y entregas pendientes de integrar (el vídeo de la
+# rana, las narraciones regrabadas): se quedan en local.
 Territorios_vivos_rana.mov
 audios carolina.zip

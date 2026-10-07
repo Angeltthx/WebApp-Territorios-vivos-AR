@@ -120,7 +120,7 @@ view = new ArView(root, {
     gesturesAttached = true;
 
     interaction.attach({
-      onTapModel: (modelId) => void tapModel.execute(modelId),
+      onTapModel: (modelId, instance) => void tapModel.execute(modelId, instance),
       onTapText: (textId) => void openMapText.execute(textId),
       onRotate: (modelId, yaw, pitch) => transformPlacement.rotateBy(modelId, yaw, pitch),
     });

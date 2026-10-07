@@ -226,6 +226,10 @@ function applyView(lift: Group, view: IconView): void {
  */
 export class MarkerPin {
   readonly group = new Group();
+  /** El animal del que es este pin (varios pines si tiene compañeros). */
+  readonly modelId: string;
+  /** Su `iconSize` del catálogo: el primer plano pone a los compañeros a escala. */
+  readonly iconSize: number;
 
   private readonly lift = new Group();
   private readonly outline = new Group();
@@ -314,7 +318,11 @@ export class MarkerPin {
     loaded: LoadedIcon,
     index: number,
     targetAspect: number,
+    /** Qué ejemplar del animal es: 0 el principal, 1… sus compañeros. */
+    readonly instance = 0,
   ) {
+    this.modelId = model.id.value;
+    this.iconSize = model.pose.size;
     this.icon = loaded.object;
     this.bodyAnchor = findBodyAnchor(this.icon);
     this.animator = new IconAnimator(this.icon, loaded.animations, model.animation);
@@ -336,6 +344,9 @@ export class MarkerPin {
     this.group.userData['modelId'] = model.id.value;
     // El icono conserva su identidad cuando se presta al primer plano.
     this.icon.userData['modelId'] = model.id.value;
+    // Y cuál de sus ejemplares es: tocar la rana chica hace saltar a ESA.
+    this.group.userData['instance'] = instance;
+    this.icon.userData['instance'] = instance;
 
     // Zona de toque invisible, del tamaño del animal (ver
     // TAP_FOOTPRINT_MARGIN): elipse de radio 1 que `sync` escala a su
@@ -436,9 +447,13 @@ export class MarkerPin {
     return true;
   }
 
-  /** Si está a mitad del gesto de toque (su clip o su movimiento). */
+  /**
+   * Si está a mitad del gesto de toque (su clip o su movimiento), también
+   * cuando lo hace por su cuenta en su bucle: la rana que ya está saltando
+   * sola no vuelve a empezar el salto porque la toquen.
+   */
   get isGesturing(): boolean {
-    return this.animator.isReacting || this.choreography.isPlaying;
+    return this.animator.isReacting || this.animator.isPerformingTapClip || this.choreography.isPlaying;
   }
 
   /** El salpicón, para que el primer plano lo cuelgue junto al icono prestado. */

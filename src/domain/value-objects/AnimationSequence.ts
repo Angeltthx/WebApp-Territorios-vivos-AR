@@ -14,10 +14,12 @@ export interface AnimationStepSnapshot {
  *   'leap'    nadando, salta fuera del agua, cae con un salpicón, se
  *             sumerge un poco y vuelve a flote (tortuga).
  *   'scuttle' corretea de lado a lado a saltitos (cangrejo).
+ *   'hop'     el salto del propio clip, más bajo y más corto para que
+ *             quepa en el primer plano; cae donde estaba (rana).
  *   'none'    solo el clip (pava: su canto ya salta y mueve la cabeza).
  */
-export type TapMove = 'none' | 'breach' | 'leap' | 'scuttle';
-const TAP_MOVES: readonly TapMove[] = ['none', 'breach', 'leap', 'scuttle'];
+export type TapMove = 'none' | 'breach' | 'leap' | 'scuttle' | 'hop';
+const TAP_MOVES: readonly TapMove[] = ['none', 'breach', 'leap', 'scuttle', 'hop'];
 
 export interface AnimationSequenceSnapshot {
   /** Bucle ambiental: lo que el animal hace siempre, sin que nadie lo toque. */
@@ -46,6 +48,15 @@ export interface AnimationSequenceSnapshot {
    * al tocar.
    */
   readonly tapSoundAt?: number;
+  /**
+   * El bucle ambiental NO va en orden: tras cada paso se elige el siguiente
+   * al azar entre `steps` (repetir un paso es tan válido como cambiar; lo
+   * único que no se repite seguido es el clip de toque), y arranca en un
+   * paso y un instante al azar. Es lo que hace que dos animales iguales —las
+   * dos ranas— no se muevan a la vez. Con `wander`, `entranceClip` no se
+   * usa. Por defecto, en orden.
+   */
+  readonly wander?: boolean;
 }
 
 export interface AnimationStep {
@@ -64,6 +75,7 @@ export class AnimationSequence {
     readonly tapLoops: number,
     readonly tapMove: TapMove,
     readonly tapSoundAt: number,
+    readonly wander: boolean,
   ) {
     Object.freeze(this.steps);
     Object.freeze(this);
@@ -124,6 +136,7 @@ export class AnimationSequence {
       tapLoops,
       tapMove,
       tapSoundAt,
+      snapshot.wander ?? false,
     );
   }
 }

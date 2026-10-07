@@ -557,4 +557,128 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       durationMs: 620,
     },
   },
+  {
+    id: 'frog',
+    // Nombre y especie, los del PÓSTER («RANA ARLEQUÍN / Oophaga
+    // solanensis»). Antes era uno de los textos del mapa; ahora es el quinto
+    // animal y esa etiqueta pasa a ser su ficha.
+    name: 'Rana arlequín',
+    species: 'Oophaga solanensis / Rana arlequín',
+    // PROVISIONAL: el equipo todavía no ha entregado texto ni narración de
+    // la rana. Son datos del género Oophaga y de la especie (descrita en
+    // 2018 cerca de Bahía Solano), escritos aquí para que la ficha no salga
+    // vacía; se sustituyen tal cual cuando llegue el texto del equipo.
+    description: [
+      'Cabe en la yema de un dedo y no se esconde: su rojo y negro es un aviso. ' +
+        'Su piel guarda venenos que saca de las hormigas y los ácaros que come.',
+      'Oophaga quiere decir «come huevos»: la madre lleva cada renacuajo a cuestas ' +
+        'hasta el agua que se junta en las bromelias, y allí lo alimenta con huevos. ' +
+        'Solo vive en las selvas del Chocó.',
+    ],
+    english: {
+      name: 'Harlequin poison frog',
+      species: 'Oophaga solanensis / Harlequin poison frog',
+      description: [
+        'It fits on a fingertip and does not hide: its red and black are a warning. ' +
+          'Its skin stores poisons it takes from the ants and mites it eats.',
+        'Oophaga means "egg-eater": the mother carries each tadpole on her back to ' +
+          'the water pooled in bromeliads, and feeds it there with eggs. ' +
+          'It lives only in the forests of the Chocó.',
+      ],
+    },
+    // No hay grabaciones abiertas de Oophaga solanensis: su llamada es la de
+    // Oophaga pumilio, del MISMO GÉNERO (un trino parecido). Al tocarla, el
+    // crujido de las hojas donde cae del salto; de fondo, la selva del Chocó
+    // con ranas. Sin narración: el equipo no la ha grabado todavía.
+    soundscape: {
+      calls: [
+        '/audio/frog/call-1.mp3',
+        '/audio/frog/call-2.mp3',
+        '/audio/frog/call-3.mp3',
+      ],
+      taps: [
+        '/audio/frog/tap-1.mp3',
+        '/audio/frog/tap-2.mp3',
+      ],
+      ambience: '/audio/frog/ambience.mp3',
+    },
+    source: ModelSource.gltf('/models/Rana_Ani.glb'),
+    animation: {
+      // A su aire (`wander`): Walk —unos pasos (0–1.25 s) y un rato
+      // quieta— y, de vez en cuando, el salto. Walk va dos veces para que
+      // camine más de lo que salta (un salto cada ~3 pasos, ~10 s), y cada
+      // rana elige por su cuenta: la grande y la chica nunca hacen lo mismo
+      // a la vez. Las dos usan los mismos clips del animador.
+      steps: [
+        { name: 'Walk', loops: 1 },
+        { name: 'Walk', loops: 1 },
+        { name: 'Jump', loops: 1 },
+      ],
+      wander: true,
+      // Al tocarla, salta YA: 'hop' quita al Jump los 2.1 s en que mira a
+      // los lados antes de agacharse (se sentía que no respondía al dedo) y
+      // lo deja más bajo y más corto, con la misma curva, para que quepa en
+      // el primer plano. Si ya está saltando, el toque no lo reinicia.
+      tapClip: 'Jump',
+      tapMove: 'hop',
+      // Las hojas suenan al caer: 3.42 s en el clip original, 1.32 s ya
+      // recortado.
+      tapSoundAt: 1.32,
+    },
+    // Las DOS ranas del póster, cada una con su contorno: esta es la
+    // grande, junto a la etiqueta, vista de espaldas sobre una hoja
+    // (dibujo: 0.10 × 0.13 de ancho de mapa); la chica es `companions`.
+    spot: { u: 0.762, v: 0.835 },
+    view: 'front',
+    // Medida en /verify.html: a 1 ocupaba 0.073 de ancho, menos que el
+    // cangrejo; a 1.35 queda en ~0.10, como su dibujo. Es negra sobre selva
+    // oscura, y más pequeña se perdía.
+    iconSize: 1.35,
+    // En primer plano salen LAS DOS en fila: el tamaño lo pone la fila.
+    focusSize: 1,
+    facing: 0,
+    // Calcado del dibujo: el rojo y el negro de la rana contra la selva.
+    outlineShape: [
+      { u: 0.715, v: 0.8464 }, { u: 0.72, v: 0.845 }, { u: 0.725, v: 0.8429 }, { u: 0.73, v: 0.8261 },
+      { u: 0.735, v: 0.8226 }, { u: 0.74, v: 0.8198 }, { u: 0.745, v: 0.8142 }, { u: 0.75, v: 0.7926 },
+      { u: 0.755, v: 0.7912 }, { u: 0.76, v: 0.787 }, { u: 0.765, v: 0.7877 }, { u: 0.77, v: 0.7905 },
+      { u: 0.775, v: 0.7933 }, { u: 0.78, v: 0.8128 }, { u: 0.785, v: 0.8184 }, { u: 0.79, v: 0.8261 },
+      { u: 0.795, v: 0.8317 }, { u: 0.8, v: 0.8282 }, { u: 0.805, v: 0.8359 }, { u: 0.81, v: 0.8561 },
+      { u: 0.81, v: 0.8603 }, { u: 0.805, v: 0.8659 }, { u: 0.8, v: 0.8701 }, { u: 0.795, v: 0.8736 },
+      { u: 0.79, v: 0.8764 }, { u: 0.785, v: 0.875 }, { u: 0.78, v: 0.875 }, { u: 0.775, v: 0.861 },
+      { u: 0.77, v: 0.8617 }, { u: 0.765, v: 0.8617 }, { u: 0.76, v: 0.861 }, { u: 0.755, v: 0.8617 },
+      { u: 0.75, v: 0.8617 }, { u: 0.745, v: 0.861 }, { u: 0.74, v: 0.8596 }, { u: 0.735, v: 0.8659 },
+      { u: 0.73, v: 0.8729 }, { u: 0.725, v: 0.8722 }, { u: 0.72, v: 0.8722 }, { u: 0.715, v: 0.8694 },
+    ],
+    // La rana chica, arriba a la derecha sobre la hoja grande. En el póster
+    // las dos miden casi lo mismo (0.09 la chica); aquí se hace claramente
+    // menor —una grande y una chiquita— y en el primer plano salen las dos.
+    companions: [
+      {
+        spot: { u: 0.891, v: 0.775 },
+        iconSize: 0.8,
+        outlineShape: [
+          { u: 0.85, v: 0.7814 }, { u: 0.855, v: 0.7877 }, { u: 0.86, v: 0.7821 }, { u: 0.865, v: 0.7696 },
+          { u: 0.87, v: 0.7654 }, { u: 0.875, v: 0.7619 }, { u: 0.88, v: 0.7416 }, { u: 0.885, v: 0.7388 },
+          { u: 0.89, v: 0.7367 }, { u: 0.895, v: 0.7367 }, { u: 0.9, v: 0.7402 }, { u: 0.905, v: 0.7486 },
+          { u: 0.91, v: 0.7619 }, { u: 0.915, v: 0.7689 }, { u: 0.92, v: 0.773 }, { u: 0.925, v: 0.7772 },
+          { u: 0.93, v: 0.7933 }, { u: 0.93, v: 0.7961 }, { u: 0.925, v: 0.801 }, { u: 0.92, v: 0.8052 },
+          { u: 0.915, v: 0.808 }, { u: 0.91, v: 0.808 }, { u: 0.905, v: 0.8087 }, { u: 0.9, v: 0.7968 },
+          { u: 0.895, v: 0.7975 }, { u: 0.89, v: 0.7989 }, { u: 0.885, v: 0.7982 }, { u: 0.88, v: 0.7961 },
+          { u: 0.875, v: 0.7954 }, { u: 0.87, v: 0.801 }, { u: 0.865, v: 0.8059 }, { u: 0.86, v: 0.8052 },
+          { u: 0.855, v: 0.8052 }, { u: 0.85, v: 0.8017 },
+        ],
+      },
+    ],
+    outlineView: 'top',
+    outlineSpin: 0,
+    defaultScale: 1,
+    sound: {
+      // Trino agudo y rápido, como el de una Oophaga.
+      waveform: 'triangle',
+      rootFrequencyHz: 1900,
+      overtoneRatios: [1, 2, 3.1],
+      durationMs: 260,
+    },
+  },
 ];

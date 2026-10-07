@@ -34,7 +34,7 @@ const imagePath = resolve(repoRoot, 'public/targets/map.jpg');
  * Un animal del mapa: el recorte donde buscarlo y qué color lo distingue.
  *
  * El recorte no es un detalle menor: es lo que impide que la regla de color
- * arrastre media ilustración. Los cuatro están bien separados en el mapa,
+ * arrastre media ilustración. Los cinco están bien separados en el mapa,
  * así que un rectángulo generoso alrededor de cada uno basta.
  */
 const SUBJECTS = {
@@ -68,6 +68,24 @@ const SUBJECTS = {
     // Verde oliva sobre mar turquesa. Lo que la separa es que en la tortuga
     // el verde le gana al azul, y en el agua es al revés.
     hit: (r, g, b) => g > b + 15 && r > b - 10 && (r + g + b) / 3 < 205,
+  },
+  frog: {
+    // La rana GRANDE de las dos (la de la izquierda, junto a la etiqueta
+    // «RANA ARLEQUÍN»), vista desde atrás sobre una hoja. El recorte acaba
+    // en 0.82 para dejar fuera la etiqueta azul y la rana pequeña.
+    box: { u0: 0.69, v0: 0.775, u1: 0.82, v1: 0.885 },
+    // Alrededor hay hojas, flores y la etiqueta azul, así que la regla dice
+    // qué es rana: lo ROJO (sin el fucsia de las flores, que tiene mucho
+    // azul) o lo NEGRO, cuyo verde va a la par del rojo; la selva oscura
+    // tiene el verde muy por encima.
+    hit: (r, g, b) => (r > g + 50 && r > b + 60) || ((0.299 * r + 0.587 * g + 0.114 * b) < 75 && g < r + 12),
+  },
+  frogSmall: {
+    // La otra rana, arriba a la derecha, sobre la hoja grande. El recorte
+    // empieza en 0.835 para dejar fuera la flor fucsia y acaba antes de la
+    // etiqueta. Misma regla de color que la grande.
+    box: { u0: 0.835, v0: 0.72, u1: 0.945, v1: 0.81 },
+    hit: (r, g, b) => (r > g + 50 && r > b + 60) || ((0.299 * r + 0.587 * g + 0.114 * b) < 75 && g < r + 12),
   },
 };
 
