@@ -2316,7 +2316,9 @@ test('los efectos de partículas salen del movimiento de sus huesos, no de la an
     foot.position.x += 2 / 60;
     particles.update(1 / 60, 1, true);
   }
-  assert.ok(particles.stats[0]!.emitted > 5, `soltó ${particles.stats[0]!.emitted}`);
+  assert.ok(particles.stats[0]!.emitted >= 4, `soltó ${particles.stats[0]!.emitted}`);
+  // Con pausa entre una y otra: medio segundo de paso no es una lluvia.
+  assert.ok(particles.stats[0]!.emitted <= 10, `soltó ${particles.stats[0]!.emitted}`);
   assert.ok(particles.stats[0]!.live > 0);
   // Mientras es un contorno no suelta, aunque se mueva.
   particles.resetStats();
@@ -2325,7 +2327,7 @@ test('los efectos de partículas salen del movimiento de sus huesos, no de la an
     particles.update(1 / 60, 1, false);
   }
   assert.equal(particles.stats[0]!.emitted, 0);
-  // La arena cae y se acaba: al rato no queda nada.
+  // El polvo se abre y se va: al rato no queda nada.
   for (let i = 0; i < 120; i += 1) particles.update(1 / 60, 1, false);
   assert.equal(particles.stats[0]!.live, 0);
   // Si el icono se muda (al primer plano), el grupo se muda con él y empieza de cero.
@@ -2339,11 +2341,12 @@ test('los efectos de partículas salen del movimiento de sus huesos, no de la an
 });
 
 test('cada animal del catálogo tiene su efecto y sus huesos existen en el modelo', () => {
-  const expected: Record<string, string> = { whale: 'bubbles', bird: 'leaves', crab: 'sand', turtle: 'bubbles', frog: 'dew' };
+  // La ballena y la tortuga, sin: tuvieron burbujas y sobraban.
+  const expected: Record<string, string | undefined> = { whale: undefined, bird: 'leaves', crab: 'sand', turtle: undefined, frog: 'fireflies' };
   for (const entry of NUQUI_CATALOG) {
     const model = ArModel.fromSnapshot(entry);
     assert.equal(model.particles[0]?.kind, expected[entry.id], `${entry.id}`);
-    assert.ok(model.particles[0]!.threshold < 10, `${entry.id}: umbral sin calibrar`);
+    if (model.particles[0] !== undefined) assert.ok(model.particles[0].threshold < 10, `${entry.id}: umbral sin calibrar`);
     // La rana chica hereda el efecto.
     for (const companion of model.companions) assert.deepEqual(companion.particles, model.particles);
   }

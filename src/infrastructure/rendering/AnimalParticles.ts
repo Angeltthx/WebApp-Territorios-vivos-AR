@@ -1,39 +1,47 @@
 import {
+  AdditiveBlending,
   BufferGeometry,
   Color,
+  DataTexture,
   DoubleSide,
   Group,
-  IcosahedronGeometry,
   InstancedMesh,
   Matrix4,
   MeshStandardMaterial,
+  NormalBlending,
   Object3D,
   Quaternion,
+  RGBAFormat,
   Shape,
   ShapeGeometry,
+  Sprite,
+  SpriteMaterial,
   Vector3,
 } from 'three';
 import type { ParticleEffect, ParticleKind } from '@domain/value-objects/ParticleEffect';
 
 /**
- * Las partículas que acompañan los movimientos de un animal: hojas, arena,
- * rocío o burbujas (ver ParticleEffect).
+ * Las partículas que acompañan los movimientos de un animal: hojas, polvo
+ * de arena o luciérnagas (ver ParticleEffect).
  *
  * No toca las animaciones. Cada fotograma mira dónde están los huesos del
  * catálogo y, si uno se mueve más deprisa que su umbral, suelta partículas
- * desde ahí en proporción a ese exceso. Así salen del gesto mismo: la pava
- * suelta hojas cuando sacude la cabeza al cantar, el cangrejo arena con
- * cada paso, la rana rocío al impulsarse y al caer.
- *
- * Son objetos 3D de verdad (InstancedMesh con MeshStandardMaterial): la luz
- * de tres puntos y el mapa de entorno los iluminan como a los animales, y
- * una hoja que gira enseña su cara y su canto.
+ * en proporción a ese exceso —con una pausa mínima entre una y otra, para
+ * que acompañen y no tapen—. Así salen del gesto mismo: la pava sacude la
+ * cabeza y le caen unas hojas, cada paso del cangrejo levanta su polvito de
+ * arena, la rana salta y se espantan unas luciérnagas.
  *
  * Viven al lado del icono, en su mismo padre (`lift` sobre el mapa, el
  * escenario o su hueco en el primer plano). En los dos sitios +Y es el
  * "arriba" del animal, así que la gravedad es -Y y no hay que saber dónde
  * está; si el icono cambia de padre, el grupo se muda con él y empieza de
  * cero. Las medidas van en tamaños del animal, como el salpicón.
+ *
+ * Hubo una primera versión con burbujas para la tortuga y la ballena, granos
+ * facetados para el cangrejo y gotas de rocío para la rana: las burbujas
+ * sobraban (las dos ya estaban bien), los granos parecían piedritas y no
+ * arena, y el rocío se leía como más burbujas. Y la pava soltaba una lluvia
+ * de hojas que tapaba su canto.
  */
 
 interface KindSpec {
@@ -50,48 +58,55 @@ interface KindSpec {
   readonly out: readonly [number, number];
   /** Cuánto lejos del hueso puede nacer, en tamaños. */
   readonly spread: number;
-  /** Vaivén lateral (hojas, burbujas), en tamaños/s. */
+  /** Cuánto MÁS ARRIBA del hueso nace (hojas: caen de la copa), en tamaños. */
+  readonly above: readonly [number, number];
+  /** Vaivén lateral, en tamaños/s. */
   readonly sway: number;
   /** Giro, en vueltas por segundo. */
   readonly spin: number;
-  /** Cuánto crece a lo largo de su vida (burbujas). */
+  /** Cuánto crece a lo largo de su vida (el polvo se abre). */
   readonly grow: number;
-  /** Si muere al caer por debajo de donde nació (arena, gotas: tocan el suelo). */
-  readonly lands: boolean;
+  /** Pausa mínima entre dos partículas del mismo hueso, en segundos. */
+  readonly cooldown: number;
+  /** Cuántas salen de golpe cada vez (el polvo, en varias nubecillas). */
+  readonly burst: number;
   readonly colors: readonly number[];
 }
 
 const SPECS: Record<ParticleKind, KindSpec> = {
+  // Pocas, desde arriba, lentas: como si al moverse rozara las ramas.
   leaves: {
-    capacity: 36, size: [0.11, 0.18], life: [2.2, 3.2], gravity: -0.55, drag: 2.2,
-    up: [0.15, 0.45], out: [0.2, 0.5], spread: 0.12, sway: 0.28, spin: 0.9, grow: 0, lands: false,
-    colors: [0x3f7d2a, 0x5a9a2e, 0x7bb342, 0x2f6b3a, 0xa7b84a],
+    capacity: 10, size: [0.1, 0.15], life: [3, 4], gravity: -0.35, drag: 2.4,
+    up: [-0.05, 0.05], out: [0.05, 0.15], spread: 0.3, above: [0.35, 0.7],
+    sway: 0.3, spin: 0.6, grow: 0, cooldown: 0.8, burst: 1,
+    colors: [0x4f8a2c, 0x6aa335, 0x3d7a33, 0x8fae3f],
   },
+  // Nubecillas de polvo de arena a ras de suelo, que se abren y se van.
   sand: {
-    capacity: 200, size: [0.015, 0.03], life: [0.55, 0.95], gravity: -7, drag: 0.6,
-    up: [0.5, 1.1], out: [0.25, 0.6], spread: 0.03, sway: 0, spin: 2.5, grow: 0, lands: true,
-    colors: [0xcfa264, 0xb98a4f, 0xdcb578, 0xa47640, 0xe4c48c],
+    capacity: 36, size: [0.13, 0.2], life: [0.7, 1.1], gravity: 0.05, drag: 3.5,
+    up: [0.05, 0.18], out: [0.15, 0.35], spread: 0.04, above: [0, 0.02],
+    sway: 0, spin: 0.1, grow: 1.4, cooldown: 0.22, burst: 2,
+    colors: [0xd8b47a, 0xe6c88f, 0xc79d5e],
   },
-  dew: {
-    capacity: 40, size: [0.018, 0.034], life: [0.5, 0.9], gravity: -5.5, drag: 0.5,
-    up: [0.6, 1.3], out: [0.35, 0.8], spread: 0.04, sway: 0, spin: 0, grow: 0, lands: true,
-    colors: [0xe8f6ff, 0xcfeaff, 0xffffff],
-  },
-  bubbles: {
-    capacity: 36, size: [0.018, 0.04], life: [1.2, 2], gravity: 0.9, drag: 1.6,
-    up: [0.1, 0.3], out: [0.05, 0.2], spread: 0.05, sway: 0.18, spin: 0, grow: 0.8, lands: false,
-    colors: [0xeaffff, 0xd6f4ff, 0xffffff],
+  // Luciérnagas: suben despacio, vagan y parpadean.
+  fireflies: {
+    capacity: 14, size: [0.1, 0.15], life: [2.8, 4], gravity: 0.12, drag: 1.2,
+    up: [0.2, 0.45], out: [0.15, 0.4], spread: 0.12, above: [0.05, 0.2],
+    sway: 0.35, spin: 0, grow: 0, cooldown: 0.5, burst: 1,
+    colors: [0xfff3a0, 0xe6ff8a, 0xffe27a],
   },
 };
 
-/** Una hoja: dos curvas que se juntan en punta, con algo más de ancho cerca del tallo. */
+/** Las que se dibujan como sprite (siempre de cara a la cámara). */
+const SPRITE_KINDS: ReadonlySet<ParticleKind> = new Set(['sand', 'fireflies']);
+
+/** Una hoja: dos curvas que se juntan en punta, un poco combada. */
 function leafGeometry(): BufferGeometry {
   const shape = new Shape();
   shape.moveTo(0, -0.5);
   shape.quadraticCurveTo(0.34, -0.2, 0, 0.5);
   shape.quadraticCurveTo(-0.34, -0.2, 0, -0.5);
   const geometry = new ShapeGeometry(shape, 6);
-  // Un poco combada, como una hoja de verdad: no es un papel plano.
   const position = geometry.getAttribute('position');
   for (let i = 0; i < position.count; i += 1) {
     const x = position.getX(i);
@@ -101,23 +116,33 @@ function leafGeometry(): BufferGeometry {
   return geometry;
 }
 
-function materialFor(kind: ParticleKind): MeshStandardMaterial {
-  switch (kind) {
-    case 'leaves':
-      return new MeshStandardMaterial({ roughness: 0.65, metalness: 0, side: DoubleSide });
-    case 'sand':
-      return new MeshStandardMaterial({ roughness: 0.95, metalness: 0, flatShading: true });
-    case 'dew':
-      return new MeshStandardMaterial({ roughness: 0.05, metalness: 0, transparent: true, opacity: 0.85, envMapIntensity: 1.4 });
-    case 'bubbles':
-      return new MeshStandardMaterial({ roughness: 0.08, metalness: 0, transparent: true, opacity: 0.5, envMapIntensity: 1.6, depthWrite: false });
+/**
+ * Textura de un disco suave, hecha a mano (sin canvas, para que funcione
+ * también fuera del navegador). `core`: cuánto del centro es pleno —el
+ * polvo es una nube difusa, la luciérnaga un punto brillante con halo—.
+ * `grain`: moteado, para que el polvo no sea un círculo liso.
+ */
+function softTexture(core: number, grain: number): DataTexture {
+  const size = 64;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const dx = (x + 0.5) / size - 0.5;
+      const dy = (y + 0.5) / size - 0.5;
+      const r = Math.sqrt(dx * dx + dy * dy) * 2;
+      const falloff = r >= 1 ? 0 : r <= core ? 1 : 1 - (r - core) / (1 - core);
+      const noise = Math.abs((Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) % 1);
+      const alpha = Math.max(0, falloff * falloff * (1 - grain * noise));
+      const i = (y * size + x) * 4;
+      data[i] = 255;
+      data[i + 1] = 255;
+      data[i + 2] = 255;
+      data[i + 3] = Math.round(alpha * 255);
+    }
   }
-}
-
-function geometryFor(kind: ParticleKind): BufferGeometry {
-  if (kind === 'leaves') return leafGeometry();
-  // La arena, irregular (icosaedro sin subdividir); gotas y burbujas, redondas.
-  return new IcosahedronGeometry(1, kind === 'sand' ? 0 : 2);
+  const texture = new DataTexture(data, size, size, RGBAFormat);
+  texture.needsUpdate = true;
+  return texture;
 }
 
 interface Particle {
@@ -125,7 +150,6 @@ interface Particle {
   age: number;
   life: number;
   size: number;
-  ground: number;
   readonly position: Vector3;
   readonly velocity: Vector3;
   readonly axis: Vector3;
@@ -134,24 +158,28 @@ interface Particle {
   phase: number;
 }
 
-/** Como mucho, tantas partículas nuevas por fotograma y efecto. */
-const MAX_PER_FRAME = 4;
-
 const random = (range: readonly [number, number]): number => range[0] + Math.random() * (range[1] - range[0]);
+
+/** Como mucho, tantos huesos sueltan por fotograma y efecto. */
+const MAX_PER_FRAME = 4;
 
 /** Las partículas de UN efecto (un tipo, unos huesos). */
 class Emitter {
-  readonly mesh: InstancedMesh;
+  readonly object: Object3D;
   private readonly spec: KindSpec;
   private readonly particles: Particle[];
   private readonly bones: Object3D[];
   private readonly previous: (Vector3 | null)[];
-  private debt = 0;
+  /** Desde cuándo no suelta cada hueso (ver `cooldown`). */
+  private readonly quiet: number[];
+  private readonly debts: number[];
   private next = 0;
   /** La mayor velocidad vista en un hueso (tamaños/s), para calibrar. */
   peakSpeed = 0;
   /** Cuántas ha soltado desde el último reinicio, para calibrar. */
   emitted = 0;
+  private readonly mesh: InstancedMesh | null;
+  private readonly sprites: Sprite[];
   private readonly matrix = new Matrix4();
   private readonly rotation = new Quaternion();
   private readonly scale = new Vector3();
@@ -167,19 +195,50 @@ class Emitter {
       if (effect.from.some((part) => node.name.endsWith(part))) this.bones.push(node);
     });
     this.previous = this.bones.map(() => null);
-    this.mesh = new InstancedMesh(geometryFor(effect.kind), materialFor(effect.kind), this.spec.capacity);
-    this.mesh.frustumCulled = false;
-    this.mesh.count = this.spec.capacity;
-    // Lo que no se ve no se toca: el raycaster de three no se salta nada.
-    this.mesh.raycast = () => {};
-    this.particles = Array.from({ length: this.spec.capacity }, (_, index) => {
-      this.color.setHex(this.spec.colors[index % this.spec.colors.length]!);
-      this.mesh.setColorAt(index, this.color);
-      return {
-        alive: false, age: 0, life: 1, size: 0, ground: 0, angle: 0, spin: 0, phase: 0,
-        position: new Vector3(), velocity: new Vector3(), axis: new Vector3(0, 1, 0),
-      };
-    });
+    this.quiet = this.bones.map(() => Infinity);
+    this.debts = this.bones.map(() => 0);
+    this.particles = Array.from({ length: this.spec.capacity }, () => ({
+      alive: false, age: 0, life: 1, size: 0, angle: 0, spin: 0, phase: 0,
+      position: new Vector3(), velocity: new Vector3(), axis: new Vector3(0, 1, 0),
+    }));
+
+    if (SPRITE_KINDS.has(effect.kind)) {
+      // Cada sprite con su material: su opacidad es suya (se desvanece sola).
+      const glow = effect.kind === 'fireflies';
+      const texture = glow ? softTexture(0.22, 0) : softTexture(0.38, 0.3);
+      this.mesh = null;
+      this.sprites = this.particles.map((_, index) => {
+        const sprite = new Sprite(new SpriteMaterial({
+          map: texture,
+          color: this.spec.colors[index % this.spec.colors.length]!,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          blending: glow ? AdditiveBlending : NormalBlending,
+        }));
+        sprite.visible = false;
+        sprite.raycast = () => {};
+        return sprite;
+      });
+      const group = new Group();
+      for (const sprite of this.sprites) group.add(sprite);
+      this.object = group;
+    } else {
+      this.sprites = [];
+      const mesh = new InstancedMesh(
+        leafGeometry(),
+        new MeshStandardMaterial({ roughness: 0.65, metalness: 0, side: DoubleSide }),
+        this.spec.capacity,
+      );
+      mesh.frustumCulled = false;
+      mesh.raycast = () => {};
+      this.particles.forEach((_, index) => {
+        this.color.setHex(this.spec.colors[index % this.spec.colors.length]!);
+        mesh.setColorAt(index, this.color);
+      });
+      this.mesh = mesh;
+      this.object = mesh;
+    }
     this.hideAll();
   }
 
@@ -198,7 +257,7 @@ class Emitter {
   /** Olvida dónde estaban los huesos (al mudarse de padre o tras una pausa). */
   forget(): void {
     this.previous.fill(null);
-    this.debt = 0;
+    this.debts.fill(0);
   }
 
   clear(): void {
@@ -209,19 +268,14 @@ class Emitter {
 
   update(dt: number, parent: Object3D, unit: number, emitting: boolean): void {
     if (unit <= 0) return;
+    for (let index = 0; index < this.quiet.length; index += 1) this.quiet[index]! += dt;
     if (emitting && dt > 0) this.emitFromBones(dt, parent, unit);
     this.simulate(dt, unit);
   }
 
   private emitFromBones(dt: number, parent: Object3D, unit: number): void {
     const { threshold, rate } = this.effect;
-    // El suelo: el hueso más bajo ahora mismo (la pata apoyada). Medirlo desde
-    // el que suelta —la pata que se levanta— hacía morir la arena a medio vuelo.
-    let ground = Infinity;
-    for (const bone of this.bones) {
-      bone.getWorldPosition(this.here);
-      ground = Math.min(ground, parent.worldToLocal(this.here).y);
-    }
+    let spawned = 0;
     this.bones.forEach((bone, index) => {
       bone.getWorldPosition(this.here);
       parent.worldToLocal(this.here);
@@ -233,22 +287,21 @@ class Emitter {
       const speed = before.distanceTo(this.here) / dt / unit;
       this.peakSpeed = Math.max(this.peakSpeed, speed);
       if (speed > threshold) {
-        // Una deuda por hueso no hace falta: con varios huesos rápidos a la
-        // vez sale más, que es justo lo que se ve (más patas, más arena).
         // Con tope: un hueso que "salta" en un fotograma (al dar la vuelta
         // un clip) daría una velocidad enorme y una lluvia de golpe.
-        this.debt = Math.min(this.debt + (speed - threshold) * rate * dt, MAX_PER_FRAME);
-        const direction = this.here.clone().sub(before).normalize();
-        while (this.debt >= 1) {
-          this.debt -= 1;
-          this.spawn(this.here, direction, unit, ground);
+        this.debts[index] = Math.min(this.debts[index]! + (speed - threshold) * rate * dt, 1);
+        if (this.debts[index]! >= 1 && this.quiet[index]! >= this.spec.cooldown && spawned < MAX_PER_FRAME) {
+          this.debts[index] = 0;
+          this.quiet[index] = 0;
+          for (let i = 0; i < this.spec.burst; i += 1) this.spawn(this.here, unit);
+          spawned += 1;
         }
       }
       before.copy(this.here);
     });
   }
 
-  private spawn(origin: Vector3, motion: Vector3, unit: number, ground: number): void {
+  private spawn(origin: Vector3, unit: number): void {
     this.emitted += 1;
     const particle = this.particles[this.next]!;
     this.next = (this.next + 1) % this.particles.length;
@@ -260,14 +313,11 @@ class Emitter {
     particle.size = random(spec.size) * unit * this.effect.scale;
     particle.position.set(
       origin.x + (Math.random() - 0.5) * 2 * spec.spread * unit,
-      origin.y + (Math.random() - 0.5) * spec.spread * unit,
+      origin.y + random(spec.above) * unit,
       origin.z + (Math.random() - 0.5) * 2 * spec.spread * unit,
     );
-    particle.ground = Math.min(origin.y, ground) - 0.02 * unit;
     const out = random(spec.out) * unit;
     particle.velocity.set(Math.cos(angle) * out, random(spec.up) * unit, Math.sin(angle) * out);
-    // Un poco hacia donde iba el hueso: la arena sale despedida con el paso.
-    particle.velocity.addScaledVector(motion, 0.3 * out);
     particle.axis.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
     particle.angle = Math.random() * Math.PI * 2;
     particle.spin = (Math.random() < 0.5 ? -1 : 1) * spec.spin * Math.PI * 2 * (0.5 + Math.random());
@@ -285,45 +335,74 @@ class Emitter {
       particle.velocity.multiplyScalar(Math.exp(-spec.drag * dt));
       particle.position.addScaledVector(particle.velocity, dt);
       if (spec.sway > 0) {
-        // Hojas y burbujas no caen ni suben en línea recta: se mecen.
-        const sway = Math.sin(particle.age * 3.1 + particle.phase) * spec.sway * unit * dt;
-        particle.position.x += sway;
-        particle.position.z += Math.cos(particle.age * 2.3 + particle.phase) * spec.sway * 0.6 * unit * dt;
+        // Hojas y luciérnagas no van en línea recta: se mecen, vagan.
+        particle.position.x += Math.sin(particle.age * 2.7 + particle.phase) * spec.sway * unit * dt;
+        particle.position.z += Math.cos(particle.age * 1.9 + particle.phase) * spec.sway * 0.7 * unit * dt;
       }
       particle.angle += particle.spin * dt;
-      const landed = spec.lands && particle.velocity.y < 0 && particle.position.y < particle.ground;
-      if (particle.age >= particle.life || landed) {
+      if (particle.age >= particle.life) {
         particle.alive = false;
         this.hide(index);
         return;
       }
-      // Aparece y se va encogiendo: sin parpadeo al nacer ni al morir.
-      const t = particle.age / particle.life;
-      const fade = Math.min(1, t / 0.08, (1 - t) / 0.2);
-      const size = particle.size * fade * (1 + spec.grow * t);
+      this.show(index, particle, particle.age / particle.life);
+    });
+    if (changed && this.mesh !== null) this.mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  private show(index: number, particle: Particle, t: number): void {
+    const spec = this.spec;
+    if (this.mesh !== null) {
+      // Hojas: aparecen y se van encogiendo, sin parpadeo.
+      const fade = Math.min(1, t / 0.1, (1 - t) / 0.25);
       this.rotation.setFromAxisAngle(particle.axis, particle.angle);
-      this.scale.setScalar(size);
+      this.scale.setScalar(particle.size * fade);
       this.matrix.compose(particle.position, this.rotation, this.scale);
       this.mesh.setMatrixAt(index, this.matrix);
-    });
-    if (changed) this.mesh.instanceMatrix.needsUpdate = true;
+      return;
+    }
+    const sprite = this.sprites[index]!;
+    const material = sprite.material;
+    sprite.visible = true;
+    sprite.position.copy(particle.position);
+    const size = particle.size * (1 + spec.grow * t);
+    sprite.scale.set(size, size, 1);
+    material.rotation = particle.angle;
+    if (this.effect.kind === 'fireflies') {
+      // Parpadean, se encienden al salir y se apagan al final.
+      const blink = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(particle.age * 7 + particle.phase));
+      material.opacity = blink * Math.min(1, t / 0.12, (1 - t) / 0.3);
+    } else {
+      // El polvo nace denso y se aclara mientras se abre.
+      material.opacity = 0.85 * Math.min(1, t / 0.08) * (1 - t) ** 1.5;
+    }
   }
 
   private hide(index: number): void {
-    this.matrix.makeScale(0, 0, 0);
-    this.mesh.setMatrixAt(index, this.matrix);
-    this.mesh.instanceMatrix.needsUpdate = true;
+    if (this.mesh !== null) {
+      this.matrix.makeScale(0, 0, 0);
+      this.mesh.setMatrixAt(index, this.matrix);
+      this.mesh.instanceMatrix.needsUpdate = true;
+      return;
+    }
+    const sprite = this.sprites[index];
+    if (sprite !== undefined) sprite.visible = false;
   }
 
   private hideAll(): void {
     for (let index = 0; index < this.particles.length; index += 1) this.hide(index);
-    if (this.mesh.instanceColor !== null) this.mesh.instanceColor.needsUpdate = true;
+    if (this.mesh?.instanceColor) this.mesh.instanceColor.needsUpdate = true;
   }
 
   dispose(): void {
-    this.mesh.geometry.dispose();
-    (this.mesh.material as MeshStandardMaterial).dispose();
-    this.mesh.dispose();
+    if (this.mesh !== null) {
+      this.mesh.geometry.dispose();
+      (this.mesh.material as MeshStandardMaterial).dispose();
+      this.mesh.dispose();
+    }
+    const texture = this.sprites[0]?.material.map;
+    for (const sprite of this.sprites) sprite.material.dispose();
+    texture?.dispose();
   }
 }
 
@@ -333,7 +412,7 @@ export class AnimalParticles {
 
   constructor(effects: readonly ParticleEffect[], private readonly icon: Object3D) {
     this.emitters = effects.map((effect) => new Emitter(effect, icon));
-    for (const emitter of this.emitters) this.group.add(emitter.mesh);
+    for (const emitter of this.emitters) this.group.add(emitter.object);
     this.group.raycast = () => {};
   }
 
@@ -358,7 +437,7 @@ export class AnimalParticles {
     for (const emitter of this.emitters) emitter.update(Math.min(dt, 0.1), parent, unit, emitting);
   }
 
-  /** Para calibrar en /verify.html: huesos encontrados, vivas y velocidad máxima. */
+  /** Para calibrar en /verify.html: huesos encontrados, vivas, soltadas y velocidad máxima. */
   get stats(): { kind: string; bones: number; live: number; peak: number; emitted: number }[] {
     return this.emitters.map((emitter) => ({
       kind: emitter.kind,

@@ -1,7 +1,7 @@
 /**
- * Un efecto de partículas que acompaña al animal cuando se mueve: hojas que
- * se desprenden al mover la cabeza la pava, arena que saltan las patas del
- * cangrejo, rocío al saltar la rana, burbujas de las aletas.
+ * Un efecto de partículas que acompaña al animal cuando se mueve: unas hojas
+ * que le caen a la pava al mover la cabeza, el polvito de arena de cada paso
+ * del cangrejo, las luciérnagas que se espantan cuando salta la rana.
  *
  * Es vocabulario, como `TapMove`: el catálogo dice QUÉ y DESDE DÓNDE (qué
  * huesos del esqueleto), y la capa de render sabe dibujarlo. Las
@@ -9,13 +9,14 @@
  * suelta partículas cuando se mueve deprisa, así que nace del gesto mismo,
  * sea el de un toque o el de su bucle.
  *
- *   'leaves'   hojas que caen meciéndose y girando
- *   'sand'     granos de arena que saltan y caen enseguida
- *   'dew'      gotas de rocío, brillantes, que salpican y caen
- *   'bubbles'  burbujas que suben bamboleándose
+ *   'leaves'     unas pocas hojas que caen desde arriba, meciéndose
+ *   'sand'       nubecillas de polvo de arena que se abren a ras de suelo
+ *   'fireflies'  luciérnagas que suben, vagan y parpadean
+ *
+ * La ballena y la tortuga no llevan: tuvieron burbujas y sobraban.
  */
-export type ParticleKind = 'leaves' | 'sand' | 'dew' | 'bubbles';
-const KINDS: readonly ParticleKind[] = ['leaves', 'sand', 'dew', 'bubbles'];
+export type ParticleKind = 'leaves' | 'sand' | 'fireflies';
+const KINDS: readonly ParticleKind[] = ['leaves', 'sand', 'fireflies'];
 
 export interface ParticleEffectSnapshot {
   readonly kind: ParticleKind;
@@ -36,7 +37,7 @@ export interface ParticleEffectSnapshot {
   readonly rate?: number;
   /**
    * Tamaño de las partículas respecto al de su tipo, que se mide en tamaños
-   * del animal: la ballena es tan grande que sus burbujas parecían balones.
+   * del animal, y un animal grande las haría enormes.
    */
   readonly scale?: number;
 }
