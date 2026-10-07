@@ -13,6 +13,12 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
+# El manifiesto, con su tipo: Netlify lo servía como application/octet-stream.
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+
 # Los nombres de modelos y targets son estables; deben revalidarse al cambiar.
 [[headers]]
   for = "/models/*"
