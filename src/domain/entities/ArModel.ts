@@ -1,3 +1,4 @@
+import { ParticleEffect, type ParticleEffectSnapshot } from '../value-objects/ParticleEffect';
 import { IconPose, type IconView } from '../value-objects/IconPose';
 import { MarkerSpot } from '../value-objects/MarkerSpot';
 import { ModelId } from '../value-objects/ModelId';
@@ -76,6 +77,8 @@ export interface ArModelSnapshot {
    * primer toque y cuentan como UN animal.
    */
   readonly companions?: readonly CompanionSnapshot[];
+  /** Partículas que acompañan sus movimientos (ver ParticleEffect). */
+  readonly particles?: readonly ParticleEffectSnapshot[];
 }
 
 /** Un ejemplar más de un animal: dónde está y cómo de grande es. */
@@ -107,8 +110,11 @@ export class ArModel {
     private readonly english: CardText | null,
     /** Los otros ejemplares: mismo id, otro sitio y otro tamaño. */
     readonly companions: readonly ArModel[] = [],
+    /** Partículas que acompañan sus movimientos. */
+    readonly particles: readonly ParticleEffect[] = [],
   ) {
     Object.freeze(this.companions);
+    Object.freeze(this.particles);
     Object.freeze(this);
   }
 
@@ -159,6 +165,7 @@ export class ArModel {
       Scale.of(snapshot.defaultScale ?? 1),
       english,
       (snapshot.companions ?? []).map((companion) => ArModel.fromSnapshot(companionOf(snapshot, companion))),
+      (snapshot.particles ?? []).map(ParticleEffect.of),
     );
   }
 }
