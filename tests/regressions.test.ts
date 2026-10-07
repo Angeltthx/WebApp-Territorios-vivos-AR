@@ -24,7 +24,7 @@ import { IconAnimator } from '../src/infrastructure/rendering/IconAnimator';
 import { MarkerPin } from '../src/infrastructure/rendering/MarkerPin';
 import { fitToIconSize, tameBreach, tameHop } from '../src/infrastructure/rendering/IconLoader';
 import { TapChoreography } from '../src/infrastructure/rendering/TapChoreography';
-import { MindArTrackingAdapter } from '../src/infrastructure/tracking/MindArTrackingAdapter';
+import { expectedInputSize, MindArTrackingAdapter } from '../src/infrastructure/tracking/MindArTrackingAdapter';
 import { FrameLockedBackground } from '../src/infrastructure/mindar/FrameLockedBackground';
 import { CameraPermissionDeniedError } from '../src/application/ports/TrackingPort';
 import { PoseFilter } from '../src/infrastructure/rendering/PoseFilter';
@@ -2218,4 +2218,73 @@ test('cambiar de idioma a media narración sigue en la MISMA frase, en los dos s
       });
     });
   }
+});
+
+test('el motor se precalienta con el tamaño del fotograma: el de la última vez o el pedido en la orientación de la pantalla', () => {
+  const full = { width: { ideal: 1280 }, height: { ideal: 720 } };
+  // Un teléfono en vertical da el fotograma en vertical.
+  assert.deepEqual(expectedInputSize(full, null, true), { width: 720, height: 1280 });
+  assert.deepEqual(expectedInputSize(full, null, false), { width: 1280, height: 720 });
+  assert.deepEqual(expectedInputSize({ width: { ideal: 960 }, height: { ideal: 540 } }, null, true), { width: 540, height: 960 });
+  // Lo que dio la cámara la última vez manda; un valor raro no.
+  assert.deepEqual(expectedInputSize(full, '720x720', true), { width: 720, height: 720 });
+  assert.deepEqual(expectedInputSize(full, 'basura', false), { width: 1280, height: 720 });
+});
+
+test('la cámara pedida al tocar es la que recibe MindAR, y si no se usa se apaga', async () => {
+  let requests = 0;
+  const stopped: string[] = [];
+  const stream = { getTracks: () => [{ stop: () => { stopped.push('track'); } }] };
+  const media = { getUserMedia: async () => { requests += 1; return stream; } };
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaDevices: media } });
+  Object.defineProperty(globalThis, 'MediaStream', { configurable: true, value: class {} });
+  const video = { muted: false, srcObject: null, setAttribute() {}, removeAttribute() {}, pause() {}, remove() {}, play: async () => {} };
+  let received: unknown = null;
+  const mindar = {
+    video,
+    start: async () => { received = await media.getUserMedia(); },
+  };
+  const runtime = {
+    init: () => mindar, mindar, anchor: {}, isInitialized: true, renderProfile: 'full',
+    setAnchorVisible() {}, stopLoop() {}, unlockBackground() {}, lockBackgroundToPose() {}, startLoop() {},
+  };
+  const tracking = new MindArTrackingAdapter(runtime as never);
+  tracking.requestCamera();
+  tracking.requestCamera();
+  assert.equal(requests, 1, 'se pide una sola vez');
+  await tracking.start();
+  assert.equal(received, stream);
+  assert.equal(requests, 1, 'MindAR no la pide otra vez');
+  // Pedida y nunca usada (la sesión se paró antes): se apaga.
+  const idle = new MindArTrackingAdapter({ ...runtime, isInitialized: false } as never);
+  idle.requestCamera();
+  await idle.stop();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(stopped, ['track']);
+});
+
+test('los modelos que llegan tarde salen con el giro, lo descubierto y el primer plano que ya había', async () => {
+  globalThis.document = { createElement: () => ({ getContext: () => null }) } as unknown as Document;
+  const scene = new Scene();
+  const camera = new PerspectiveCamera(60, 0.46, 0.01, 100);
+  const runtime = {
+    prepare: async () => {},
+    init: () => ({ scene, renderer: {} }),
+    mindar: { scene, camera, renderer: {} },
+    onFrame: () => () => {},
+    anchorVisible: false,
+  };
+  const adapter = new ThreeSceneAdapter(runtime as never, 1.432);
+  // Se puede arrancar antes de tener los modelos…
+  await adapter.whenStartable([model]);
+  // …y mientras llegan, el usuario ya giró la ballena y la descubrió.
+  adapter.applyPlacement(Placement.initial(model.id, model.defaultScale).rotatedBy(model.id, 0.7, 0));
+  adapter.applyDiscovery(ArSession.idle().discovery.unlock(model.id));
+  await adapter.preload([model]);
+  await adapter.whenLoaded();
+  // Llegó descubierta y en primer plano (el escenario la tiene).
+  const stage = adapter.pickables?.get('whale');
+  assert.ok(stage);
+  assert.ok(stage.children.some((child) => child.userData['modelId'] === 'whale'), 'no pasó al primer plano');
+  adapter.clear();
 });

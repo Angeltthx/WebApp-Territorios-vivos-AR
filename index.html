@@ -26,6 +26,16 @@
          build (`preload-ar-engine` en vite.config.ts) en `data-engine`. El
          mapa comprimido, solo si el navegador sabe descomprimirlo. -->
     <script>
+      // Una sola descarga del mapa comprimido, la pida quien la pida
+      // primero (este script o la app, ver MindArRuntime).
+      window.__fetchMapTarget = function () {
+        if (!window.__mapTarget) {
+          window.__mapTarget = fetch('/targets/map.mind.gz')
+            .then(function (response) { return response.ok ? response.arrayBuffer() : null; })
+            .catch(function () { return null; });
+        }
+        return window.__mapTarget;
+      };
       window.addEventListener('DOMContentLoaded', function () {
         var add = function (attrs) {
           var link = document.createElement('link');
@@ -35,9 +45,10 @@
         var go = function () {
           var engine = document.documentElement.getAttribute('data-engine');
           if (engine) add({ rel: 'modulepreload', href: engine });
-          if ('DecompressionStream' in window) {
-            add({ rel: 'preload', as: 'fetch', href: '/targets/map.mind.gz', crossorigin: 'anonymous' });
-          }
+          // El mapa lo baja __fetchMapTarget y la app recoge la misma
+          // promesa: un <link rel="preload"> no siempre se reutiliza —con las
+          // cabeceras de Netlify se bajaba DOS veces—.
+          if ('DecompressionStream' in window) window.__fetchMapTarget();
         };
         var splash = document.querySelector('#boot-fill img');
         if (splash && !splash.complete) {

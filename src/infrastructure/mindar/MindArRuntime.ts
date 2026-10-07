@@ -207,9 +207,17 @@ export class MindArRuntime {
   private async downloadCompressed(signal: AbortSignal): Promise<Blob | null> {
     if (typeof DecompressionStream === 'undefined') return null;
     try {
-      const response = await fetch(`${this.imageTargetSrc}.gz`, { signal });
-      if (!response.ok) return null;
-      const bytes = new Uint8Array(await response.arrayBuffer());
+      // La misma descarga que empieza el <head> en cuanto baja la portada
+      // (ver index.html): quien llegue primero la lanza, el otro la recoge.
+      // Sin ese script (verify.html), o si falló, se pide aquí.
+      const shared = (window as { __fetchMapTarget?: () => Promise<ArrayBuffer | null> }).__fetchMapTarget;
+      let buffer = shared === undefined ? null : await shared();
+      if (buffer === null) {
+        const response = await fetch(`${this.imageTargetSrc}.gz`, { signal });
+        if (!response.ok) return null;
+        buffer = await response.arrayBuffer();
+      }
+      const bytes = new Uint8Array(buffer);
       // Hay servidores que lo entregan con `Content-Encoding: gzip` y el
       // navegador ya lo descomprimió (el de `vite preview`, por ejemplo):
       // solo se descomprime si todavía empieza como un gzip (1F 8B).
