@@ -750,15 +750,9 @@ export class ArView {
         && shown[0]!.kind !== 'directory' && shown[0]!.kind !== 'pin';
       this.readingCard.dataset['centered'] = lone ? 'true' : 'false';
       const blocks = shown.map(renderBlock);
-      if (text?.illustration) {
-        // El dibujo del mapa, recortado sin fondo, encima de su texto.
-        const image = document.createElement('img');
-        image.className = 'rt-illustration';
-        image.src = text.illustration;
-        image.alt = '';
-        image.decoding = 'async';
-        blocks.unshift(image);
-      }
+      // Fotos reales del lugar, encima de su texto (antes, el dibujo del mapa
+      // recortado sin fondo).
+      if (text !== undefined && text.photos.length > 0) blocks.unshift(this.renderPhotos(text));
       this.readingCard.replaceChildren(...blocks);
       this.readingCard.scrollTop = 0;
       this.reading.setAttribute('aria-label', text?.labelIn(this.language) ?? this.strings.mapText);
@@ -770,6 +764,42 @@ export class ArView {
     const show = id !== null;
     this.reading.dataset['visible'] = show ? 'true' : 'false';
     this.reading.setAttribute('aria-hidden', show ? 'false' : 'true');
+  }
+
+  /**
+   * Las fotos de un lugar: una tira que se desliza de lado, con la siguiente
+   * asomando (así se entiende que hay más) y unos puntos que siguen a la que
+   * se ve. Con una sola foto, a todo el ancho y sin puntos.
+   */
+  private renderPhotos(text: MapText): HTMLElement {
+    const figure = element('figure', 'rt-photos');
+    figure.dataset['count'] = String(text.photos.length);
+    const track = element('div', 'rt-photos-track');
+    for (const photo of text.photos) {
+      const image = document.createElement('img');
+      image.className = 'rt-photo';
+      image.src = photo.src;
+      image.alt = text.photoAltIn(photo, this.language);
+      image.decoding = 'async';
+      image.draggable = false;
+      track.append(image);
+    }
+    figure.append(track);
+    if (text.photos.length > 1) {
+      const dots = element('div', 'rt-photos-dots');
+      dots.setAttribute('aria-hidden', 'true');
+      const marks = text.photos.map(() => element('span', 'rt-photos-dot'));
+      dots.append(...marks);
+      const mark = (): void => {
+        const step = track.scrollWidth / text.photos.length;
+        const current = step > 0 ? Math.round(track.scrollLeft / step) : 0;
+        marks.forEach((dot, index) => { dot.dataset['active'] = index === current ? 'true' : 'false'; });
+      };
+      track.addEventListener('scroll', mark, { passive: true });
+      mark();
+      figure.append(dots);
+    }
+    return figure;
   }
 
   /**
@@ -805,14 +835,16 @@ export class ArView {
   }
 }
 
+/** Un elemento con su clase y, si lo lleva, su texto (siempre como texto). */
+function element(tag: string, className: string, text?: string): HTMLElement {
+  const node = document.createElement(tag);
+  node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
 /** Un bloque de texto del mapa, con el aspecto que tiene impreso. */
 function renderBlock(block: MapTextBlock): HTMLElement {
-  const element = (tag: string, className: string, text?: string): HTMLElement => {
-    const node = document.createElement(tag);
-    node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  };
   switch (block.kind) {
     case 'paragraph':
       return element('p', 'rt-paragraph', block.text);

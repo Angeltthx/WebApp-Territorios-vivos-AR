@@ -1288,16 +1288,55 @@
         text-align: left;
         text-shadow: 0 2px 16px rgba(0, 0, 0, 0.85);
       }
-      /* El dibujo del mapa, recortado y sin fondo, sobre su texto. */
-      .rt-illustration {
-        display: block;
-        width: auto;
-        max-width: 100%;
-        max-height: 34vh;
-        margin: 0 auto 22px;
-        filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.55));
+      /* Fotos reales del lugar sobre su texto (antes, el dibujo del mapa
+         recortado sin fondo, que se veía mal recortado). Una tira que se
+         desliza de lado: llega de borde a borde de la tarjeta, la siguiente
+         asoma para que se entienda que hay más, y cada una encaja al soltar.
+         Los puntos, en el dorado de "aquí hay algo". */
+      .rt-photos {
+        margin: 0 -24px 22px;
       }
-      #reading[data-visible="true"] .rt-illustration {
+      .rt-photos-track {
+        display: flex;
+        gap: 10px;
+        padding: 0 24px;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scroll-snap-type: x mandatory;
+        scroll-padding: 0 24px;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      .rt-photos-track::-webkit-scrollbar { display: none; }
+      .rt-photo {
+        flex: 0 0 86%;
+        width: 86%;
+        aspect-ratio: 4 / 3;
+        max-height: 34vh;
+        object-fit: cover;
+        border-radius: 16px;
+        scroll-snap-align: start;
+        background: rgba(255, 255, 255, 0.08);
+        box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .rt-photos[data-count="1"] .rt-photo { flex-basis: 100%; width: 100%; }
+      .rt-photos-dots {
+        display: flex;
+        justify-content: center;
+        gap: 7px;
+        margin-top: 12px;
+      }
+      .rt-photos-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.4);
+        transition: background 0.25s ease, transform 0.25s ease;
+      }
+      .rt-photos-dot[data-active="true"] { background: #ffc53d; transform: scale(1.25); }
+      #reading[data-visible="true"] .rt-photos {
         animation: dibujo 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.1s both;
       }
       @keyframes dibujo {

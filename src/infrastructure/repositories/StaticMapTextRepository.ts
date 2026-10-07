@@ -1,4 +1,4 @@
-import { MapText, type MapTextSnapshot } from '@domain/value-objects/MapText';
+import { MapText, type MapPhoto, type MapTextSnapshot } from '@domain/value-objects/MapText';
 import type { MapTextRepository } from '@application/ports/MapTextRepository';
 
 export class StaticMapTextRepository implements MapTextRepository {
@@ -30,6 +30,53 @@ const COAST = '/audio/coast/ambience.mp3';
 const FOREST = '/audio/bird/ambience.mp3';
 /** Playa con manglar. */
 const MANGROVE = '/audio/crab/ambience.mp3';
+
+/**
+ * Fotos REALES de los lugares, de la grabación del webdoc (ver
+ * `npm run make-photos` y photos-src/photos.json, que dice de qué foto
+ * original sale cada una). Como mucho tres por texto. La danza es la de
+ * Orfelina Marmolejo, la misma compañía del directorio (@orfelinamarmolejo);
+ * Chachita lleva el delantal de su posada.
+ *
+ * Kipará Té, Lobos del Manglar y Panguí llevan fotos de las estaciones del
+ * webdoc que el equipo situó en una comunidad embera y en el manglar de
+ * Panguí: hay que confirmar con el equipo que cada una es de ESE lugar.
+ */
+const PHOTOS: Record<string, readonly MapPhoto[]> = {
+  danza: [
+    { src: '/photos/danza-1.webp', alt: 'El grupo de danza tradicional con sus trajes, alrededor de Orfelina Marmolejo', altEn: 'The traditional dance group in costume, around Orfelina Marmolejo' },
+    { src: '/photos/danza-2.webp', alt: 'Una bailarina de amarillo sonríe junto a su pareja de baile', altEn: 'A dancer in yellow smiles next to her dance partner' },
+    { src: '/photos/danza-3.webp', alt: 'Bailarinas con flores rojas en el cabello', altEn: 'Dancers with red flowers in their hair' },
+  ],
+  kipara: [
+    { src: '/photos/kipara-1.webp', alt: 'Tambos embera con techo de palma, unidos por pasarelas de madera', altEn: 'Emberá tambos with palm-thatched roofs, joined by wooden walkways' },
+    { src: '/photos/kipara-2.webp', alt: 'Danza embera de noche bajo el techo de un tambo', altEn: 'An Emberá dance at night under the roof of a tambo' },
+    { src: '/photos/kipara-3.webp', alt: 'Mujeres y niñas embera con su vestimenta tradicional', altEn: 'Emberá women and girls in traditional dress' },
+  ],
+  chachita: [
+    { src: '/photos/chachita-1.webp', alt: 'Chachita sonríe con el delantal de su posada ecoturística', altEn: 'Chachita smiles in the apron of her eco-lodge' },
+    { src: '/photos/chachita-2.webp', alt: 'Chachita en la playa, con frutas y platos de la región', altEn: 'Chachita on the beach, with fruit and local dishes' },
+    { src: '/photos/chachita-3.webp', alt: 'Chachita con plantas de su huerta junto al mar', altEn: 'Chachita with plants from her garden by the sea' },
+  ],
+  lobos: [
+    { src: '/photos/lobos-1.webp', alt: 'Una mujer camina por un túnel de raíces de manglar', altEn: 'A woman walks through a tunnel of mangrove roots' },
+    { src: '/photos/lobos-2.webp', alt: 'El manglar reflejado en el agua, con garzas', altEn: 'The mangrove reflected in the water, with herons' },
+  ],
+  nuqui: [
+    { src: '/photos/nuqui-1.webp', alt: 'Un pescador rema en su canoa frente a una isla', altEn: 'A fisherman paddles his canoe in front of an island' },
+    { src: '/photos/nuqui-2.webp', alt: 'Una calle de Nuquí después de la lluvia', altEn: 'A street in Nuquí after the rain' },
+  ],
+  pangui: [
+    { src: '/photos/pangui-1.webp', alt: 'El río y la selva de Panguí desde el aire', altEn: 'The river and the forest of Panguí from the air' },
+    { src: '/photos/pangui-2.webp', alt: 'Una mujer toca las ramas del manglar', altEn: 'A woman touches the branches of the mangrove' },
+    { src: '/photos/pangui-3.webp', alt: 'Una mujer camina hacia el mar al atardecer', altEn: 'A woman walks into the sea at sunset' },
+  ],
+  turismo: [
+    { src: '/photos/turismo-1.webp', alt: 'Un pescador sonríe con su red al hombro', altEn: 'A fisherman smiles with his net over his shoulder' },
+    { src: '/photos/turismo-2.webp', alt: 'Un pescador camina por la playa junto a una canoa', altEn: 'A fisherman walks along the beach next to a canoe' },
+    { src: '/photos/turismo-3.webp', alt: 'Atardecer sobre el Pacífico, entre rocas y selva', altEn: 'Sunset over the Pacific, between rocks and forest' },
+  ],
+};
 
 /**
  * Los textos del mapa de Nuquí que se pueden leer en grande.
@@ -92,6 +139,7 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
         },
       ],
     },
+    photos: PHOTOS['turismo']!,
     ambience: COAST,
   },
   {
@@ -166,7 +214,7 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
         { kind: 'pin', text: 'Las Serranía traditional dance company' },
       ],
     },
-    illustration: '/illustrations/danza.webp',
+    photos: PHOTOS['danza']!,
     ambience: COAST,
   },
   {
@@ -174,7 +222,7 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
     label: 'Etnoaldea Kipara Té',
     area: { u0: 0.735, v0: 0.0594, u1: 0.935, v1: 0.1362 },
     blocks: [{ kind: 'pin', text: 'Etnoaldea Kipara Té' }],
-    illustration: '/illustrations/kipara.webp',
+    photos: PHOTOS['kipara']!,
     ambience: FOREST,
   },
   {
@@ -182,6 +230,7 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
     label: 'Lobos del Manglar',
     area: { u0: 0.688, v0: 0.3031, u1: 0.757, v1: 0.3282 },
     blocks: [{ kind: 'pin', text: 'Lobos del Manglar' }],
+    photos: PHOTOS['lobos']!,
     ambience: MANGROVE,
   },
   {
@@ -189,6 +238,7 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
     label: 'Posada ecoturistica Chachita',
     area: { u0: 0.388, v0: 0.6879, u1: 0.468, v1: 0.7214 },
     blocks: [{ kind: 'pin', text: 'Posada ecoturistica Chachita' }],
+    photos: PHOTOS['chachita']!,
     ambience: FOREST,
   },
   {
@@ -213,7 +263,7 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
   },
   { id: 'jurubida', label: 'Jurubidá', area: { u0: 0.48, v0: 0.0433, u1: 0.605, v1: 0.0615 }, blocks: [{ kind: 'place', text: 'Jurubidá' }], ambience: COAST },
   { id: 'tribuga', label: 'Tribugá', area: { u0: 0.672, v0: 0.3527, u1: 0.8, v1: 0.3701 }, blocks: [{ kind: 'place', text: 'Tribugá' }], ambience: COAST },
-  { id: 'nuqui', label: 'Nuquí', area: { u0: 0.51, v0: 0.618, u1: 0.605, v1: 0.6362 }, blocks: [{ kind: 'place', text: 'Nuquí' }], ambience: COAST },
-  { id: 'pangui', label: 'Pangui', area: { u0: 0.378, v0: 0.7367, u1: 0.477, v1: 0.7556 }, blocks: [{ kind: 'place', text: 'Pangui' }], ambience: COAST },
+  { id: 'nuqui', label: 'Nuquí', area: { u0: 0.51, v0: 0.618, u1: 0.605, v1: 0.6362 }, blocks: [{ kind: 'place', text: 'Nuquí' }], photos: PHOTOS['nuqui']!, ambience: COAST },
+  { id: 'pangui', label: 'Pangui', area: { u0: 0.378, v0: 0.7367, u1: 0.477, v1: 0.7556 }, blocks: [{ kind: 'place', text: 'Pangui' }], photos: PHOTOS['pangui']!, ambience: COAST },
   { id: 'coqui', label: 'Coqui', area: { u0: 0.118, v0: 0.8834, u1: 0.215, v1: 0.9015 }, blocks: [{ kind: 'place', text: 'Coqui' }], ambience: COAST },
 ];

@@ -2364,3 +2364,23 @@ test('cada animal del catálogo tiene su efecto y sus huesos existen en el model
     for (const companion of model.companions) assert.deepEqual(companion.particles, model.particles);
   }
 });
+
+test('los puntos del mapa enseñan fotos reales del lugar: como mucho tres, que existen y descritas en los dos idiomas', () => {
+  const withPhotos = NUQUI_MAP_TEXTS.map(MapText.of).filter((text) => text.photos.length > 0);
+  // Los dos que tenían dibujo recortado (la danza y la etnoaldea) llevan fotos, y otros cinco más.
+  for (const id of ['danza', 'kipara', 'chachita', 'lobos', 'nuqui', 'pangui', 'turismo']) {
+    assert.ok(withPhotos.some((text) => text.id === id), `${id} sin fotos`);
+  }
+  for (const text of withPhotos) {
+    assert.ok(text.photos.length <= 3, `${text.id}: más de tres fotos`);
+    for (const photo of text.photos) {
+      assert.ok(existsSync(`public${photo.src}`), `falta ${photo.src}`);
+      assert.ok(text.photoAltIn(photo, 'es').length > 10);
+      assert.notEqual(text.photoAltIn(photo, 'en'), text.photoAltIn(photo, 'es'), `${photo.src} sin descripción en inglés`);
+    }
+  }
+  const [first] = NUQUI_MAP_TEXTS;
+  const photo = { src: '/photos/x.webp', alt: 'Una foto' };
+  assert.throws(() => MapText.of({ ...first!, photos: [photo, photo, photo, photo] }), /máximo/);
+  assert.throws(() => MapText.of({ ...first!, photos: [{ src: '/photos/x.webp', alt: ' ' }] }));
+});
