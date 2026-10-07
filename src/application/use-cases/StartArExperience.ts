@@ -51,12 +51,13 @@ export class StartArExperience {
   }
 
   /**
-   * Baja y monta los modelos, SIN tocar la camara.
+   * Deja la escena lista para arrancar, SIN tocar la camara: el motor y el
+   * mapa. Los modelos y despues los sonidos siguen bajando por detras.
    *
    * Se lanza en cuanto se abre la pagina, mientras se ve la pantalla de
-   * bienvenida: son 3,3 MB de .glb y esperar a que termine el saludo para
-   * empezar a pedirlos regala varios segundos de pantalla en blanco. Cuando
-   * `execute` llega, casi siempre esto ya esta hecho.
+   * bienvenida, para que al tocar «Iniciar» casi todo este hecho. Resuelve
+   * sin esperar a los modelos: con 4G lento, esperarlos dejaba 12 s entre el
+   * toque y la peticion de la camara.
    *
    * Es idempotente: llamarlo dos veces devuelve la misma promesa.
    */
@@ -87,11 +88,15 @@ export class StartArExperience {
     const requested = ModelId.of(initialModelId);
     const initial = catalog.find((model) => model.id.equals(requested)) ?? catalog[0]!;
 
-    await this.scene.preload(catalog);
-    // Las grabaciones, después de lo que hace falta para ver algo: modelos
-    // y mapa van primero. Una a una y en segundo plano (ver AudioPort).
-    this.audio.preload(soundPreloadOrder(catalog, this.language()));
+    // Solo lo imprescindible para arrancar —el motor y el mapa—: los
+    // modelos siguen llegando mientras se busca el mapa (ver ScenePort).
+    await this.scene.whenStartable(catalog);
     this.scene.setStabilization(this.session.stabilization);
+    // Las grabaciones, después de los modelos: lo que se ve va primero.
+    // Una a una y en segundo plano (ver AudioPort).
+    void this.scene.whenLoaded()
+      .then(() => this.audio.preload(soundPreloadOrder(catalog, this.language())))
+      .catch(() => {});
 
     return { catalog, initial };
   }
@@ -102,6 +107,9 @@ export class StartArExperience {
     if (this.stopping !== null) return this.stopping.then(() => this.execute(initialModelId));
     if (this.starting !== null) return this.starting;
     if (this.session.hasStarted) return Promise.resolve(this.session);
+    // También dentro del clic: la cámara se pide ya, no cuando el motor
+    // termine de bajar (ver TrackingPort.requestCamera).
+    this.tracking.requestCamera();
     this.starting = this.start(initialModelId, this.generation).finally(() => {
       this.starting = null;
     });

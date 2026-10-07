@@ -96,6 +96,7 @@ export class MindArRuntime {
   /** El `.mind` ya descargado, como blob: URL. Ver `prefetchTarget`. */
   private localTargetSrc: string | null = null;
   private preparation: Promise<void> | null = null;
+  private warming: Promise<void> | null = null;
   private constructorRef: typeof MindARThree | null = null;
 
   constructor(
@@ -130,6 +131,57 @@ export class MindArRuntime {
     void this.prepare().catch(() => {});
   }
 
+  /**
+   * Compila el motor ANTES de la cámara, mientras se ve la portada.
+   *
+   * Tras conceder la cámara, MindAR hace un `dummyRun`: pasa un fotograma
+   * por todo el detector y el seguidor para que TensorFlow compile sus
+   * programas de la GPU. Medido, son 2–3 s en un portátil (más en un
+   * teléfono) con la portada todavía puesta, y era la mayor parte de lo que
+   * se tardaba después de dar permiso.
+   *
+   * Aquí se hace lo mismo con un lienzo en blanco del tamaño que tendrá el
+   * fotograma (ver `expectedInputSize`): `_startAR` entero, igual que en el
+   * arranque, y luego se desmonta ese controlador. TensorFlow guarda lo
+   * compilado, así que el arranque de verdad se lo encuentra hecho. Si el
+   * tamaño no acierta, no se rompe nada: se compila otra vez, como antes.
+   *
+   * Internos de mind-ar@1.2.5 (`three.js`: `video`, `controller`,
+   * `_startAR`; `controller.js`: `dispose`). Si no están, no se precalienta.
+   */
+  warmUp(size: { width: number; height: number }): Promise<void> {
+    if (this.warming !== null) return this.warming;
+    this.warming = this.prepare()
+      .then(async () => {
+        const mindar = this.init() as unknown as WarmableMindAR;
+        if (typeof mindar._startAR !== 'function') return;
+        const canvas = document.createElement('canvas');
+        canvas.width = size.width;
+        canvas.height = size.height;
+        mindar.video = Object.assign(canvas, { videoWidth: size.width, videoHeight: size.height });
+        try {
+          await mindar._startAR();
+        } finally {
+          const warmed = mindar.controller;
+          warmed?.dispose?.();
+          // Lo que el seguidor subió a la GPU (los datos del mapa) es de ESTE
+          // controlador: el de verdad sube los suyos. Lo compilado no se
+          // toca: vive en TensorFlow, que es justo lo que se quería.
+          const tracker = warmed?.tracker;
+          for (const list of [tracker?.featurePointsListT, tracker?.imagePixelsListT, tracker?.imagePropertiesListT]) {
+            for (const tensor of list ?? []) tensor?.dispose?.();
+          }
+          mindar.video = undefined;
+        }
+      })
+      .catch((error: unknown) => {
+        // Es una mejora de tiempos: si falla, el arranque compila como antes.
+        console.warn('[MindArRuntime] Sin precalentar', error);
+        this.warming = null;
+      });
+    return this.warming;
+  }
+
   /** Motor y target en paralelo; nunca se crea MindAR antes de tener ambos. */
   prepare(): Promise<void> {
     if (this.preparation !== null) return this.preparation;
@@ -145,14 +197,51 @@ export class MindArRuntime {
     return this.preparation;
   }
 
+  /**
+   * El `.mind` comprimido (`.mind.gz`, lo escribe compile-target), si el
+   * navegador sabe descomprimir: 457 KB en vez de 864. Netlify sirve el
+   * `.mind` como binario y no lo comprime, y era lo que más pesaba de lo
+   * imprescindible para arrancar. Sin `DecompressionStream` (iOS < 16.4) o
+   * si algo falla, null: se baja el de siempre.
+   */
+  private async downloadCompressed(signal: AbortSignal): Promise<Blob | null> {
+    if (typeof DecompressionStream === 'undefined') return null;
+    try {
+      // La misma descarga que empieza el <head> en cuanto baja la portada
+      // (ver index.html): quien llegue primero la lanza, el otro la recoge.
+      // Sin ese script (verify.html), o si falló, se pide aquí.
+      const shared = (window as { __fetchMapTarget?: () => Promise<ArrayBuffer | null> }).__fetchMapTarget;
+      let buffer = shared === undefined ? null : await shared();
+      if (buffer === null) {
+        const response = await fetch(`${this.imageTargetSrc}.gz`, { signal });
+        if (!response.ok) return null;
+        buffer = await response.arrayBuffer();
+      }
+      const bytes = new Uint8Array(buffer);
+      // Hay servidores que lo entregan con `Content-Encoding: gzip` y el
+      // navegador ya lo descomprimió (el de `vite preview`, por ejemplo):
+      // solo se descomprime si todavía empieza como un gzip (1F 8B).
+      if (bytes[0] !== 0x1f || bytes[1] !== 0x8b) return new Blob([bytes]);
+      return await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).blob();
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return null;
+    }
+  }
+
+  private async downloadPlain(signal: AbortSignal): Promise<Blob> {
+    const response = await fetch(this.imageTargetSrc, { signal });
+    if (!response.ok) throw new Error(`No se pudo cargar el mapa (${response.status}). Reintenta.`);
+    return response.blob();
+  }
+
   private async downloadTarget(): Promise<void> {
     if (this.localTargetSrc !== null) return;
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 30000);
     try {
-      const response = await fetch(this.imageTargetSrc, { signal: controller.signal });
-      if (!response.ok) throw new Error(`No se pudo cargar el mapa (${response.status}). Reintenta.`);
-      this.localTargetSrc = URL.createObjectURL(await response.blob());
+      const blob = (await this.downloadCompressed(controller.signal)) ?? (await this.downloadPlain(controller.signal));
+      this.localTargetSrc = URL.createObjectURL(blob);
     } finally {
       window.clearTimeout(timeout);
     }
@@ -338,4 +427,14 @@ export class MindArRuntime {
     // como no tocable y los punteros vuelven a caer en el canvas.
     this.mindar.cssRenderer.domElement.style.pointerEvents = 'none';
   }
+}
+
+/** Lo que el precalentamiento toca de MindAR por dentro (ver `warmUp`). */
+interface WarmableMindAR {
+  video: unknown;
+  controller?: {
+    dispose?: () => void;
+    tracker?: Partial<Record<'featurePointsListT' | 'imagePixelsListT' | 'imagePropertiesListT', ({ dispose?: () => void } | undefined)[]>>;
+  };
+  _startAR?: () => Promise<void>;
 }

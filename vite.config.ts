@@ -29,6 +29,23 @@ export default defineConfig({
         return compact;
       },
     },
+    {
+      // El motor de AR (MindAR + TensorFlow, ~360 KB comprimido) se pide con
+      // un import() dinámico, es decir, cuando el JS de la app ya bajó y se
+      // ejecutó. Con datos móviles eso es tarde: es lo primero que hace falta
+      // al tocar «Iniciar». Su nombre lleva hash, así que el build lo apunta
+      // en `<html data-engine>` y el script del <head> lo pide en cuanto
+      // termina de bajar la portada (ver index.html).
+      name: 'preload-ar-engine',
+      apply: 'build',
+      transformIndexHtml(html, context) {
+        const engine = Object.values(context.bundle ?? {}).find(
+          (chunk) => chunk.type === 'chunk' && chunk.fileName.includes('mindar-image-three'),
+        );
+        if (engine === undefined) return html;
+        return html.replace('<html lang="es">', `<html lang="es" data-engine="/${engine.fileName}">`);
+      },
+    },
   ],
   server: { host: true, port: 5173 },
   resolve: {

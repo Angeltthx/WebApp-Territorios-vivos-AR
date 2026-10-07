@@ -18,6 +18,47 @@
       type="image/webp"
       fetchpriority="high"
     />
+    <!-- Lo primero que hace falta al tocar «Iniciar» es el motor de AR y el
+         mapa para MindAR (comprimido, ver MindArRuntime). Se piden en cuanto
+         la PORTADA termina de bajar, sin esperar a que el JS de la app los
+         pida: antes no, porque con datos móviles comparten la conexión y la
+         portada tardaba cuatro veces más en salir. El motor lo apunta el
+         build (`preload-ar-engine` en vite.config.ts) en `data-engine`. El
+         mapa comprimido, solo si el navegador sabe descomprimirlo. -->
+    <script>
+      // Una sola descarga del mapa comprimido, la pida quien la pida
+      // primero (este script o la app, ver MindArRuntime).
+      window.__fetchMapTarget = function () {
+        if (!window.__mapTarget) {
+          window.__mapTarget = fetch('/targets/map.mind.gz')
+            .then(function (response) { return response.ok ? response.arrayBuffer() : null; })
+            .catch(function () { return null; });
+        }
+        return window.__mapTarget;
+      };
+      window.addEventListener('DOMContentLoaded', function () {
+        var add = function (attrs) {
+          var link = document.createElement('link');
+          for (var key in attrs) link.setAttribute(key, attrs[key]);
+          document.head.appendChild(link);
+        };
+        var go = function () {
+          var engine = document.documentElement.getAttribute('data-engine');
+          if (engine) add({ rel: 'modulepreload', href: engine });
+          // El mapa lo baja __fetchMapTarget y la app recoge la misma
+          // promesa: un <link rel="preload"> no siempre se reutiliza —con las
+          // cabeceras de Netlify se bajaba DOS veces—.
+          if ('DecompressionStream' in window) window.__fetchMapTarget();
+        };
+        var splash = document.querySelector('#boot-fill img');
+        if (splash && !splash.complete) {
+          splash.addEventListener('load', go, { once: true });
+          splash.addEventListener('error', go, { once: true });
+        } else {
+          go();
+        }
+      });
+    </script>
     <title>Territorios Vivos AR · Nuquí, Chocó</title>
 
     <!-- El icono de la experiencia (LOGO.png → `npm run make-icons`). Sin

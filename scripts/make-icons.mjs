@@ -44,9 +44,14 @@ const opaque = {
   height: side - inset * 2,
 };
 
-const rounded = (size) => sharp(SOURCE).extract(square).resize(size, size).png({ compressionLevel: 9 });
+// PNG con paleta (256 colores, cuantizada con cuidado): a la vista no se
+// distingue del de color verdadero y pesa la cuarta parte. El de 192 px
+// pesaba 107 KB y el navegador lo baja al abrir la página, en plena
+// carga de lo que hace falta para arrancar.
+const PNG = { palette: true, quality: 90, effort: 10, compressionLevel: 9 };
+const rounded = (size) => sharp(SOURCE).extract(square).resize(size, size).png(PNG);
 const filled = (size) =>
-  sharp(SOURCE).extract(opaque).resize(size, size).flatten({ background: '#1f5b3a' }).png({ compressionLevel: 9 });
+  sharp(SOURCE).extract(opaque).resize(size, size).flatten({ background: '#1f5b3a' }).png(PNG);
 
 const outputs = [
   ['favicon-48.png', rounded(48)],
