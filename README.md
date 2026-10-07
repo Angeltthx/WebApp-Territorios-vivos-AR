@@ -2,7 +2,7 @@
 
 Experiencia de realidad aumentada en el navegador con seguimiento del mapa
 ilustrado de Nuquí. MindAR 1.2.5 detecta la imagen y Three.js 0.160.0 dibuja
-cuatro animales: ballena, pava, cangrejo y tortuga. No requiere instalar una app.
+cinco animales: ballena, pava, cangrejo, tortuga y rana arlequín. No requiere instalar una app.
 
 ## Experiencia
 
@@ -76,7 +76,7 @@ adaptar también la integración de escena e interacción que comparten MindArRu
 el dominio, los casos de uso y ArView permanecen independientes de esas librerías.
 
 MindArRuntime posee el bucle de render. ThreeSceneAdapter copia la pose del
-marcador a un follower suavizado, que contiene los cuatro MarkerPin. El primer
+marcador a un follower suavizado, que contiene los cinco MarkerPin. El primer
 plano usa un escenario independiente de ese follower para seguir visible al
 perder el marcador. Se mueve el mismo icono entre ambos; no se duplican texturas.
 
@@ -109,7 +109,7 @@ Cambiar el mapa exige tratar como una unidad:
 
 1. Preparar y compilar la imagen nueva.
 2. Actualizar TARGET_ASPECT, el visor HTML y las vistas de verificación.
-3. Medir de nuevo los spot y calcar los cuatro outlineShape.
+3. Medir de nuevo los spot y calcar los cinco outlineShape.
 4. Comparar anchos compilados con bench-detection, siempre sobre la misma imagen.
 
 El compilador preconvierte a luma Rec.601 para coincidir con el runtime.

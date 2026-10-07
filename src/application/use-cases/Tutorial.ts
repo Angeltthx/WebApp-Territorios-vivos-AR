@@ -71,6 +71,8 @@ export class Tutorial {
   /** El animal abierto ahora, si lo hay. */
   private focusedAnimal: string | null = null;
   private narrating = false;
+  /** La ficha abierta no tiene narración (la rana, de momento). */
+  private silent = false;
   /** Ya se señaló la ✕ una vez (con el primer animal): no se repite. */
   private closeTaught = false;
   /** Animales a los que ya se enseñó a tocar en primer plano (una vez por animal). */
@@ -136,6 +138,7 @@ export class Tutorial {
       this.busy = false;
       this.focusedAnimal = null;
       this.narrating = false;
+      this.silent = false;
       // Al cerrar un animal, enseguida el siguiente (o el primer punto, si
       // era el último). Al cerrar el primer texto, la despedida: libre.
       if (closedAnimal) this.showNext();
@@ -151,16 +154,26 @@ export class Tutorial {
   /** Tocó al animal que está en primer plano (y este hizo su gesto). */
   focusedAnimalTapped(): void {
     if (this.step === 'tapFocused') this.hide();
+    // Un animal sin narración no tiene un «callar» que espere a la ✕: se
+    // enseña en cuanto ha visto su gesto.
+    if (this.silent && this.busy && this.focusedAnimal !== null) this.teachClose();
   }
 
   /**
    * La narración de la ficha abierta cambió. Cuando CALLA —acabó, o la
    * detuvo—, la mano señala la ✕, una sola vez en toda la sesión.
+   * `available` es falso si la ficha no tiene narración.
    */
-  narrationChanged(playing: boolean): void {
+  narrationChanged(playing: boolean, available = true): void {
     const wasPlaying = this.narrating;
     this.narrating = playing;
+    this.silent = !available;
     if (!this.busy || this.focusedAnimal === null || !wasPlaying || playing) return;
+    this.teachClose();
+  }
+
+  /** La mano señala la ✕: una sola vez en toda la sesión. */
+  private teachClose(): void {
     if (this.closeTaught) return;
     this.closeTaught = true;
     this.show('closeFocus');
@@ -216,6 +229,7 @@ export class Tutorial {
     this.gestureTaught.clear();
     this.focusedAnimal = null;
     this.narrating = false;
+    this.silent = false;
     this.step = 'off';
     this.urgent = false;
     this.emit();

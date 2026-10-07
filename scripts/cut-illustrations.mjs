@@ -1,7 +1,7 @@
 /**
  * Recorta dibujos del mapa SIN su fondo, para enseñarlos en grande junto al
- * texto que los acompaña (la choza de la etnoaldea, los bailarines, las
- * ranas). public/targets/map.jpg -> public/illustrations/<id>.webp (+ alfa)
+ * texto que los acompaña (la choza de la etnoaldea, los bailarines).
+ * public/targets/map.jpg -> public/illustrations/<id>.webp (+ alfa)
  *
  *   npm run cut-illustrations            genera los .webp
  *   npm run cut-illustrations -- preview además, .preview/illustrations/<id>.png sobre damero
@@ -42,14 +42,8 @@ const SUBJECTS = {
   // Los bailarines: vestido blanco, piel, sombreros. La caja empieza a la
   // derecha de las etiquetas rosadas, que ya salen como texto.
   danza: { box: [703, 778, 797, 878], background: jungle },
-  // Las ranas: la regla va al revés, porque alrededor hay hojas, flores y
-  // la etiqueta azul de la especie. Rana es lo ROJO (sin el fucsia de las
-  // flores, que tiene mucho azul) o lo NEGRO: el negro de la rana tiene el
-  // verde a la par del rojo, y la selva oscura, muy por encima.
-  rana: {
-    box: [700, 1060, 955, 1262],
-    background: (r, g, b) => !((r > g + 50 && r > b + 60) || (lum(r, g, b) < 75 && g < r + 12)),
-  },
+  // Las ranas tuvieron su recorte mientras eran un texto del mapa; desde
+  // que la rana es un animal, su ficha enseña el modelo 3D y no el dibujo.
 };
 
 const preview = process.argv.includes('preview');
@@ -113,8 +107,8 @@ for (const [id, { box: [x0, y0, x1, y1], background }] of Object.entries(SUBJECT
   const alpha = new Uint8Array(w * h);
   for (let k = 0; k < w * h; k += 1) alpha[k] = label[k] >= 0 && keep[label[k]] ? 255 : 0;
 
-  // Agujeros: lo que no es dibujo pero queda ENCERRADO por él (las manchas
-  // negras de la rana, un hueco entre dos chozas pegadas) es del dibujo.
+  // Agujeros: lo que no es dibujo pero queda ENCERRADO por él (un hueco
+  // entre dos chozas pegadas) es del dibujo.
   // Fuera es solo lo que se alcanza desde el borde sin cruzar el dibujo.
   const reach = new Uint8Array(w * h);
   const open = [];

@@ -14,10 +14,12 @@ export interface AnimationStepSnapshot {
  *   'leap'    nadando, salta fuera del agua, cae con un salpicón, se
  *             sumerge un poco y vuelve a flote (tortuga).
  *   'scuttle' corretea de lado a lado a saltitos (cangrejo).
+ *   'hop'     el salto del propio clip, más bajo y más corto para que
+ *             quepa en el primer plano; cae donde estaba (rana).
  *   'none'    solo el clip (pava: su canto ya salta y mueve la cabeza).
  */
-export type TapMove = 'none' | 'breach' | 'leap' | 'scuttle';
-const TAP_MOVES: readonly TapMove[] = ['none', 'breach', 'leap', 'scuttle'];
+export type TapMove = 'none' | 'breach' | 'leap' | 'scuttle' | 'hop';
+const TAP_MOVES: readonly TapMove[] = ['none', 'breach', 'leap', 'scuttle', 'hop'];
 
 export interface AnimationSequenceSnapshot {
   /** Bucle ambiental: lo que el animal hace siempre, sin que nadie lo toque. */

@@ -120,6 +120,9 @@ export class IconLoader {
           return tamed.clip;
         });
       }
+      if (model.animation?.tapMove === 'hop' && tapClip !== null) {
+        animations = animations.map((clip) => (clip.name === tapClip ? tameHop(clip) : clip));
+      }
 
       // Se mide con el bucle ambiental, que es lo que se ve casi siempre: la
       // pose de reposo del archivo puede ser menor que la de nado. El gesto
@@ -145,6 +148,37 @@ export class IconLoader {
   dispose(): void {
     this.draco.dispose();
   }
+}
+
+/**
+ * A qué escala se reproduce el salto de la rana. En el archivo la cadera
+ * sube 23 unidades y avanza 22 —más que el largo del animal—: en el primer
+ * plano, a la cima, se salía del encuadre por arriba y por un lado.
+ */
+const HOP_SCALE = 0.45;
+
+/**
+ * Adapta el `Jump` de la rana al encuadre: la cadera sube y avanza a
+ * HOP_SCALE de lo que el animador le dio, con la MISMA forma de curva y el
+ * mismo tiempo. Nada más: los giros quedan intactos y, a diferencia de la
+ * ballena, la caída tampoco se reescribe, porque cae sobre su hoja y el
+ * clip ya la deja donde empezó.
+ */
+export function tameHop(clip: AnimationClip): AnimationClip {
+  const tamed = clip.clone();
+  for (const track of tamed.tracks) {
+    if (!/Hips\.position$/.test(track.name)) continue;
+    const values = track.values;
+    const x0 = values[0]!;
+    const y0 = values[1]!;
+    const z0 = values[2]!;
+    for (let i = 0; i < values.length; i += 3) {
+      values[i] = x0 + (values[i]! - x0) * HOP_SCALE;
+      values[i + 1] = y0 + (values[i + 1]! - y0) * HOP_SCALE;
+      values[i + 2] = z0 + (values[i + 2]! - z0) * HOP_SCALE;
+    }
+  }
+  return tamed;
 }
 
 /**

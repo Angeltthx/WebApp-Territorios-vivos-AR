@@ -483,7 +483,7 @@ function traceBoundary(grid: Occupancy): SilhouettePoint[] {
  * —la ballena del mapa bucea con la cola alzada y la aleta extendida— y en
  * esos casos el contorno se calca del DIBUJO. Que pase por el mismo
  * remuestreo que el calcado del modelo es lo que hace que los trazos se vean
- * igual de repartidos en los cuatro animales.
+ * igual de repartidos en todos los animales.
  */
 export function prepareOutline(
   loop: readonly SilhouettePoint[],

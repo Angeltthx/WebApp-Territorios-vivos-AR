@@ -13,7 +13,7 @@ import {
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 /**
- * Iluminación de tres puntos para los cuatro animales, la de un plató:
+ * Iluminación de tres puntos para los cinco animales, la de un plató:
  *
  *   - PRINCIPAL (key): la que modela la forma. Desde arriba a la derecha
  *     y por delante: ilumina tres cuartas partes del animal y deja la otra

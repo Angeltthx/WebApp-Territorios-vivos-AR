@@ -260,19 +260,48 @@
       }
     ]
   },
-  "frogs": {
+  "frog": {
+    "calls": [
+      {
+        "src": "frog-oophaga",
+        "start": 0.6,
+        "dur": 3.0
+      },
+      {
+        "src": "frog-oophaga",
+        "start": 4.2,
+        "dur": 3.0
+      },
+      {
+        "src": "frog-oophaga",
+        "start": 7.6,
+        "dur": 3.0
+      }
+    ],
+    "taps": [
+      {
+        "src": "leaves-rustle",
+        "start": 2.33,
+        "dur": 1.2
+      },
+      {
+        "src": "leaves-rustle",
+        "start": 8.83,
+        "dur": 1.0
+      }
+    ],
     "ambience": [
       {
         "src": "jungle-choco",
         "start": 30.0,
         "dur": 30.0,
-        "gain": 0.6
+        "gain": 1
       },
       {
         "src": "frog-oophaga",
         "start": 0,
         "dur": 30.0,
-        "gain": 1,
+        "gain": 0.3,
         "loop": true
       }
     ]

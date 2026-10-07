@@ -22,7 +22,7 @@ import { AnimationSequence } from '../src/domain/value-objects/AnimationSequence
 import { ThreeSceneAdapter } from '../src/infrastructure/rendering/ThreeSceneAdapter';
 import { IconAnimator } from '../src/infrastructure/rendering/IconAnimator';
 import { MarkerPin } from '../src/infrastructure/rendering/MarkerPin';
-import { fitToIconSize, tameBreach } from '../src/infrastructure/rendering/IconLoader';
+import { fitToIconSize, tameBreach, tameHop } from '../src/infrastructure/rendering/IconLoader';
 import { TapChoreography } from '../src/infrastructure/rendering/TapChoreography';
 import { MindArTrackingAdapter } from '../src/infrastructure/tracking/MindArTrackingAdapter';
 import { FrameLockedBackground } from '../src/infrastructure/mindar/FrameLockedBackground';
@@ -367,6 +367,33 @@ test('la secuencia rechaza gestos de toque imposibles', () => {
   const ok = AnimationSequence.of({ ...base, tapClip: 'Jump', tapMove: 'breach' });
   assert.equal(ok.tapClip, 'Jump');
   assert.equal(ok.tapSpeed, 1);
+});
+
+test('el salto de la rana es más bajo y más corto, con la misma curva y el mismo tiempo, y cae donde estaba', () => {
+  // Como el Jump del archivo: quieta, salta 23 hacia arriba y 22 adelante, y vuelve.
+  const times = [0, 2.2, 2.6, 2.97, 3.33, 3.7, 5.4];
+  const rise = [0, 0, 17, 23, 1.5, 0, 0];
+  const ahead = [0, 0, 10.5, 22.6, 5, 0, 0];
+  const values = times.flatMap((_, i) => [0, 4 + rise[i]!, -2 + ahead[i]!]);
+  const original = new AnimationClip('Jump', 5.4, [
+    new VectorKeyframeTrack('RIG_Rana:Hips.position', times, values),
+    new NumberKeyframeTrack('RIG_Rana:Hips.rotation[x]', [0, 5.4], [0, 1]),
+  ]);
+  const clip = tameHop(original);
+  const hop = clip.tracks[0]!.values;
+  assert.equal(clip.duration, 5.4);
+  assert.deepEqual(Array.from(clip.tracks[0]!.times), Array.from(original.tracks[0]!.times));
+  assert.deepEqual(Array.from(clip.tracks[1]!.values), [0, 1]);
+  // Mismo factor arriba y adelante en cada fotograma: el arco del animador, a escala.
+  const scale = (hop[3 * 3 + 1]! - 4) / 23;
+  assert.ok(scale > 0.3 && scale < 0.6);
+  times.forEach((_, i) => {
+    assert.ok(Math.abs(hop[i * 3 + 1]! - (4 + rise[i]! * scale)) < 1e-6);
+    assert.ok(Math.abs(hop[i * 3 + 2]! - (-2 + ahead[i]! * scale)) < 1e-6);
+  });
+  // Empieza y acaba en el mismo sitio, y el original no se toca.
+  assert.deepEqual(Array.from(hop.slice(-3)), [0, 4, -2]);
+  assert.equal(original.tracks[0]!.values[3 * 3 + 1], 27);
 });
 
 test('el salto de la ballena conserva su tiempo y sus giros, cae en arco y se sumerge antes de volver', () => {
@@ -886,7 +913,7 @@ test('leer un texto excluye al primer plano, y la X cierra cualquiera de los dos
   assert.equal(discovery.reading, 'turismo');
   assert.equal(discovery.isBusy, true);
   // Con un texto abierto, otro no entra.
-  assert.equal(discovery.read('rana'), discovery);
+  assert.equal(discovery.read('danza'), discovery);
   discovery = discovery.focus(null);
   assert.equal(discovery.reading, null);
   assert.equal(discovery.isBusy, false);
@@ -943,7 +970,7 @@ test('un texto solo se abre con todos los animales encontrados y bloquea al rest
   discover.execute('whale');
   assert.equal(state.discovery.focused, null);
   // …ni se abre otro texto encima.
-  await open.execute('rana');
+  await open.execute('danza');
   assert.equal(state.discovery.reading, 'turismo');
   // Un id que no existe no hace nada.
   close.execute();
@@ -1257,8 +1284,19 @@ test('cerrar la ficha a mitad de la narración la corta y no la deja seguir', as
   assert.equal(h.pendingMs(), null);
 });
 
-test('las cuatro narraciones del catálogo existen, van en trozos y cada pausa deja actuar al animal', () => {
-  for (const entry of NUQUI_CATALOG) {
+/** Animales que el equipo todavía no ha narrado: su ficha se abre sin voz. */
+const WITHOUT_NARRATION = new Set(['frog']);
+const NARRATED = NUQUI_CATALOG.filter((entry) => !WITHOUT_NARRATION.has(entry.id));
+
+test('las narraciones del catálogo existen, van en trozos y cada pausa deja actuar al animal', () => {
+  assert.equal(NARRATED.length, 4);
+  for (const entry of NUQUI_CATALOG.filter((e) => WITHOUT_NARRATION.has(e.id))) {
+    // Sin narración de verdad, no a medias: ni voz española ni inglesa.
+    const soundscape = ArModel.fromSnapshot(entry).soundscape!;
+    assert.equal(soundscape.narrationIn('es'), null, `${entry.id} ya tiene narración: quítalo de WITHOUT_NARRATION`);
+    assert.equal(soundscape.narrationIn('en'), null);
+  }
+  for (const entry of NARRATED) {
     const narration = ArModel.fromSnapshot(entry).soundscape?.narration;
     assert.ok(narration, `${entry.id} no tiene narración`);
     assert.equal(narration.parts.length, 2);
@@ -1665,7 +1703,7 @@ test('el tutorial, animal por animal: un toque lo abre, la ✕ al callar la narr
     }
   };
   const animals = ['whale', 'bird', 'crab', 'turtle'];
-  const tutorial = new Tutorial(animals, ['turismo', 'rana'], timers);
+  const tutorial = new Tutorial(animals, ['turismo', 'danza'], timers);
   const states: { step: string; urgent: boolean; preferred: string | null; remaining: number }[] = [];
   tutorial.onChange((state) => states.push({
     step: state.step, urgent: state.urgent, preferred: state.hint?.preferred ?? null,
@@ -1723,7 +1761,7 @@ test('el tutorial, animal por animal: un toque lo abre, la ✕ al callar la narr
   // A los 5 s se va, y el tutorial se acabó: leer otro no lo trae de vuelta.
   fire(5000);
   assert.equal(last().step, 'off');
-  state = state.withDiscovery(state.discovery.read('rana'));
+  state = state.withDiscovery(state.discovery.read('danza'));
   tutorial.update(state);
   state = state.withDiscovery(state.discovery.focus(null));
   tutorial.update(state);
@@ -1840,6 +1878,7 @@ test('cada animal y cada texto con párrafos tiene su versión en inglés, y su 
     const en = animal.cardIn('en');
     assert.notEqual(en.name, es.name, `${entry.id} sin nombre en inglés`);
     assert.equal(en.paragraphs.length, es.paragraphs.length, `${entry.id}: distinto número de párrafos`);
+    if (WITHOUT_NARRATION.has(entry.id)) continue;
     const narration = animal.soundscape?.narrationIn('en');
     assert.ok(narration && narration !== animal.soundscape?.narrationIn('es'), `${entry.id} sin narración inglesa`);
     for (const part of narration.parts) assert.ok(existsSync(`public${part}`), `falta ${part}`);
@@ -1912,7 +1951,7 @@ test('en inglés narra la voz inglesa; cambiar de idioma a media narración sigu
 });
 
 test('las frases de cada narración española e inglesa van a la par', () => {
-  for (const entry of NUQUI_CATALOG) {
+  for (const entry of NARRATED) {
     const soundscape = ArModel.fromSnapshot(entry).soundscape!;
     const es = soundscape.narrationIn('es')!;
     const en = soundscape.narrationIn('en')!;
@@ -1938,4 +1977,27 @@ test('la mano de la ✕ sale una sola vez en la sesión, no con cada animal', ()
     state = state.withDiscovery(state.discovery.focus(null));
     tutorial.update(state);
   }
+});
+
+test('un animal sin narración enseña la ✕ en cuanto se ve su gesto, y solo esa vez', () => {
+  const timers = { set: () => 1, clear: () => {} };
+  const tutorial = new Tutorial(['frog', 'whale'], ['turismo'], timers);
+  let state = ArSession.idle().searching(Placement.initial(model.id, model.defaultScale)).tracking();
+  tutorial.update(state);
+  // La rana primero: su ficha no tiene voz, así que nunca «calla».
+  state = state.withDiscovery(state.discovery.unlock(ModelId.of('frog')));
+  tutorial.update(state);
+  tutorial.narrationChanged(false, false);
+  assert.equal(tutorial.state.step, 'tapFocused');
+  tutorial.focusedAnimalTapped();
+  assert.equal(tutorial.state.step, 'closeFocus');
+  state = state.withDiscovery(state.discovery.focus(null));
+  tutorial.update(state);
+  // La ballena después: narra, y la ✕ ya se enseñó.
+  state = state.withDiscovery(state.discovery.unlock(ModelId.of('whale')));
+  tutorial.update(state);
+  tutorial.narrationChanged(true);
+  tutorial.focusedAnimalTapped();
+  tutorial.narrationChanged(false);
+  assert.equal(tutorial.state.step, 'off');
 });
