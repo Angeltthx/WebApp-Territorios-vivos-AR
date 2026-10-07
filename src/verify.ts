@@ -31,7 +31,7 @@ import {
 } from 'three';
 import { ArModel } from '@domain/entities/ArModel';
 import { addThreePointLighting } from '@infrastructure/rendering/ThreePointLighting';
-import { IconLoader } from '@infrastructure/rendering/IconLoader';
+import { copyIcon, IconLoader } from '@infrastructure/rendering/IconLoader';
 import { MarkerPin } from '@infrastructure/rendering/MarkerPin';
 import { NUQUI_CATALOG } from '@infrastructure/repositories/StaticModelRepository';
 import { NUQUI_MAP_TEXTS } from '@infrastructure/repositories/StaticMapTextRepository';
@@ -92,21 +92,35 @@ tapHint.setHint({ urgent: hintParams.has('urgent') });
 scene.add(tapHint.group);
 
 const icons = new IconLoader();
+/** Un pin por EJEMPLAR, como en la app: la rana grande y la chica son dos. */
 const pins: MarkerPin[] = [];
+const catalog = NUQUI_CATALOG.map(ArModel.fromSnapshot);
 
 const ready = Promise.all(
-  NUQUI_CATALOG.map(async (snapshot, index) => {
-    const model = ArModel.fromSnapshot(snapshot);
-    const pin = new MarkerPin(model, await icons.load(model), index, TARGET_ASPECT);
-    scene.add(pin.group);
-    return [index, pin] as const;
+  catalog.map(async (model, index) => {
+    const loaded = await icons.load(model);
+    const copies = model.instances.map((instanceModel, instance) =>
+      instance === 0 ? loaded : copyIcon(loaded, instanceModel.pose.size / model.pose.size));
+    return model.instances.map((instanceModel, instance) => {
+      const icon = copies[instance]!;
+      const pin = new MarkerPin(instanceModel, icon, index + instance * catalog.length, TARGET_ASPECT, instance);
+      scene.add(pin.group);
+      return [index * 10 + instance, pin, instanceModel] as const;
+    });
   }),
-).finally(() => icons.dispose());
+).then((groups) => groups.flat()).finally(() => icons.dispose());
+
+/** Dónde está cada pin, en el mismo orden que `pins`. */
+const spots: { u: number; v: number }[] = [];
 
 // Los .glb llegan de forma asíncrona: se ordenan al final para que el
 // desfase del vaivén siga correspondiendo al orden del catálogo.
 void ready.then((loaded) => {
-  for (const [index, pin] of loaded) pins[index] = pin;
+  loaded.sort((a, b) => a[0] - b[0]);
+  loaded.forEach(([, pin, model], position) => {
+    pins[position] = pin;
+    spots[position] = model.spot;
+  });
   // En la app los animales salen escondidos tras su contorno y solo
   // aparecen cuando la camara se acerca. Aqui no hay camara que acercar, y
   // lo que se viene a verificar son las COORDENADAS, asi que se revelan los
@@ -157,8 +171,8 @@ document.querySelector<HTMLCanvasElement>('#flat')?.addEventListener('click', (e
   const v = (event.clientY - rect.top) / rect.height;
   let nearest = -1;
   let distance = 0.13;
-  NUQUI_CATALOG.forEach((model, index) => {
-    const candidate = Math.hypot(u - model.spot.u, (v - model.spot.v) * TARGET_ASPECT);
+  spots.forEach((spot, index) => {
+    const candidate = Math.hypot(u - spot.u, (v - spot.v) * TARGET_ASPECT);
     if (candidate < distance) {
       nearest = index;
       distance = candidate;
@@ -167,6 +181,10 @@ document.querySelector<HTMLCanvasElement>('#flat')?.addEventListener('click', (e
   if (nearest >= 0 && pins[nearest]?.isRevealed) pins[nearest]!.pulse();
 });
 
+function pinOf(id: string, instance: number): MarkerPin | undefined {
+  return pins.find((pin) => pin.modelId === id && pin.instance === instance);
+}
+
 // Calibrar `iconSize` es medir, no calcular (ver CLAUDE.md): desde la
 // consola, `measureIcons()` da lo que ocupa cada animal en la vista
 // ortográfica, en anchos de mapa, para compararlo con su dibujo.
@@ -174,22 +192,25 @@ Object.assign(window, {
   // Para afinar la iluminación desde la consola sin recargar:
   // `verifyScene.getObjectByName('contraluz').intensity = 3; stepVerify(0)`.
   verifyScene: scene,
-  measureIcons: () => pins.map((pin, index) => {
+  measureIcons: () => pins.map((pin) => {
     let icon: Object3D | null = null;
     pin.group.traverse((node) => {
       if (node !== pin.group && node.userData['modelId'] !== undefined) icon = node;
     });
     const size = icon === null ? new Vector3() : new Box3().setFromObject(icon).getSize(new Vector3());
-    return { id: NUQUI_CATALOG[index]?.id, ancho: +size.x.toFixed(3), alto: +size.y.toFixed(3) };
+    const id = pin.instance === 0 ? pin.modelId : `${pin.modelId}#${pin.instance}`;
+    return { id, ancho: +size.x.toFixed(3), alto: +size.y.toFixed(3) };
   }),
   // Una pestaña en segundo plano no ejecuta requestAnimationFrame, así que
   // una animación no se puede fotografiar a mitad. `tap('whale')` y luego
   // `stepVerify(1.2)` la dejan exactamente en ese instante.
-  tap: (id: string) => pins[NUQUI_CATALOG.findIndex((model) => model.id === id)]?.pulse(),
+  // `tap('frog', 1)`: la rana chica.
+  tap: (id: string, instance = 0) => pinOf(id, instance)?.pulse(),
   // Gira un animal como lo haría el dedo (radianes): `turn('whale', 1.57)`
   // y luego `tap('whale')` comprueba que el salpicón sale donde cae.
-  turn: (id: string, yaw: number, pitch = 0) =>
-    pins[NUQUI_CATALOG.findIndex((model) => model.id === id)]?.applyTransform(1, yaw, pitch),
+  turn: (id: string, yaw: number, pitch = 0) => {
+    for (const pin of pins) if (pin.modelId === id) pin.applyTransform(1, yaw, pitch);
+  },
   stepVerify: (seconds: number) => {
     const frame = 1 / 60;
     for (let t = 0; t < seconds; t += frame) {

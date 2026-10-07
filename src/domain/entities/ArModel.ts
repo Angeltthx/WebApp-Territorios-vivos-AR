@@ -69,6 +69,23 @@ export interface ArModelSnapshot {
    */
   readonly outlineMirror?: boolean;
   readonly defaultScale?: number;
+  /**
+   * Otros ejemplares del MISMO animal dibujados en el mapa (las dos ranas
+   * del póster). Cada uno con su sitio, su contorno y su tamaño; comparten
+   * todo lo demás —ficha, sonidos, clips—, se descubren juntos con el
+   * primer toque y cuentan como UN animal.
+   */
+  readonly companions?: readonly CompanionSnapshot[];
+}
+
+/** Un ejemplar más de un animal: dónde está y cómo de grande es. */
+export interface CompanionSnapshot {
+  readonly spot: { readonly u: number; readonly v: number };
+  readonly outlineShape?: readonly { readonly u: number; readonly v: number }[];
+  /** Por defecto, el del animal. */
+  readonly iconSize?: number;
+  /** Por defecto, el del animal. */
+  readonly facing?: number;
 }
 
 export class ArModel {
@@ -88,8 +105,16 @@ export class ArModel {
     readonly pose: IconPose,
     readonly defaultScale: Scale,
     private readonly english: CardText | null,
+    /** Los otros ejemplares: mismo id, otro sitio y otro tamaño. */
+    readonly companions: readonly ArModel[] = [],
   ) {
+    Object.freeze(this.companions);
     Object.freeze(this);
+  }
+
+  /** Este ejemplar y sus compañeros, en orden: el primero es el principal. */
+  get instances(): readonly ArModel[] {
+    return [this, ...this.companions];
   }
 
   /** Nombre, especie y párrafos de la ficha en ese idioma (español si no hay traducción). */
@@ -133,8 +158,25 @@ export class ArModel {
       ),
       Scale.of(snapshot.defaultScale ?? 1),
       english,
+      (snapshot.companions ?? []).map((companion) => ArModel.fromSnapshot(companionOf(snapshot, companion))),
     );
   }
+}
+
+/**
+ * El snapshot de un compañero: el del animal con su sitio, su contorno y su
+ * tamaño. El contorno del principal NO se hereda (está en otro sitio del
+ * mapa): sin el suyo, se deduce del modelo.
+ */
+function companionOf(snapshot: ArModelSnapshot, companion: CompanionSnapshot): ArModelSnapshot {
+  const { companions: _companions, outlineShape: _outline, ...shared } = snapshot;
+  return {
+    ...shared,
+    spot: companion.spot,
+    ...(companion.outlineShape === undefined ? {} : { outlineShape: companion.outlineShape }),
+    ...(companion.iconSize === undefined ? {} : { iconSize: companion.iconSize }),
+    ...(companion.facing === undefined ? {} : { facing: companion.facing }),
+  };
 }
 
 /** Lo que dice la ficha de un animal, en un idioma. */

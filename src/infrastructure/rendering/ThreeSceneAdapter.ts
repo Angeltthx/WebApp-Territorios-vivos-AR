@@ -18,7 +18,7 @@ import { ModelId } from '@domain/value-objects/ModelId';
 import { Stabilization } from '@domain/value-objects/Stabilization';
 import type { HintSpec, ScenePort } from '@application/ports/ScenePort';
 import type { MindArRuntime } from '../mindar/MindArRuntime';
-import { IconLoader } from './IconLoader';
+import { copyIcon, IconLoader } from './IconLoader';
 import { MarkerPin, STAGE_LOOK_DOWN } from './MarkerPin';
 import { PoseFilter } from './PoseFilter';
 import { addEnvironment, addThreePointLighting } from './ThreePointLighting';
@@ -71,6 +71,12 @@ const STAGE_LIFT = 0.13;
  */
 const STAGE_MAX_WIDTH = 0.82;
 /**
+ * Con varios ejemplares en primer plano (las dos ranas), el hueco entre uno
+ * y otro, en lados del principal. Van en fila, con los pies a la misma
+ * altura, cada uno a su escala del catálogo.
+ */
+const STAGE_COMPANION_GAP = 0.08;
+/**
  * Mientras su animal quede dentro de este margen de la pantalla (en
  * coordenadas normalizadas, ±1 es el borde), la mano de "toca un animal" no
  * cambia de animal.
@@ -113,7 +119,18 @@ export class ThreeSceneAdapter implements ScenePort {
     new CircleGeometry(1, 24),
     new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: DoubleSide }),
   );
+  /**
+   * Un pin por EJEMPLAR: `frog` es la rana grande y `frog#1` la chica.
+   * Casi siempre es uno por animal; para saber de qué animal es cada uno,
+   * `pin.modelId`, no la clave.
+   */
   private readonly pins = new Map<string, MarkerPin>();
+  /** Cuántos animales hay (no pines): lo que cuenta para "los encontró todos". */
+  private modelCount = 0;
+  /** Los ejemplares prestados al primer plano, cada uno en su hueco de la fila. */
+  private staged: { readonly pin: MarkerPin; readonly icon: Object3D; readonly slot: Group | null; readonly hit: Mesh | null }[] = [];
+  /** Zona de toque de cada ejemplar en el primer plano, cuando hay varios. */
+  private readonly slotHitGeometry = new CircleGeometry(1, 24);
   /** Puntos sobre los textos del mapa; se encienden al aceptar explorarlos. */
   private readonly hotspots = new Map<string, MapTextHotspot>();
 
@@ -178,12 +195,19 @@ export class ThreeSceneAdapter implements ScenePort {
     const icons = loaded.value;
 
     icons.forEach(([model, icon], index) => {
-      const pin = new MarkerPin(model, icon, index, this.targetAspect);
-      pin.onSplash = (strength) => this.splashListener?.(model.id.value, strength);
-      pin.onTapSound = () => this.tapSoundListener?.(model.id.value);
-      this.overlay.add(pin.group);
-      this.pins.set(model.id.value, pin);
+      // Los compañeros (la rana chica) llevan una copia del icono (ver
+      // copyIcon), hecha ANTES de que el pin del original lo marque.
+      const copies = model.instances.map((instanceModel, instance) =>
+        instance === 0 ? icon : copyIcon(icon, instanceModel.pose.size / model.pose.size));
+      model.instances.forEach((instanceModel, instance) => {
+        const pin = new MarkerPin(instanceModel, copies[instance]!, index + instance * models.length, this.targetAspect, instance);
+        pin.onSplash = (strength) => this.splashListener?.(model.id.value, strength);
+        pin.onTapSound = () => this.tapSoundListener?.(model.id.value);
+        this.overlay.add(pin.group);
+        this.pins.set(instance === 0 ? model.id.value : `${model.id.value}#${instance}`, pin);
+      });
     });
+    this.modelCount = models.length;
     if (this.mapTexts.length > 0) {
       this.mapTexts.forEach((text, index) => {
         const hotspot = new MapTextHotspot(text, this.targetAspect, index + 1);
@@ -212,8 +236,8 @@ export class ThreeSceneAdapter implements ScenePort {
 
     // Cada animal con SU giro: arrastrar uno ya no mueve a los otros tres.
     this.scale = scale.value;
-    for (const [key, pin] of this.pins) {
-      const { yaw, pitch } = placement.orientationOf(ModelId.of(key));
+    for (const pin of this.pins.values()) {
+      const { yaw, pitch } = placement.orientationOf(ModelId.of(pin.modelId));
       pin.applyTransform(scale.value, yaw, pitch);
     }
   }
@@ -226,12 +250,12 @@ export class ThreeSceneAdapter implements ScenePort {
    * que se descubrió se queda.
    */
   applyDiscovery(discovery: Discovery): void {
-    for (const [key, pin] of this.pins) {
-      if (discovery.isUnlocked(ModelId.of(key))) pin.setRevealed(true);
+    for (const pin of this.pins.values()) {
+      if (discovery.isUnlocked(ModelId.of(pin.modelId))) pin.setRevealed(true);
     }
     // Los puntos de los textos: con todos los animales encontrados y nada
     // abierto (con una ficha o un texto en pantalla, apagados).
-    const textsOn = discovery.hasFoundAll(this.pins.size) && !discovery.isBusy;
+    const textsOn = discovery.hasFoundAll(this.modelCount) && !discovery.isBusy;
     for (const hotspot of this.hotspots.values()) hotspot.setActive(textsOn);
     this.setFocus(discovery.focused?.value ?? null);
   }
@@ -268,9 +292,12 @@ export class ThreeSceneAdapter implements ScenePort {
     if (this.focusedId === id) return;
 
     if (this.focusedId !== null) {
-      const previousPin = this.pins.get(this.focusedId);
-      previousPin?.reclaimWater();
-      previousPin?.reclaimIcon();
+      for (const { pin, slot } of this.staged) {
+        if (slot !== null) this.stage.remove(slot);
+        pin.reclaimWater();
+        pin.reclaimIcon();
+      }
+      this.staged = [];
       this.stagedIcon = null;
     }
 
@@ -278,38 +305,61 @@ export class ThreeSceneAdapter implements ScenePort {
     this.stageHit.visible = false;
     delete this.stage.userData['modelId'];
 
-    if (id !== null) {
-      const pin = this.pins.get(id);
-      if (pin !== undefined) {
+    const pins = id === null ? [] : this.pinsOf(id);
+    if (id !== null && pins.length > 0) {
+      const icons = pins.map((pin) => {
         const icon = pin.releaseIcon();
-        // Se mide AHORA, mientras el icono no cuelga de nadie: una vez
-        // dentro del escenario su caja de mundo llevaría encima la
-        // transformación del escenario y saldría otro número.
         icon.scale.setScalar(1);
         icon.rotation.set(0, 0, 0);
-        icon.updateMatrixWorld(true);
-        // TRAMPA: three calcula la caja de una malla animada UNA vez, en la
-        // postura de ese momento, y la reutiliza para siempre. Sin
-        // recalcularla, la ballena medía 0.10 × 0.14 × 0.10 —casi un cubo,
-        // cuando es alargada— y el encaje no sabía lo larga que es: de
-        // frente no se notaba, en tres cuartos ocupaba el 90 % del ancho.
-        icon.traverse((object) => {
-          if (object instanceof SkinnedMesh) object.computeBoundingBox();
-        });
-        new Box3().setFromObject(icon).getSize(this.stagedNaturalSize);
-        this.stagedNaturalSize.set(
-          this.stagedNaturalSize.x || 1,
-          this.stagedNaturalSize.y || 1,
-          this.stagedNaturalSize.z || 1,
-        );
+        icon.position.set(0, 0, 0);
+        return icon;
+      });
+      // Se mide el principal AHORA, mientras no cuelga de nadie: una vez
+      // dentro del escenario su caja de mundo llevaría encima la
+      // transformación del escenario y saldría otro número. Los compañeros
+      // son el mismo modelo a otra escala del catálogo.
+      const icon = icons[0]!;
+      icon.updateMatrixWorld(true);
+      // TRAMPA: three calcula la caja de una malla animada UNA vez, en la
+      // postura de ese momento, y la reutiliza para siempre. Sin
+      // recalcularla, la ballena medía 0.10 × 0.14 × 0.10 —casi un cubo,
+      // cuando es alargada— y el encaje no sabía lo larga que es: de
+      // frente no se notaba, en tres cuartos ocupaba el 90 % del ancho.
+      icon.traverse((object) => {
+        if (object instanceof SkinnedMesh) object.computeBoundingBox();
+      });
+      new Box3().setFromObject(icon).getSize(this.stagedNaturalSize);
+      this.stagedNaturalSize.set(
+        this.stagedNaturalSize.x || 1,
+        this.stagedNaturalSize.y || 1,
+        this.stagedNaturalSize.z || 1,
+      );
 
-        this.stage.add(icon);
-        const water = pin.waterGroup;
-        if (water !== null) this.stage.add(water);
-        this.stagedIcon = icon;
-        this.stage.userData['modelId'] = id;
-        this.stageHit.visible = true;
-      }
+      // Todos sus ejemplares, en fila: la rana grande y la chica salen
+      // juntas y cada una salta cuando la tocan a ella.
+      // Un animal solo va directo al escenario, como siempre.
+      pins.forEach((pin, index) => {
+        if (pins.length === 1) {
+          this.stage.add(icons[index]!);
+          this.staged.push({ pin, icon: icons[index]!, slot: null, hit: null });
+          return;
+        }
+        const slot = new Group();
+        slot.add(icons[index]!);
+        const hit = new Mesh(this.slotHitGeometry, this.stageHit.material);
+        hit.userData['modelId'] = id;
+        hit.userData['instance'] = pin.instance;
+        // Por delante de la zona general del primer plano, que no dice cuál.
+        hit.position.z = 0.03;
+        slot.add(hit);
+        this.stage.add(slot);
+        this.staged.push({ pin, icon: icons[index]!, slot, hit });
+      });
+      const water = pins[0]!.waterGroup;
+      if (water !== null) this.stage.add(water);
+      this.stagedIcon = icon;
+      this.stage.userData['modelId'] = id;
+      this.stageHit.visible = true;
     }
 
     this.stage.visible = this.stagedIcon !== null;
@@ -342,7 +392,7 @@ export class ThreeSceneAdapter implements ScenePort {
     // cuando el usuario lo arrastra con el dedo.
     // Tres cuartos de partida (ver MarkerPin.stageYaw) más lo que el
     // usuario lo haya girado: el mismo giro que lleva sobre el mapa.
-    const pin = this.pins.get(this.focusedId ?? '');
+    const pin = this.staged[0]?.pin;
     const yaw = (pin?.stageYaw ?? 0) + (pin?.userSpin ?? 0);
     const pitch = STAGE_LOOK_DOWN + (pin?.userTilt ?? 0);
 
@@ -373,18 +423,79 @@ export class ThreeSceneAdapter implements ScenePort {
       availableWidth / Math.max(projectedWidth, this.stagedNaturalSize.z * 0.6),
       perspectiveCap,
     );
-    icon.scale.setScalar(fittedScale * (pin?.focusSize ?? 1) * this.scale);
-    // El gesto de toque (salto, buceo, correteo) y su salpicón, igual que
-    // sobre el mapa: lo aplica el propio pin, que es quien lo lleva.
-    if (pin !== undefined) {
-      pin.poseIcon(yaw, 0, pitch);
-      pin.placeWater(0);
+    if (this.staged.length > 1) {
+      this.layoutCompanions(yaw, pitch, availableWidth, availableHeight, halfWidth, distance);
     } else {
-      icon.rotation.set(pitch, yaw, 0);
+      icon.scale.setScalar(fittedScale * (pin?.focusSize ?? 1) * this.scale);
+      // El gesto de toque (salto, buceo, correteo) y su salpicón, igual que
+      // sobre el mapa: lo aplica el propio pin, que es quien lo lleva.
+      if (pin !== undefined) {
+        pin.poseIcon(yaw, 0, pitch);
+        pin.placeWater(0);
+      } else {
+        icon.rotation.set(pitch, yaw, 0);
+      }
     }
     // El círculo tiene radio 1: queda algo mayor que el animal para que sea
     // fácil acertarle con un dedo y el teléfono en movimiento.
     this.stageHit.scale.setScalar(Math.min(availableWidth, availableHeight) * this.scale * 0.65);
+  }
+
+  /**
+   * El primer plano de un animal con varios ejemplares: en fila, cada uno a
+   * su escala del catálogo (la rana chica, más chica), con los pies a la
+   * misma altura. Se encaja la FILA entera con los mismos topes que un
+   * animal solo, y el hueco de cada uno se mide con su lado mayor en planta
+   * para que girarlos con el dedo no los meta uno dentro del otro.
+   */
+  private layoutCompanions(
+    yaw: number,
+    pitch: number,
+    availableWidth: number,
+    availableHeight: number,
+    halfWidth: number,
+    distance: number,
+  ): void {
+    const primary = this.staged[0]!.pin;
+    const natural = this.stagedNaturalSize;
+    const span = Math.max(natural.x, natural.z);
+    // Lo que ocupa de lado cada uno con el giro de AHORA (el mismo cálculo
+    // que para un animal solo): girados en tres cuartos ocupan más que su
+    // lado mayor, y medirlos con él los solapaba.
+    const across = Math.abs(Math.cos(yaw)) * natural.x + Math.abs(Math.sin(yaw)) * natural.z;
+    const ratios = this.staged.map(({ pin }) => pin.iconSize / primary.iconSize);
+    const lineup = across * (ratios.reduce((sum, k) => sum + k, 0) + STAGE_COMPANION_GAP * (ratios.length - 1));
+    // El tope de perspectiva de un animal solo supone que su lado mayor
+    // puede apuntar a la cámara. En fila, lo que llega al borde es el
+    // extremo de la fila (L/2 de lado) adelantado por el fondo de UN
+    // ejemplar (r): s·(L/2)·d ≤ W·(d − s·r), despejando s.
+    const depth = span / 2;
+    const fitted = Math.min(
+      availableHeight / natural.y,
+      availableWidth / lineup,
+      (halfWidth * distance) / ((lineup / 2) * distance + halfWidth * depth),
+    );
+    const unit = fitted * primary.focusSize * this.scale;
+    let cursor = -(lineup * unit) / 2;
+    this.staged.forEach(({ pin, icon, slot, hit }, index) => {
+      const k = ratios[index]!;
+      const width = across * k * unit;
+      slot?.position.set(cursor + width / 2, (-(1 - k) * natural.y * unit) / 2, 0);
+      cursor += width + STAGE_COMPANION_GAP * across * unit;
+      // La copia ya lleva su proporción dentro (ver copyIcon): aquí, la misma
+      // escala para todos.
+      icon.scale.setScalar(unit);
+      pin.poseIcon(yaw, 0, pitch);
+      pin.placeWater(0);
+      hit?.scale.setScalar(Math.max(span, natural.y) * k * unit * 0.6);
+    });
+  }
+
+  /** Los pines de un animal, el principal primero. */
+  private pinsOf(id: string): MarkerPin[] {
+    return [...this.pins.values()]
+      .filter((pin) => pin.modelId === id)
+      .sort((a, b) => a.instance - b.instance);
   }
 
   /** El animal en primer plano: arrastrar en cualquier sitio lo gira a él. */
@@ -400,8 +511,13 @@ export class ThreeSceneAdapter implements ScenePort {
     this.tapSoundListener = listener;
   }
 
-  pulse(id: ModelId): boolean {
-    return this.pins.get(id.value)?.pulse() ?? false;
+  pulse(id: ModelId, instance?: number): boolean {
+    const pins = this.pinsOf(id.value);
+    if (instance !== undefined) return pins[instance]?.pulse() ?? false;
+    // Sin decir cuál (un toque en la zona general, o la pausa de una
+    // narración): el primero que no esté ya a mitad de su gesto.
+    const free = pins.find((pin) => !pin.isGesturing);
+    return free?.pulse() ?? false;
   }
 
   clear(): void {
@@ -428,6 +544,7 @@ export class ThreeSceneAdapter implements ScenePort {
     this.unsubscribeFrame = null;
     this.clear();
     this.stageHit.geometry.dispose();
+    this.slotHitGeometry.dispose();
     this.stageHit.material.dispose();
     this.tapHint.dispose();
     if (this.runtime.isInitialized) {

@@ -71,9 +71,11 @@ export interface ScenePort {
 
   /**
    * Lanza el gesto de toque de un animal. Devuelve false si ya estaba a
-   * mitad de uno: el gesto no se reinicia hasta que acaba.
+   * mitad de uno: el gesto no se reinicia hasta que acaba. Con varios
+   * ejemplares (las dos ranas), `instance` dice cuál; sin él, el primero
+   * que no esté ya a mitad de su gesto.
    */
-  pulse(id: ModelId): boolean;
+  pulse(id: ModelId, instance?: number): boolean;
 
   clear(): void;
 

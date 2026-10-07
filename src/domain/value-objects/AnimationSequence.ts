@@ -48,6 +48,15 @@ export interface AnimationSequenceSnapshot {
    * al tocar.
    */
   readonly tapSoundAt?: number;
+  /**
+   * El bucle ambiental NO va en orden: tras cada paso se elige el siguiente
+   * al azar entre `steps` (repetir un paso es tan válido como cambiar; lo
+   * único que no se repite seguido es el clip de toque), y arranca en un
+   * paso y un instante al azar. Es lo que hace que dos animales iguales —las
+   * dos ranas— no se muevan a la vez. Con `wander`, `entranceClip` no se
+   * usa. Por defecto, en orden.
+   */
+  readonly wander?: boolean;
 }
 
 export interface AnimationStep {
@@ -66,6 +75,7 @@ export class AnimationSequence {
     readonly tapLoops: number,
     readonly tapMove: TapMove,
     readonly tapSoundAt: number,
+    readonly wander: boolean,
   ) {
     Object.freeze(this.steps);
     Object.freeze(this);
@@ -126,6 +136,7 @@ export class AnimationSequence {
       tapLoops,
       tapMove,
       tapSoundAt,
+      snapshot.wander ?? false,
     );
   }
 }

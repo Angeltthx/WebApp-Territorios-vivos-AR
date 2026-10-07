@@ -165,7 +165,7 @@ export class PointerInteractionAdapter implements InteractionPort {
     if (target === null) return;
 
     if (target.kind === 'text') this.handlers.onTapText(target.id);
-    else this.handlers.onTapModel(target.id);
+    else this.handlers.onTapModel(target.id, target.instance);
   }
 
   /** Qué animal hay bajo el dedo (los textos no se giran), o null. */
@@ -184,7 +184,7 @@ export class PointerInteractionAdapter implements InteractionPort {
         const angle = (i / TOLERANCE_DIRECTIONS) * Math.PI * 2;
         const near = this.targetAt(clientX + Math.cos(angle) * radius, clientY + Math.sin(angle) * radius);
         if (near === null) continue;
-        const key = `${near.kind}:${near.id}`;
+        const key = `${near.kind}:${near.id}:${near.instance ?? ''}`;
         const vote = votes.get(key) ?? { target: near, count: 0 };
         vote.count += 1;
         votes.set(key, vote);
@@ -283,6 +283,8 @@ function isShown(object: Object3D): boolean {
 interface TapTarget {
   readonly kind: 'model' | 'text';
   readonly id: string;
+  /** Cuál de los ejemplares de un animal (las dos ranas), si lo dice el objeto tocado. */
+  readonly instance?: number;
 }
 
 /**
@@ -293,9 +295,14 @@ interface TapTarget {
  */
 function findTarget(object: Object3D): TapTarget | null {
   let current: Object3D | null = object;
+  let instance: number | undefined;
   while (current !== null) {
+    const found: unknown = current.userData['instance'];
+    if (instance === undefined && typeof found === 'number') instance = found;
     const modelId: unknown = current.userData['modelId'];
-    if (typeof modelId === 'string') return { kind: 'model', id: modelId };
+    if (typeof modelId === 'string') {
+      return instance === undefined ? { kind: 'model', id: modelId } : { kind: 'model', id: modelId, instance };
+    }
     const textId: unknown = current.userData['textId'];
     if (typeof textId === 'string') return { kind: 'text', id: textId };
     current = current.parent;

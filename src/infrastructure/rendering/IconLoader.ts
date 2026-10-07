@@ -5,6 +5,7 @@ import {
   CircleGeometry,
   DoubleSide,
   Group,
+  KeyframeTrack,
   Mesh,
   MeshStandardMaterial,
   Object3D,
@@ -12,6 +13,7 @@ import {
 } from 'three';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { ArModel } from '@domain/entities/ArModel';
 import { addRimShading } from './ThreePointLighting';
 
@@ -127,9 +129,13 @@ export class IconLoader {
       // Se mide con el bucle ambiental, que es lo que se ve casi siempre: la
       // pose de reposo del archivo puede ser menor que la de nado. El gesto
       // de toque NO entra en la medida —el salto de la ballena la encogía a
-      // la mitad para que cupiera un salto que dura dos segundos—.
+      // la mitad para que cupiera un salto que dura dos segundos—, tampoco
+      // cuando además está en el bucle (las ranas saltan solas de vez en
+      // cuando).
       const ambient = animations.filter(
-        (clip) => model.animation?.steps.some((step) => step.name === clip.name) ?? false,
+        (clip) =>
+          clip.name !== tapClip &&
+          (model.animation?.steps.some((step) => step.name === clip.name) ?? false),
       );
       return {
         object: fitToIconSize(gltf.scene, targetSize, ambient),
@@ -156,16 +162,29 @@ export class IconLoader {
  * plano, a la cima, se salía del encuadre por arriba y por un lado.
  */
 const HOP_SCALE = 0.45;
+/**
+ * Segundos del principio del `Jump` que se quitan. El clip pasa 2.2 s
+ * mirando a los lados antes de agacharse (2.22 s), despegar (2.35 s) y caer
+ * (3.42 s): al tocarla, la rana parecía ponerse a caminar y saltar mucho
+ * después, y no se sentía que respondiera al dedo. Desde 2.1 s queda un
+ * instante quieta y enseguida el agachón: el salto del animador, entero.
+ */
+const HOP_LEAD_IN = 2.1;
 
 /**
- * Adapta el `Jump` de la rana al encuadre: la cadera sube y avanza a
- * HOP_SCALE de lo que el animador le dio, con la MISMA forma de curva y el
- * mismo tiempo. Nada más: los giros quedan intactos y, a diferencia de la
- * ballena, la caída tampoco se reescribe, porque cae sobre su hoja y el
- * clip ya la deja donde empezó.
+ * Adapta el `Jump` de la rana: empieza en HOP_LEAD_IN y la cadera sube y
+ * avanza a HOP_SCALE de lo que el animador le dio, con la MISMA forma de
+ * curva y el mismo tiempo. Nada más: los giros quedan intactos y, a
+ * diferencia de la ballena, la caída tampoco se reescribe, porque cae sobre
+ * su hoja y el clip ya la deja donde empezó.
  */
-export function tameHop(clip: AnimationClip): AnimationClip {
+export function tameHop(clip: AnimationClip, leadIn = HOP_LEAD_IN): AnimationClip {
   const tamed = clip.clone();
+  const cut = Math.min(Math.max(0, leadIn), clip.duration);
+  if (cut > 0) {
+    for (const track of tamed.tracks) trimStart(track, cut);
+    tamed.duration = clip.duration - cut;
+  }
   for (const track of tamed.tracks) {
     if (!/Hips\.position$/.test(track.name)) continue;
     const values = track.values;
@@ -179,6 +198,25 @@ export function tameHop(clip: AnimationClip): AnimationClip {
     }
   }
   return tamed;
+}
+
+/**
+ * Quita los primeros `cut` segundos de una pista: su primer fotograma pasa
+ * a ser la pose interpolada en `cut` (sin salto) y el resto se adelanta.
+ */
+function trimStart(track: KeyframeTrack, cut: number): void {
+  const size = track.getValueSize();
+  const first = Array.from(track.createInterpolant().evaluate(cut) as ArrayLike<number>);
+  const times: number[] = [0];
+  const values: number[] = [...first];
+  for (let i = 0; i < track.times.length; i += 1) {
+    const t = track.times[i]!;
+    if (t <= cut + 1e-6) continue;
+    times.push(t - cut);
+    for (let k = 0; k < size; k += 1) values.push(track.values[i * size + k]!);
+  }
+  track.times = new Float32Array(times);
+  track.values = new Float32Array(values);
 }
 
 /**
@@ -379,6 +417,28 @@ export function fitToIconSize(
   const wrapper = new Group();
   wrapper.add(fit);
   return wrapper;
+}
+
+/**
+ * Otro ejemplar de un icono ya cargado (la rana chica), a `factor` de su
+ * tamaño. Comparte geometría, materiales y texturas con el original —en la
+ * GPU no pesa más— y tiene su propio esqueleto para animarse por su cuenta.
+ *
+ * El tamaño del catálogo ya va dentro del icono (lo puso `fitToIconSize` con
+ * el `iconSize` del original), así que el del compañero es una proporción.
+ * La raíz se copia SIN su `userData`: el pin del original ya le había
+ * escrito su id y su ejemplar, y la copia los heredaba —tocar la rana chica
+ * hacía saltar a la grande—.
+ */
+export function copyIcon(loaded: LoadedIcon, factor: number): LoadedIcon {
+  const copy = cloneSkinned(loaded.object);
+  copy.userData = {};
+  const scaled = new Group();
+  scaled.scale.setScalar(factor);
+  scaled.add(copy);
+  const wrapper = new Group();
+  wrapper.add(scaled);
+  return { ...loaded, object: wrapper };
 }
 
 /**

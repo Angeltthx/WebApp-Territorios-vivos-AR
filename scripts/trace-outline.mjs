@@ -80,6 +80,13 @@ const SUBJECTS = {
     // tiene el verde muy por encima.
     hit: (r, g, b) => (r > g + 50 && r > b + 60) || ((0.299 * r + 0.587 * g + 0.114 * b) < 75 && g < r + 12),
   },
+  frogSmall: {
+    // La otra rana, arriba a la derecha, sobre la hoja grande. El recorte
+    // empieza en 0.835 para dejar fuera la flor fucsia y acaba antes de la
+    // etiqueta. Misma regla de color que la grande.
+    box: { u0: 0.835, v0: 0.72, u1: 0.945, v1: 0.81 },
+    hit: (r, g, b) => (r > g + 50 && r > b + 60) || ((0.299 * r + 0.587 * g + 0.114 * b) < 75 && g < r + 12),
+  },
 };
 
 const [name, mode = 'ascii', pointsArg] = process.argv.slice(2);

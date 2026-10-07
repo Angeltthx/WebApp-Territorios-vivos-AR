@@ -604,29 +604,38 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     },
     source: ModelSource.gltf('/models/Rana_Ani.glb'),
     animation: {
-      // Walk son unos pasos (0–1.25 s) y un rato quieta: tal cual sirve de
-      // bucle de reposo. Al tocarla, el Jump del animador a su velocidad:
-      // mira a los lados, se agacha, salta (2.25 s) y cae en su sitio.
+      // A su aire (`wander`): Walk —unos pasos (0–1.25 s) y un rato
+      // quieta— y, de vez en cuando, el salto. Walk va dos veces para que
+      // camine más de lo que salta (un salto cada ~3 pasos, ~10 s), y cada
+      // rana elige por su cuenta: la grande y la chica nunca hacen lo mismo
+      // a la vez. Las dos usan los mismos clips del animador.
       steps: [
         { name: 'Walk', loops: 1 },
+        { name: 'Walk', loops: 1 },
+        { name: 'Jump', loops: 1 },
       ],
-      entranceClip: 'Walk',
+      wander: true,
+      // Al tocarla, salta YA: 'hop' quita al Jump los 2.1 s en que mira a
+      // los lados antes de agacharse (se sentía que no respondía al dedo) y
+      // lo deja más bajo y más corto, con la misma curva, para que quepa en
+      // el primer plano. Si ya está saltando, el toque no lo reinicia.
       tapClip: 'Jump',
-      // A tamaño de archivo, en el primer plano se salía del encuadre en la
-      // cima del salto: 'hop' lo deja más bajo y más corto, misma curva.
       tapMove: 'hop',
-      // Las hojas suenan al caer (las caderas vuelven al suelo a los 3.4 s).
-      tapSoundAt: 3.4,
+      // Las hojas suenan al caer: 3.42 s en el clip original, 1.32 s ya
+      // recortado.
+      tapSoundAt: 1.32,
     },
-    // La rana GRANDE de las dos que hay junto a la etiqueta, vista de
-    // espaldas sobre una hoja. Dibujo: 0.10 × 0.13 de ancho de mapa.
+    // Las DOS ranas del póster, cada una con su contorno: esta es la
+    // grande, junto a la etiqueta, vista de espaldas sobre una hoja
+    // (dibujo: 0.10 × 0.13 de ancho de mapa); la chica es `companions`.
     spot: { u: 0.762, v: 0.835 },
     view: 'front',
     // Medida en /verify.html: a 1 ocupaba 0.073 de ancho, menos que el
     // cangrejo; a 1.35 queda en ~0.10, como su dibujo. Es negra sobre selva
     // oscura, y más pequeña se perdía.
     iconSize: 1.35,
-    focusSize: 0.85,
+    // En primer plano salen LAS DOS en fila: el tamaño lo pone la fila.
+    focusSize: 1,
     facing: 0,
     // Calcado del dibujo: el rojo y el negro de la rana contra la selva.
     outlineShape: [
@@ -640,6 +649,26 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       { u: 0.77, v: 0.8617 }, { u: 0.765, v: 0.8617 }, { u: 0.76, v: 0.861 }, { u: 0.755, v: 0.8617 },
       { u: 0.75, v: 0.8617 }, { u: 0.745, v: 0.861 }, { u: 0.74, v: 0.8596 }, { u: 0.735, v: 0.8659 },
       { u: 0.73, v: 0.8729 }, { u: 0.725, v: 0.8722 }, { u: 0.72, v: 0.8722 }, { u: 0.715, v: 0.8694 },
+    ],
+    // La rana chica, arriba a la derecha sobre la hoja grande. En el póster
+    // las dos miden casi lo mismo (0.09 la chica); aquí se hace claramente
+    // menor —una grande y una chiquita— y en el primer plano salen las dos.
+    companions: [
+      {
+        spot: { u: 0.891, v: 0.775 },
+        iconSize: 0.8,
+        outlineShape: [
+          { u: 0.85, v: 0.7814 }, { u: 0.855, v: 0.7877 }, { u: 0.86, v: 0.7821 }, { u: 0.865, v: 0.7696 },
+          { u: 0.87, v: 0.7654 }, { u: 0.875, v: 0.7619 }, { u: 0.88, v: 0.7416 }, { u: 0.885, v: 0.7388 },
+          { u: 0.89, v: 0.7367 }, { u: 0.895, v: 0.7367 }, { u: 0.9, v: 0.7402 }, { u: 0.905, v: 0.7486 },
+          { u: 0.91, v: 0.7619 }, { u: 0.915, v: 0.7689 }, { u: 0.92, v: 0.773 }, { u: 0.925, v: 0.7772 },
+          { u: 0.93, v: 0.7933 }, { u: 0.93, v: 0.7961 }, { u: 0.925, v: 0.801 }, { u: 0.92, v: 0.8052 },
+          { u: 0.915, v: 0.808 }, { u: 0.91, v: 0.808 }, { u: 0.905, v: 0.8087 }, { u: 0.9, v: 0.7968 },
+          { u: 0.895, v: 0.7975 }, { u: 0.89, v: 0.7989 }, { u: 0.885, v: 0.7982 }, { u: 0.88, v: 0.7961 },
+          { u: 0.875, v: 0.7954 }, { u: 0.87, v: 0.801 }, { u: 0.865, v: 0.8059 }, { u: 0.86, v: 0.8052 },
+          { u: 0.855, v: 0.8052 }, { u: 0.85, v: 0.8017 },
+        ],
+      },
     ],
     outlineView: 'top',
     outlineSpin: 0,

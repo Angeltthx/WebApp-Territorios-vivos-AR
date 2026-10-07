@@ -37,7 +37,7 @@ export class TapModel {
     private readonly gestured: () => void = () => {},
   ) {}
 
-  async execute(rawModelId: string): Promise<void> {
+  async execute(rawModelId: string, instance?: number): Promise<void> {
     const session = this.getSession();
     const id = ModelId.of(rawModelId);
     const focused = session.discovery.focused;
@@ -52,7 +52,7 @@ export class TapModel {
 
     const model = await this.models.findById(id);
     if (model === null) return;
-    if (!this.scene.pulse(model.id)) return;
+    if (!this.scene.pulse(model.id, instance)) return;
     this.gestured();
     this.analytics.track('model_tapped', { modelId: model.id.value });
   }
