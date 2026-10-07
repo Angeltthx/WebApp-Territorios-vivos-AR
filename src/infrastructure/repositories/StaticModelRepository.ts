@@ -145,14 +145,14 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
         sentences: [[0, 3.1, 10.3, 12.24], [0]],
       },
-      // La inglesa sigue siendo la grabación ANTERIOR del equipo y no dice lo
-      // mismo que la de Carolina. Sin `sentences`, cambiar de idioma a mitad
-      // de un trozo lo empieza desde el principio (ver resumePoint): con los
-      // inicios de frase de la grabación vieja saltaba a una frase que no era
-      // la misma. Al grabar la nueva, se miden sus frases y se ponen aquí.
+      // La misma ficha en inglés (voz generada, v4), cortada en la frase
+      // equivalente: 17.38 s. Va frase a frase con la de Carolina, así que
+      // cambiar de idioma a mitad sigue en la misma frase (ver resumePoint).
       narrationEn: {
         parts: ['/audio/whale/narration-en-1.mp3', '/audio/whale/narration-en-2.mp3'],
         cues: [{ action: 'call', clip: '/audio/whale/call-1.mp3', holdSeconds: 6 }],
+        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
+        sentences: [[0, 1.63, 8.97, 11.64], [0]],
       },
     },
     source: ModelSource.gltf('/models/Ballena_Ani.glb'),
@@ -273,14 +273,16 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
         sentences: [[0, 2.36, 7.18], [0, 4.6]],
       },
-      // La inglesa sigue siendo la grabación ANTERIOR del equipo y no dice lo
-      // mismo que la de Carolina. Sin `sentences`, cambiar de idioma a mitad
-      // de un trozo lo empieza desde el principio (ver resumePoint): con los
-      // inicios de frase de la grabación vieja saltaba a una frase que no era
-      // la misma. Al grabar la nueva, se miden sus frases y se ponen aquí.
+      // La misma ficha en inglés (voz generada, v4), cortada en la frase
+      // equivalente: 10.27 s. Va frase a frase con la de Carolina, así que
+      // cambiar de idioma a mitad sigue en la misma frase (ver resumePoint).
       narrationEn: {
         parts: ['/audio/bird/narration-en-1.mp3', '/audio/bird/narration-en-2.mp3'],
         cues: [{ action: 'gesture', holdSeconds: 5.4 }],
+        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
+        // «It lives nowhere else on the planet.» va con la frase anterior: en
+        // español es una sola («endémica…, no existe en ningún otro planeta»).
+        sentences: [[0, 1.5, 7.55], [0, 4.29]],
       },
     },
     source: ModelSource.gltf('/models/Pava_Ani.glb'),
@@ -378,14 +380,14 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
         sentences: [[0, 4.16], [0, 2.92, 6.88, 10.56]],
       },
-      // La inglesa sigue siendo la grabación ANTERIOR del equipo y no dice lo
-      // mismo que la de Carolina. Sin `sentences`, cambiar de idioma a mitad
-      // de un trozo lo empieza desde el principio (ver resumePoint): con los
-      // inicios de frase de la grabación vieja saltaba a una frase que no era
-      // la misma. Al grabar la nueva, se miden sus frases y se ponen aquí.
+      // La misma ficha en inglés (voz generada, v4), cortada en la frase
+      // equivalente: 6.57 s. Va frase a frase con la de Carolina, así que
+      // cambiar de idioma a mitad sigue en la misma frase (ver resumePoint).
       narrationEn: {
         parts: ['/audio/crab/narration-en-1.mp3', '/audio/crab/narration-en-2.mp3'],
         cues: [{ action: 'gesture', holdSeconds: 3.1 }],
+        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
+        sentences: [[0, 3], [0, 3.38, 7.8, 12.26]],
       },
     },
     source: ModelSource.gltf('/models/Cangrejo_Ani.glb'),
@@ -502,14 +504,14 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
         sentences: [[0, 2.12], [0, 4.3, 6.5, 8.72, 15.26, 17.64, 22.72, 24.6]],
       },
-      // La inglesa sigue siendo la grabación ANTERIOR del equipo y no dice lo
-      // mismo que la de Carolina. Sin `sentences`, cambiar de idioma a mitad
-      // de un trozo lo empieza desde el principio (ver resumePoint): con los
-      // inicios de frase de la grabación vieja saltaba a una frase que no era
-      // la misma. Al grabar la nueva, se miden sus frases y se ponen aquí.
+      // La misma ficha en inglés (voz generada, v4), cortada en la frase
+      // equivalente: 6.86 s. Va frase a frase con la de Carolina, así que
+      // cambiar de idioma a mitad sigue en la misma frase (ver resumePoint).
       narrationEn: {
         parts: ['/audio/turtle/narration-en-1.mp3', '/audio/turtle/narration-en-2.mp3'],
         cues: [{ action: 'gesture', holdSeconds: 5 }],
+        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
+        sentences: [[0, 1.71], [0, 5.28, 8.47, 10.73, 18.1, 21.01, 25.51, 27.34]],
       },
     },
     source: ModelSource.gltf('/models/Tortuga_Ani.glb'),
