@@ -11,7 +11,7 @@ import { CloseFocus } from '../src/application/use-cases/CloseFocus';
 import { OpenMapText } from '../src/application/use-cases/OpenMapText';
 import { MapText } from '../src/domain/value-objects/MapText';
 import { NUQUI_MAP_TEXTS, StaticMapTextRepository } from '../src/infrastructure/repositories/StaticMapTextRepository';
-import { pickDifferent, Soundscape } from '../src/domain/value-objects/Soundscape';
+import { pickDifferent, resumePoint, Soundscape } from '../src/domain/value-objects/Soundscape';
 import { ArSession } from '../src/domain/entities/ArSession';
 import { ArModel } from '../src/domain/entities/ArModel';
 import { ModelId } from '../src/domain/value-objects/ModelId';
@@ -1955,12 +1955,32 @@ test('en inglés narra la voz inglesa; cambiar de idioma a media narración sigu
   assert.ok(order.includes('/turtle/en1') && !order.includes('/turtle/n1'));
 });
 
+/**
+ * Narraciones cuya versión inglesa todavía NO dice lo mismo que la española:
+ * la española es la de Carolina (lee la ficha) y la inglesa, la grabación
+ * anterior del equipo. Al grabar la inglesa nueva, se quita de aquí y este
+ * test vuelve a exigir que vayan frase a frase.
+ */
+const ENGLISH_NOT_YET_MATCHING = new Set(['whale', 'bird', 'crab', 'turtle']);
+
 test('las frases de cada narración española e inglesa van a la par', () => {
   for (const entry of NARRATED) {
     const soundscape = ArModel.fromSnapshot(entry).soundscape!;
     const es = soundscape.narrationIn('es')!;
     const en = soundscape.narrationIn('en')!;
-    assert.ok(es.sentences && en.sentences, `${entry.id} sin inicios de frase`);
+    assert.ok(es.sentences, `${entry.id} sin inicios de frase en español`);
+    if (ENGLISH_NOT_YET_MATCHING.has(entry.id)) {
+      // Dicen cosas distintas: cambiar de idioma a media frase no puede
+      // saltar a una frase que no es la misma; empieza el trozo de nuevo.
+      // Tener el mismo número de frases por casualidad no basta (la pava
+      // coincidía en el primer trozo): la inglesa vieja no lleva inicios.
+      assert.equal(en.sentences, null, `${entry.id}: la inglesa vieja no puede llevar inicios de frase`);
+      es.sentences.forEach((starts, part) => {
+        assert.equal(resumePoint(es, en, part, starts.at(-1)! + 0.5), 0, `${entry.id}, trozo ${part + 1}`);
+      });
+      continue;
+    }
+    assert.ok(en.sentences, `${entry.id} sin inicios de frase en inglés`);
     es.sentences.forEach((starts, part) => {
       assert.equal(starts.length, en.sentences![part]!.length, `${entry.id}, trozo ${part + 1}: distinto número de frases`);
     });

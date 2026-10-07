@@ -101,7 +101,7 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     name: 'Ballena jorobada',
     species: 'Megaptera novaeangliae / Ballena yubarta o jorobada',
     description: [
-      'Cada año viaja más de 8.000 km desde la Antártida hasta estas aguas tibias ' +
+      'Cada año viaja más de 8.000 kilómetros desde la Antártida hasta estas aguas tibias ' +
         'para tener a sus crías. Nuquí es su sala de parto.',
       'El macho canta bajo el agua durante horas: la melodía más larga del reino ' +
         'animal. Y la compone frente a estas costas.',
@@ -134,21 +134,25 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       // Suena al caer al agua, no al tocarla: antes era uno de sus toques y
       // sonaba antes de saltar.
       splash: '/audio/whale/splash.mp3',
-      // «…El macho puede pasar horas cantando bajo el agua.» → la narración
-      // calla y la ballena CANTA (su canto, no su gesto: su gesto es un
-      // salto) → «Su canto es largo, profundo…». Corte a los 25.21 s.
+      // La narración es la de Carolina, que lee la ficha. «…El macho canta
+      // bajo el agua durante horas, la melodía más larga del reino animal,»
+      // → la narración calla y la ballena CANTA (su canto, no su gesto: su
+      // gesto es un salto) → «y la compone frente a estas costas.». Corte a
+      // los 17.40 s.
       narration: {
         parts: ['/audio/whale/narration-1.mp3', '/audio/whale/narration-2.mp3'],
         cues: [{ action: 'call', clip: '/audio/whale/call-1.mp3', holdSeconds: 6 }],
         // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
-        sentences: [[0, 4.61, 10.25, 13.29, 18.79, 21.91], [0.18, 3.58]],
+        sentences: [[0, 3.1, 10.3, 12.24], [0]],
       },
-      // La misma en inglés, cortada en la frase equivalente (clips.json).
+      // La inglesa sigue siendo la grabación ANTERIOR del equipo y no dice lo
+      // mismo que la de Carolina. Sin `sentences`, cambiar de idioma a mitad
+      // de un trozo lo empieza desde el principio (ver resumePoint): con los
+      // inicios de frase de la grabación vieja saltaba a una frase que no era
+      // la misma. Al grabar la nueva, se miden sus frases y se ponen aquí.
       narrationEn: {
         parts: ['/audio/whale/narration-en-1.mp3', '/audio/whale/narration-en-2.mp3'],
         cues: [{ action: 'call', clip: '/audio/whale/call-1.mp3', holdSeconds: 6 }],
-        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
-        sentences: [[0, 4.01, 10.91, 14.85, 19.23, 22.31], [0, 4.48]],
       },
     },
     source: ModelSource.gltf('/models/Ballena_Ani.glb'),
@@ -228,7 +232,7 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     name: 'Pava del Baudó',
     species: 'Penelope ortoni / Pava del Baudó',
     description: [
-      'Endémica del Chocó biogeográfico: no existe en ningún otro lugar del planeta. ' +
+      'Endémica del Chocó biogeográfico: no existe en ningún otro planeta. ' +
         'Su canto anuncia que el bosque está sano.',
       'Dispersa las semillas de los árboles gigantes al comer sus frutos. ' +
         'Cada vuelo suyo siembra selva.',
@@ -260,22 +264,23 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         '/audio/bird/tap-2.mp3',
       ],
       ambience: '/audio/bird/ambience.mp3',
-      // «Su canto es una de esas señales que indican que el bosque todavía
-      // conserva su equilibrio.» → la pava CANTA: su gesto Sing, con el canto
-      // a los 1.3 s (dura ~4) → «Además, cumple una función…». Corte a los
-      // 18.10 s.
+      // Carolina: «…su canto anuncia que el bosque está sano,» → la pava
+      // CANTA: su gesto Sing, con el canto a los 1.3 s (dura ~4) → «dispersa
+      // las semillas…». Corte a los 9.68 s.
       narration: {
         parts: ['/audio/bird/narration-1.mp3', '/audio/bird/narration-2.mp3'],
         cues: [{ action: 'gesture', holdSeconds: 5.4 }],
         // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
-        sentences: [[0, 7.01, 12.49], [0.09, 3.63, 8.99]],
+        sentences: [[0, 2.36, 7.18], [0, 4.6]],
       },
-      // La misma en inglés, cortada en la frase equivalente (clips.json).
+      // La inglesa sigue siendo la grabación ANTERIOR del equipo y no dice lo
+      // mismo que la de Carolina. Sin `sentences`, cambiar de idioma a mitad
+      // de un trozo lo empieza desde el principio (ver resumePoint): con los
+      // inicios de frase de la grabación vieja saltaba a una frase que no era
+      // la misma. Al grabar la nueva, se miden sus frases y se ponen aquí.
       narrationEn: {
         parts: ['/audio/bird/narration-en-1.mp3', '/audio/bird/narration-en-2.mp3'],
         cues: [{ action: 'gesture', holdSeconds: 5.4 }],
-        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
-        sentences: [[0, 7.81, 12.93], [0.17, 2.83, 8.89]],
       },
     },
     source: ModelSource.gltf('/models/Pava_Ani.glb'),
@@ -364,21 +369,23 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         '/audio/crab/tap-2.mp3',
       ],
       ambience: '/audio/crab/ambience.mp3',
-      // «…unas patas que se confunden con la tierra.» → el cangrejo
-      // CORRETEA con sus patitas (2.7 s) → «Aunque nace en el mar…». Corte
-      // a los 8.91 s.
+      // Carolina: «…Naranja fuego sobre patas de tierra.» → el cangrejo
+      // CORRETEA con sus patitas (2.7 s) → «Nace en el mar…». Corte a los
+      // 6.40 s.
       narration: {
         parts: ['/audio/crab/narration-1.mp3', '/audio/crab/narration-2.mp3'],
         cues: [{ action: 'gesture', holdSeconds: 3.1 }],
         // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
-        sentences: [[0, 3.57], [0.12, 5, 10.18, 13.98, 19.86]],
+        sentences: [[0, 4.16], [0, 2.92, 6.88, 10.56]],
       },
-      // La misma en inglés, cortada en la frase equivalente (clips.json).
+      // La inglesa sigue siendo la grabación ANTERIOR del equipo y no dice lo
+      // mismo que la de Carolina. Sin `sentences`, cambiar de idioma a mitad
+      // de un trozo lo empieza desde el principio (ver resumePoint): con los
+      // inicios de frase de la grabación vieja saltaba a una frase que no era
+      // la misma. Al grabar la nueva, se miden sus frases y se ponen aquí.
       narrationEn: {
         parts: ['/audio/crab/narration-en-1.mp3', '/audio/crab/narration-en-2.mp3'],
         cues: [{ action: 'gesture', holdSeconds: 3.1 }],
-        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
-        sentences: [[0, 2.89], [0.01, 4.65, 9.85, 13.57, 18.17]],
       },
     },
     source: ModelSource.gltf('/models/Cangrejo_Ani.glb'),
@@ -486,21 +493,23 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       ambience: '/audio/turtle/ambience.mp3',
       // El mismo chapuzón que la ballena, más corto y agudo: cuerpo pequeño.
       splash: '/audio/turtle/splash.mp3',
-      // «…puede pasar décadas recorriendo el océano y, aun así, recordar el
-      // camino de regreso.» → la tortuga SALTA fuera del agua y cae, con sus
-      // dos chapuzones (4.8 s) → «Su caparazón también…». Corte a los 11.38 s.
+      // Carolina: «…y siempre recuerda el camino de vuelta.» → la tortuga
+      // SALTA fuera del agua y cae, con sus dos chapuzones (4.8 s) → «Su
+      // caparazón…». Corte a los 6.80 s.
       narration: {
         parts: ['/audio/turtle/narration-1.mp3', '/audio/turtle/narration-2.mp3'],
         cues: [{ action: 'gesture', holdSeconds: 5 }],
         // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
-        sentences: [[0, 3.83], [0.13, 3.01, 12.49, 16.31, 24.69, 32.11, 40.33, 46.17]],
+        sentences: [[0, 2.12], [0, 4.3, 6.5, 8.72, 15.26, 17.64, 22.72, 24.6]],
       },
-      // La misma en inglés, cortada en la frase equivalente (clips.json).
+      // La inglesa sigue siendo la grabación ANTERIOR del equipo y no dice lo
+      // mismo que la de Carolina. Sin `sentences`, cambiar de idioma a mitad
+      // de un trozo lo empieza desde el principio (ver resumePoint): con los
+      // inicios de frase de la grabación vieja saltaba a una frase que no era
+      // la misma. Al grabar la nueva, se miden sus frases y se ponen aquí.
       narrationEn: {
         parts: ['/audio/turtle/narration-en-1.mp3', '/audio/turtle/narration-en-2.mp3'],
         cues: [{ action: 'gesture', holdSeconds: 5 }],
-        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
-        sentences: [[0, 3.55], [0.15, 2.39, 8.63, 11.33, 17.21, 23.07, 30.43, 34.93]],
       },
     },
     source: ModelSource.gltf('/models/Tortuga_Ani.glb'),
