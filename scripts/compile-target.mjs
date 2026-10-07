@@ -25,10 +25,11 @@
  * devuelve entonces exactamente la misma señal que el shader. No se toca
  * MindAR, no pesa un byte más, y no cuesta nada en tiempo de ejecución.
  *
- * Uso:  node scripts/compile-target.mjs <entrada.jpg> <salida.mind>
+ * Uso:  node scripts/compile-target.mjs <entrada.jpg> <salida.mind>   (escribe también <salida.mind>.gz)
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import jpeg from 'jpeg-js';
 import * as tf from '@tensorflow/tfjs';
 import { CompilerBase } from 'mind-ar/src/image-target/compiler-base.js';
@@ -114,5 +115,13 @@ await compiler.compileImageTargets([{ width, height, data }], (percent) => {
 const buffer = compiler.exportData();
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, Buffer.from(buffer));
+// Y comprimido: Netlify sirve el .mind tal cual (binario, sin comprimir) y
+// es lo que más pesa del arranque. MindArRuntime baja el .gz y lo
+// descomprime en el navegador; el .mind queda para los que no saben.
+const gzipped = gzipSync(Buffer.from(buffer), { level: 9 });
+writeFileSync(`${outputPath}.gz`, gzipped);
 
-console.log(`\nEscrito ${outputPath} (${(buffer.byteLength / 1024).toFixed(0)} KB)`);
+console.log(
+  `\nEscrito ${outputPath} (${(buffer.byteLength / 1024).toFixed(0)} KB, ` +
+    `${(gzipped.byteLength / 1024).toFixed(0)} KB comprimido)`,
+);

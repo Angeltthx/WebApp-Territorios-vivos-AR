@@ -18,7 +18,7 @@ import { ModelId } from '@domain/value-objects/ModelId';
 import { Stabilization } from '@domain/value-objects/Stabilization';
 import type { HintSpec, ScenePort } from '@application/ports/ScenePort';
 import type { MindArRuntime } from '../mindar/MindArRuntime';
-import { copyIcon, IconLoader } from './IconLoader';
+import { copyIcon, IconLoader, type LoadedIcon } from './IconLoader';
 import { MarkerPin, STAGE_LOOK_DOWN } from './MarkerPin';
 import { PoseFilter } from './PoseFilter';
 import { addEnvironment, addThreePointLighting } from './ThreePointLighting';
@@ -127,6 +127,11 @@ export class ThreeSceneAdapter implements ScenePort {
   private readonly pins = new Map<string, MarkerPin>();
   /** Cuántos animales hay (no pines): lo que cuenta para "los encontró todos". */
   private modelCount = 0;
+  /** La carga en curso o hecha (ver `preload`); null para volver a empezar. */
+  private loading: { readonly startable: Promise<void>; readonly complete: Promise<void> } | null = null;
+  /** Lo último aplicado, para los modelos que llegan después. */
+  private placement: Placement | null = null;
+  private discovery: Discovery | null = null;
   /** Los ejemplares prestados al primer plano, cada uno en su hueco de la fila. */
   private staged: { readonly pin: MarkerPin; readonly icon: Object3D; readonly slot: Group | null; readonly hit: Mesh | null }[] = [];
   /** Zona de toque de cada ejemplar en el primer plano, cuando hay varios. */
@@ -184,50 +189,101 @@ export class ThreeSceneAdapter implements ScenePort {
     this.stage.add(this.stageHit);
   }
 
-  async preload(models: readonly ArModel[]): Promise<void> {
-    const loader = new IconLoader();
-    const [runtime, loaded] = await Promise.allSettled([
-      this.runtime.prepare(),
-      Promise.all(models.map(async (model) => [model, await loader.load(model)] as const))
-        .finally(() => loader.dispose()),
-    ]);
-    if (loaded.status === 'rejected') throw loaded.reason;
-    const icons = loaded.value;
+  /**
+   * Carga la escena en dos tiempos, y lo que va primero es lo que deja
+   * ARRANCAR: el motor (MindAR) y el mapa (`.mind`). Con eso se monta la
+   * escena y ya se puede pedir la cámara y buscar el mapa. Los modelos se
+   * piden DESPUÉS —no a la vez: en datos móviles compartían la conexión con
+   * el motor y lo retrasaban todos— y cada uno aparece sobre el mapa en
+   * cuanto llega (ver `addPins`).
+   *
+   * Antes el arranque esperaba a los cinco modelos y al decodificador Draco:
+   * 2,3 MB entre el toque y la petición de la cámara. Con 4G lento eran 12 s
+   * con la portada puesta; los modelos solos los necesita el que mira un
+   * animal, no el que todavía está apuntando al mapa.
+   *
+   * `preload` resuelve con TODO cargado (lo esperan las páginas de
+   * verificación y los tests); `whenStartable`, con lo imprescindible.
+   * Las dos comparten la misma carga.
+   */
+  preload(models: readonly ArModel[]): Promise<void> {
+    if (this.loading === null) this.loading = this.load(models);
+    return this.loading.complete;
+  }
 
-    icons.forEach(([model, icon], index) => {
-      // Los compañeros (la rana chica) llevan una copia del icono (ver
-      // copyIcon), hecha ANTES de que el pin del original lo marque.
-      const copies = model.instances.map((instanceModel, instance) =>
-        instance === 0 ? icon : copyIcon(icon, instanceModel.pose.size / model.pose.size));
-      model.instances.forEach((instanceModel, instance) => {
-        const pin = new MarkerPin(instanceModel, copies[instance]!, index + instance * models.length, this.targetAspect, instance);
-        pin.onSplash = (strength) => this.splashListener?.(model.id.value, strength);
-        pin.onTapSound = () => this.tapSoundListener?.(model.id.value);
-        this.overlay.add(pin.group);
-        this.pins.set(instance === 0 ? model.id.value : `${model.id.value}#${instance}`, pin);
-      });
-    });
+  whenStartable(models: readonly ArModel[]): Promise<void> {
+    if (this.loading === null) this.loading = this.load(models);
+    return this.loading.startable;
+  }
+
+  whenLoaded(): Promise<void> {
+    return this.loading?.complete ?? Promise.resolve();
+  }
+
+  private load(models: readonly ArModel[]): { startable: Promise<void>; complete: Promise<void> } {
     this.modelCount = models.length;
-    if (this.mapTexts.length > 0) {
-      this.mapTexts.forEach((text, index) => {
-        const hotspot = new MapTextHotspot(text, this.targetAspect, index + 1);
-        this.overlay.add(hotspot.group);
-        this.hotspots.set(text.id, hotspot);
-      });
-    }
-    if (runtime.status === 'rejected') {
-      this.clear();
-      throw runtime.reason;
-    }
-    try {
+    const startable = this.runtime.prepare().then(() => {
+      if (this.hotspots.size === 0) {
+        this.mapTexts.forEach((text, index) => {
+          const hotspot = new MapTextHotspot(text, this.targetAspect, index + 1);
+          this.overlay.add(hotspot.group);
+          this.hotspots.set(text.id, hotspot);
+        });
+      }
       this.mount();
-    } catch (error) {
-      this.clear();
-      throw error;
+    });
+    const complete = startable.then(async () => {
+      const loader = new IconLoader();
+      try {
+        // En orden de catálogo y a la vez: la ballena —la primera que
+        // enseña el tutorial— es la primera en pedirse.
+        await Promise.all(models.map(async (model, index) => {
+          this.addPins(model, await loader.load(model), index, models.length);
+        }));
+      } finally {
+        loader.dispose();
+      }
+    });
+    const loading = { startable, complete };
+    // Si falla, se olvida para que "Reintentar" vuelva a intentarlo.
+    complete.catch(() => {
+      if (this.loading === loading) this.loading = null;
+    });
+    return loading;
+  }
+
+  /**
+   * Pone sobre el mapa los ejemplares de un animal recién cargado, con lo
+   * que la escena ya sabe: el giro y la escala del usuario, si ya estaba
+   * descubierto y si es el que está en primer plano. Llega cuando llega
+   * —la sesión puede llevar un rato buscando el mapa, o haberlo encontrado—.
+   */
+  private addPins(model: ArModel, icon: LoadedIcon, index: number, count: number): void {
+    // Los compañeros (la rana chica) llevan una copia del icono (ver
+    // copyIcon), hecha ANTES de que el pin del original lo marque.
+    const copies = model.instances.map((instanceModel, instance) =>
+      instance === 0 ? icon : copyIcon(icon, instanceModel.pose.size / model.pose.size));
+    model.instances.forEach((instanceModel, instance) => {
+      const pin = new MarkerPin(instanceModel, copies[instance]!, index + instance * count, this.targetAspect, instance);
+      pin.onSplash = (strength) => this.splashListener?.(model.id.value, strength);
+      pin.onTapSound = () => this.tapSoundListener?.(model.id.value);
+      if (this.placement !== null) {
+        const { yaw, pitch } = this.placement.orientationOf(model.id);
+        pin.applyTransform(this.placement.scale.value, yaw, pitch);
+      }
+      if (this.discovery?.isUnlocked(model.id) === true) pin.setRevealed(true);
+      this.overlay.add(pin.group);
+      this.pins.set(instance === 0 ? model.id.value : `${model.id.value}#${instance}`, pin);
+    });
+    // Si ya estaba en primer plano sin icono que prestar, se monta ahora.
+    if (this.focusedId === model.id.value && this.stagedIcon === null) {
+      this.focusedId = null;
+      this.setFocus(model.id.value);
     }
   }
 
   applyPlacement(placement: Placement): void {
+    this.placement = placement;
     const { offset, scale } = placement;
 
     // El offset mueve la capa entera; los iconos conservan su sitio
@@ -250,6 +306,7 @@ export class ThreeSceneAdapter implements ScenePort {
    * que se descubrió se queda.
    */
   applyDiscovery(discovery: Discovery): void {
+    this.discovery = discovery;
     for (const pin of this.pins.values()) {
       if (discovery.isUnlocked(ModelId.of(pin.modelId))) pin.setRevealed(true);
     }
@@ -527,6 +584,7 @@ export class ThreeSceneAdapter implements ScenePort {
       pin.dispose();
     }
     this.pins.clear();
+    this.loading = null;
     for (const hotspot of this.hotspots.values()) {
       this.overlay.remove(hotspot.group);
       hotspot.dispose();

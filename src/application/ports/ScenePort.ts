@@ -32,6 +32,16 @@ export interface ScenePort {
    */
   preload(models: readonly ArModel[]): Promise<void>;
 
+  /**
+   * Empieza la misma carga que `preload` y resuelve en cuanto se puede
+   * ARRANCAR (el motor y el mapa), sin esperar a los modelos: esos van
+   * apareciendo sobre el mapa según llegan.
+   */
+  whenStartable(models: readonly ArModel[]): Promise<void>;
+
+  /** Cuando la carga lanzada termina del todo (modelos incluidos). */
+  whenLoaded(): Promise<void>;
+
 
   applyPlacement(placement: Placement): void;
 

@@ -34,6 +34,14 @@ export interface TrackingPort {
   prewarm(): void;
 
   /**
+   * Pide la cámara YA, dentro del toque de «Iniciar», sin esperar a que el
+   * motor esté listo: el permiso y el arranque del sensor corren mientras
+   * termina de bajar lo que falte, y `start()` usa ese mismo stream. Si la
+   * sesión no llega a arrancar, `stop()` lo apaga.
+   */
+  requestCamera(): void;
+
+  /**
    * Pide permiso de cámara y arranca el motor de visión.
    * @throws CameraPermissionDeniedError si el usuario rechaza la cámara.
    */

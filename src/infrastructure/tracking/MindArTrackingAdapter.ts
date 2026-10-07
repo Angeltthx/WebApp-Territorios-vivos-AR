@@ -9,6 +9,11 @@ import type { MindArRuntime } from '../mindar/MindArRuntime';
 export class MindArTrackingAdapter implements TrackingPort {
   private readonly handlers = new Map<TrackingEvent, Set<() => void>>();
   private cameraError: unknown = null;
+  /** La cámara pedida al tocar «Iniciar», todavía sin entregar a MindAR. */
+  private earlyCamera: Promise<MediaStream> | null = null;
+  /** El precalentamiento del motor (ver MindArRuntime.warmUp). */
+  private warming: Promise<void> = Promise.resolve();
+  private warmingDone = true;
 
   constructor(private readonly runtime: MindArRuntime) {}
 
@@ -31,10 +36,33 @@ export class MindArTrackingAdapter implements TrackingPort {
 
   prewarm(): void {
     this.runtime.prefetchTarget();
+    this.warmingDone = false;
+    this.warming = this.runtime.warmUp(expectedInputSize(this.cameraSize())).finally(() => {
+      this.warmingDone = true;
+    });
+  }
+
+  requestCamera(): void {
+    const media = navigator.mediaDevices;
+    if (this.earlyCamera !== null || media?.getUserMedia === undefined) return;
+    // Las mismas restricciones que pedirá MindAR (three.js:108-125) con la
+    // resolución de withSharperCamera.
+    this.earlyCamera = media.getUserMedia({
+      audio: false,
+      video: { facingMode: 'environment', ...this.cameraSize() },
+    });
+    // Si lo deniega, el error lo recoge quien lo use; aquí solo se evita el
+    // "rechazo sin atender".
+    this.earlyCamera.catch(() => {});
   }
 
   async start(): Promise<void> {
     this.cameraError = null;
+    // Si el precalentamiento sigue en marcha, se espera: trabaja sobre el
+    // mismo MindAR, y lo que compila es justo lo que el arranque necesita.
+    // Solo si sigue: sin nada que esperar, todo lo de abajo tiene que pasar
+    // en el mismo instante que el toque (ver silenceVideoChrome).
+    if (!this.warmingDone) await this.warming;
     const mindar = this.runtime.init();
     const anchor = this.runtime.anchor;
 
@@ -56,6 +84,7 @@ export class MindArTrackingAdapter implements TrackingPort {
 
     try {
       await starting;
+      rememberInputSize(mindar.video);
     } catch (error) {
       const cause = this.cameraError ?? error;
       if (this.isPermissionError(cause)) throw new CameraPermissionDeniedError();
@@ -75,6 +104,11 @@ export class MindArTrackingAdapter implements TrackingPort {
   }
 
   async stop(): Promise<void> {
+    // Una cámara pedida al tocar y que no llegó a usarse no puede quedarse
+    // encendida.
+    const early = this.earlyCamera;
+    this.earlyCamera = null;
+    void early?.then((stream) => stream.getTracks().forEach((track) => track.stop())).catch(() => {});
     if (!this.runtime.isInitialized) return;
     this.runtime.setAnchorVisible(false);
     this.runtime.stopLoop();
@@ -157,6 +191,15 @@ export class MindArTrackingAdapter implements TrackingPort {
     if (media === undefined || original === undefined) return run();
 
     media.getUserMedia = (constraints?: MediaStreamConstraints) => {
+      // La que se pidió al tocar «Iniciar»: ya concedida, o a punto.
+      const early = this.earlyCamera;
+      this.earlyCamera = null;
+      if (early !== null) {
+        return early.catch((error: unknown) => {
+          this.cameraError = error;
+          throw error;
+        });
+      }
       const video = constraints?.video;
       const enriched: MediaStreamConstraints =
         typeof video === 'object'
@@ -291,4 +334,57 @@ export class MindArTrackingAdapter implements TrackingPort {
       error.name === 'SecurityError'
     );
   }
+}
+
+/** Dónde se recuerda el tamaño real del fotograma de la cámara. */
+const INPUT_SIZE_KEY = 'territorios-vivos:camara';
+
+/**
+ * Con qué tamaño va a llegar el fotograma de la cámara, para precalentar el
+ * motor con ese mismo tamaño (TensorFlow guarda sus programas por forma: con
+ * otro tamaño, se compilarían de nuevo al arrancar).
+ *
+ * El de la última vez, si lo hay. Si no, lo que se pide (1280×720 o
+ * 960×540) en la orientación de la pantalla: un teléfono en vertical da el
+ * fotograma en vertical.
+ */
+export function expectedInputSize(
+  requested: MediaTrackConstraints,
+  stored: string | null = readStored(),
+  portrait = window.innerHeight > window.innerWidth,
+): { width: number; height: number } {
+  const remembered = parseSize(stored);
+  if (remembered !== null) return remembered;
+  const long = idealOf(requested.width) ?? 1280;
+  const short = idealOf(requested.height) ?? 720;
+  return portrait ? { width: short, height: long } : { width: long, height: short };
+}
+
+function rememberInputSize(video: HTMLVideoElement | undefined): void {
+  if (video === undefined || video.videoWidth === 0 || video.videoHeight === 0) return;
+  try {
+    localStorage.setItem(INPUT_SIZE_KEY, `${video.videoWidth}x${video.videoHeight}`);
+  } catch {
+    // Sin almacenamiento, la próxima vez se vuelve a suponer.
+  }
+}
+
+function readStored(): string | null {
+  try {
+    return localStorage.getItem(INPUT_SIZE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function parseSize(value: string | null): { width: number; height: number } | null {
+  const match = /^(\d{2,5})x(\d{2,5})$/.exec(value ?? '');
+  if (match === null) return null;
+  return { width: Number(match[1]), height: Number(match[2]) };
+}
+
+function idealOf(value: MediaTrackConstraints['width']): number | null {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'object' && value !== null && typeof value.ideal === 'number') return value.ideal;
+  return null;
 }

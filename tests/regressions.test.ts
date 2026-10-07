@@ -80,7 +80,7 @@ function harness() {
   const handlers = new Map<string, Set<() => void>>();
   const calls = { starts: 0, stops: 0, loads: 0, unlocks: 0 };
   const tracking = {
-    isSupported: async () => true, prewarm() {}, confirmAnchor() {},
+    isSupported: async () => true, prewarm() {}, requestCamera() {}, confirmAnchor() {},
     start: async () => { calls.starts++; },
     stop: async () => { calls.stops++; },
     on(event: string, handler: () => void) {
@@ -91,6 +91,8 @@ function harness() {
   };
   const scene = {
     preload: async () => { calls.loads++; },
+    whenStartable(models: readonly ArModel[]) { return this.preload(models); },
+    whenLoaded: async () => {},
     applyPlacement() {}, setStabilization() {}, setHint() {},
     applyDiscovery() {}, pulse: () => true, clear() {}, dispose() {},
   };
