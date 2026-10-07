@@ -192,6 +192,21 @@ Object.assign(window, {
   // Para afinar la iluminación desde la consola sin recargar:
   // `verifyScene.getObjectByName('contraluz').intensity = 3; stepVerify(0)`.
   verifyScene: scene,
+  // Calibrar los efectos de partículas: por animal, cuántos huesos casaron,
+  // cuántas partículas hay vivas y la mayor velocidad de hueso vista (en
+  // tamaños del animal por segundo). `particleStats(true)` la pone a cero.
+  particleStats: (reset = false) => pins.map((pin) => ({
+    ...(reset ? (pin.resetParticleStats(), {}) : {}),
+    id: pin.instance === 0 ? pin.modelId : `${pin.modelId}#${pin.instance}`,
+    effects: pin.particleStats,
+  })),
+  // Los nombres de los nodos de un animal tal como los deja three, para
+  // escribir los `from` del catálogo: `boneNames('frog')`.
+  boneNames: (id: string) => {
+    const names: string[] = [];
+    pins.find((pin) => pin.modelId === id)?.group.traverse((node) => { if (node.type === 'Bone') names.push(node.name); });
+    return names;
+  },
   measureIcons: () => pins.map((pin) => {
     let icon: Object3D | null = null;
     pin.group.traverse((node) => {

@@ -2288,3 +2288,63 @@ test('los modelos que llegan tarde salen con el giro, lo descubierto y el primer
   assert.ok(stage.children.some((child) => child.userData['modelId'] === 'whale'), 'no pasó al primer plano');
   adapter.clear();
 });
+
+test('los efectos de partículas salen del movimiento de sus huesos, no de la animación quieta', async () => {
+  const { AnimalParticles } = await import('../src/infrastructure/rendering/AnimalParticles');
+  const { ParticleEffect } = await import('../src/domain/value-objects/ParticleEffect');
+  assert.throws(() => ParticleEffect.of({ kind: 'confeti' as never, from: ['Foot'] }));
+  assert.throws(() => ParticleEffect.of({ kind: 'sand', from: [] }));
+  // Un "animal" con un pie (y su control IK, que NO debe contar).
+  const parent = new Group();
+  const icon = new Group();
+  const foot = new Object3D();
+  foot.name = 'RIG_CangrejoLeftFoot_F_jnt';
+  const control = new Object3D();
+  control.name = 'RIG_CangrejoLeftFoot_F_jnt_main';
+  icon.add(foot, control);
+  parent.add(icon);
+  const sand = ParticleEffect.of({ kind: 'sand', from: ['Foot_F_jnt'], threshold: 0.5, rate: 20 });
+  const particles = new AnimalParticles([sand], icon);
+  particles.update(1 / 60, 1, true);
+  assert.equal(particles.group.parent, parent, 'vive al lado del icono');
+  assert.equal(particles.stats[0]!.bones, 1, 'casa por el final del nombre, sin el control');
+  // Quieto: nada.
+  for (let i = 0; i < 60; i += 1) particles.update(1 / 60, 1, true);
+  assert.equal(particles.stats[0]!.emitted, 0);
+  // El pie se mueve deprisa (2 tamaños/s): suelta arena.
+  for (let i = 0; i < 30; i += 1) {
+    foot.position.x += 2 / 60;
+    particles.update(1 / 60, 1, true);
+  }
+  assert.ok(particles.stats[0]!.emitted > 5, `soltó ${particles.stats[0]!.emitted}`);
+  assert.ok(particles.stats[0]!.live > 0);
+  // Mientras es un contorno no suelta, aunque se mueva.
+  particles.resetStats();
+  for (let i = 0; i < 30; i += 1) {
+    foot.position.x += 2 / 60;
+    particles.update(1 / 60, 1, false);
+  }
+  assert.equal(particles.stats[0]!.emitted, 0);
+  // La arena cae y se acaba: al rato no queda nada.
+  for (let i = 0; i < 120; i += 1) particles.update(1 / 60, 1, false);
+  assert.equal(particles.stats[0]!.live, 0);
+  // Si el icono se muda (al primer plano), el grupo se muda con él y empieza de cero.
+  const stage = new Group();
+  stage.add(icon);
+  particles.update(1 / 60, 1, true);
+  assert.equal(particles.group.parent, stage);
+  // Nada de esto se puede tocar.
+  assert.deepEqual(new Raycaster().intersectObject(particles.group, true), []);
+  particles.dispose();
+});
+
+test('cada animal del catálogo tiene su efecto y sus huesos existen en el modelo', () => {
+  const expected: Record<string, string> = { whale: 'bubbles', bird: 'leaves', crab: 'sand', turtle: 'bubbles', frog: 'dew' };
+  for (const entry of NUQUI_CATALOG) {
+    const model = ArModel.fromSnapshot(entry);
+    assert.equal(model.particles[0]?.kind, expected[entry.id], `${entry.id}`);
+    assert.ok(model.particles[0]!.threshold < 10, `${entry.id}: umbral sin calibrar`);
+    // La rana chica hereda el efecto.
+    for (const companion of model.companions) assert.deepEqual(companion.particles, model.particles);
+  }
+});

@@ -24,6 +24,7 @@ import { SmokePuff } from './SmokePuff';
 import { ICON_TARGET_SIZE, type ClipSplash, type LoadedIcon } from './IconLoader';
 import { IconAnimator } from './IconAnimator';
 import { TapChoreography } from './TapChoreography';
+import { AnimalParticles } from './AnimalParticles';
 import { WaterSplash } from './WaterSplash';
 
 /**
@@ -236,6 +237,8 @@ export class MarkerPin {
   private readonly outlineMaterial: MeshBasicMaterial;
   private readonly smoke = new SmokePuff();
   private readonly splash: WaterSplash | null;
+  /** Hojas, arena, rocío o burbujas que salen de sus movimientos (ver AnimalParticles). */
+  private readonly particles: AnimalParticles | null;
   private readonly icon: Object3D;
   private readonly animator: IconAnimator;
   private readonly choreography: TapChoreography;
@@ -336,6 +339,7 @@ export class MarkerPin {
     this.idleTilt = model.id.value === 'bird' ? 0.05 : model.id.value === 'crab' ? 0.02 : 0.03;
     // Solo salpica lo que vive en el agua y hace algo con ella al tocarlo.
     this.splash = tapMove === 'breach' || tapMove === 'leap' ? new WaterSplash() : null;
+    this.particles = model.particles.length > 0 ? new AnimalParticles(model.particles, this.icon) : null;
 
     const { x, y } = anchorPositionOf(model.spot, targetAspect);
     this.group.position.set(x, y, 0);
@@ -652,9 +656,22 @@ export class MarkerPin {
     this.outline.scale.setScalar(1 + OUTLINE_PULSE_SCALE * this.outlinePulse);
 
     this.sync();
+    // Después de colocarlo: los huesos ya están donde se van a ver. Solo
+    // cuando ya es un animal —un contorno no levanta arena—.
+    this.particles?.update(deltaSeconds, this.reach * this.icon.scale.x, this.revealProgress >= 1);
+  }
+
+  /** Para calibrar los umbrales en /verify.html (ver ParticleEffect). */
+  get particleStats(): { kind: string; bones: number; live: number; peak: number; emitted: number }[] {
+    return this.particles?.stats ?? [];
+  }
+
+  resetParticleStats(): void {
+    this.particles?.resetStats();
   }
 
   dispose(): void {
+    this.particles?.dispose();
     this.animator.dispose();
     this.smoke.dispose();
     if (this.splash !== null) {

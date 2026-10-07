@@ -155,6 +155,12 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         sentences: [[0, 1.63, 8.97, 11.64], [0]],
       },
     },
+    // PARTÍCULAS: burbujas de la cola al nadar y al zambullirse (nada bajo el agua). Salen del movimiento de esos
+    // huesos, sin tocar la animación (ver ParticleEffect). Umbral y ritmo,
+    // calibrados en /verify.html con particleStats().
+    particles: [
+      { kind: 'bubbles', from: ['Tail4'], threshold: 0.12, rate: 40, scale: 0.5 },
+    ],
     source: ModelSource.gltf('/models/Ballena_Ani.glb'),
     animation: {
       // Nada siempre. Al tocarla salta fuera del agua, gira sobre el lomo,
@@ -285,6 +291,12 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         sentences: [[0, 1.5, 7.55], [0, 4.29]],
       },
     },
+    // PARTÍCULAS: hojas que se desprenden cuando sacude la cabeza y las alas al cantar. Salen del movimiento de esos
+    // huesos, sin tocar la animación (ver ParticleEffect). Umbral y ritmo,
+    // calibrados en /verify.html con particleStats().
+    particles: [
+      { kind: 'leaves', from: ['Head_jnt', 'Wing_03_jnt'], threshold: 0.2, rate: 220 },
+    ],
     source: ModelSource.gltf('/models/Pava_Ani.glb'),
     animation: {
       // Siempre en Idle (más el balanceo de MarkerPin, porque Idle apenas
@@ -390,6 +402,12 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         sentences: [[0, 3], [0, 3.38, 7.8, 12.26]],
       },
     },
+    // PARTÍCULAS: arena que saltan sus patas con cada paso. Salen del movimiento de esos
+    // huesos, sin tocar la animación (ver ParticleEffect). Umbral y ritmo,
+    // calibrados en /verify.html con particleStats().
+    particles: [
+      { kind: 'sand', from: ['Foot_B_jnt', 'Foot_F_jnt', 'Foot_M_jnt'], threshold: 0.45, rate: 100 },
+    ],
     source: ModelSource.gltf('/models/Cangrejo_Ani.glb'),
     animation: {
       // Ratos quieto y ratos caminando. Al tocarlo, dos vueltas de Walk a
@@ -514,6 +532,12 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         sentences: [[0, 1.71], [0, 5.28, 8.47, 10.73, 18.1, 21.01, 25.51, 27.34]],
       },
     },
+    // PARTÍCULAS: burbujas de las aletas delanteras al nadar (nada bajo el agua). Salen del movimiento de esos
+    // huesos, sin tocar la animación (ver ParticleEffect). Umbral y ritmo,
+    // calibrados en /verify.html con particleStats().
+    particles: [
+      { kind: 'bubbles', from: ['LeftHand', 'RightHand'], threshold: 0.5, rate: 10 },
+    ],
     source: ModelSource.gltf('/models/Tortuga_Ani.glb'),
     animation: {
       // Nada y descansa. Al tocarla, sin dejar de nadar (dos vueltas de
@@ -613,6 +637,12 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       ],
       ambience: '/audio/frog/ambience.mp3',
     },
+    // PARTÍCULAS: gotas de rocío de las hojas al impulsarse y al caer del salto. Salen del movimiento de esos
+    // huesos, sin tocar la animación (ver ParticleEffect). Umbral y ritmo,
+    // calibrados en /verify.html con particleStats().
+    particles: [
+      { kind: 'dew', from: ['RanaLeftToe_End', 'RanaRightToe_End'], threshold: 1.6, rate: 30 },
+    ],
     source: ModelSource.gltf('/models/Rana_Ani.glb'),
     animation: {
       // A su aire (`wander`): Walk —unos pasos (0–1.25 s) y un rato
