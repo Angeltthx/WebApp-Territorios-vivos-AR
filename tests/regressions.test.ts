@@ -11,7 +11,7 @@ import { CloseFocus } from '../src/application/use-cases/CloseFocus';
 import { OpenMapText } from '../src/application/use-cases/OpenMapText';
 import { MapText } from '../src/domain/value-objects/MapText';
 import { NUQUI_MAP_TEXTS, StaticMapTextRepository } from '../src/infrastructure/repositories/StaticMapTextRepository';
-import { pickDifferent, Soundscape } from '../src/domain/value-objects/Soundscape';
+import { pickDifferent, resumePoint, Soundscape } from '../src/domain/value-objects/Soundscape';
 import { ArSession } from '../src/domain/entities/ArSession';
 import { ArModel } from '../src/domain/entities/ArModel';
 import { ModelId } from '../src/domain/value-objects/ModelId';
@@ -1955,12 +1955,33 @@ test('en inglés narra la voz inglesa; cambiar de idioma a media narración sigu
   assert.ok(order.includes('/turtle/en1') && !order.includes('/turtle/n1'));
 });
 
+/**
+ * Narraciones cuya versión inglesa todavía NO dice lo mismo que la española
+ * (se grabó una y no la otra). Mientras estén aquí, la inglesa no lleva
+ * inicios de frase y cambiar de idioma empieza el trozo de nuevo; al
+ * grabarla, se quita de aquí y este test vuelve a exigir que vayan frase a
+ * frase.
+ */
+const ENGLISH_NOT_YET_MATCHING = new Set<string>();
+
 test('las frases de cada narración española e inglesa van a la par', () => {
   for (const entry of NARRATED) {
     const soundscape = ArModel.fromSnapshot(entry).soundscape!;
     const es = soundscape.narrationIn('es')!;
     const en = soundscape.narrationIn('en')!;
-    assert.ok(es.sentences && en.sentences, `${entry.id} sin inicios de frase`);
+    assert.ok(es.sentences, `${entry.id} sin inicios de frase en español`);
+    if (ENGLISH_NOT_YET_MATCHING.has(entry.id)) {
+      // Dicen cosas distintas: cambiar de idioma a media frase no puede
+      // saltar a una frase que no es la misma; empieza el trozo de nuevo.
+      // Tener el mismo número de frases por casualidad no basta (la pava
+      // coincidía en el primer trozo): la inglesa vieja no lleva inicios.
+      assert.equal(en.sentences, null, `${entry.id}: la inglesa vieja no puede llevar inicios de frase`);
+      es.sentences.forEach((starts, part) => {
+        assert.equal(resumePoint(es, en, part, starts.at(-1)! + 0.5), 0, `${entry.id}, trozo ${part + 1}`);
+      });
+      continue;
+    }
+    assert.ok(en.sentences, `${entry.id} sin inicios de frase en inglés`);
     es.sentences.forEach((starts, part) => {
       assert.equal(starts.length, en.sentences![part]!.length, `${entry.id}, trozo ${part + 1}: distinto número de frases`);
     });
@@ -2177,4 +2198,22 @@ test('en primer plano salen las dos ranas en fila, la chica más chica, y salta 
   adapter.applyDiscovery(discovery.focus(null));
   assert.equal(stage.children.filter((child) => child.userData['instance'] !== undefined).length, 0);
   adapter.clear();
+});
+
+test('cambiar de idioma a media narración sigue en la MISMA frase, en los dos sentidos', () => {
+  for (const entry of NARRATED) {
+    if (ENGLISH_NOT_YET_MATCHING.has(entry.id)) continue;
+    const soundscape = ArModel.fromSnapshot(entry).soundscape!;
+    const es = soundscape.narrationIn('es')!;
+    const en = soundscape.narrationIn('en')!;
+    es.sentences!.forEach((starts, part) => {
+      starts.forEach((start, sentence) => {
+        // A media frase en español → al principio de esa frase en inglés…
+        const inEnglish = resumePoint(es, en, part, start + 0.4);
+        assert.equal(inEnglish, en.sentences![part]![sentence], `${entry.id}, trozo ${part + 1}, frase ${sentence + 1}`);
+        // …y de vuelta, al principio de la misma en español.
+        assert.equal(resumePoint(en, es, part, inEnglish + 0.4), start, `${entry.id}, vuelta, frase ${sentence + 1}`);
+      });
+    });
+  }
 });

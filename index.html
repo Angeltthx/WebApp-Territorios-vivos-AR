@@ -749,7 +749,16 @@
         text-shadow: 0 1px 12px rgba(0, 0, 0, 0.95);
       }
       #focus-species:empty { display: none; }
-      #focus-info p { margin: 0; }
+      /* Justificado, como los textos del mapa: los dos bordes rectos, la
+         última línea a la izquierda y guiones (del idioma de la página) para
+         que una columna tan estrecha no abra huecos entre palabras. */
+      #focus-info p {
+        margin: 0;
+        text-align: justify;
+        text-align-last: left;
+        -webkit-hyphens: auto;
+        hyphens: auto;
+      }
       #focus-info p + p { margin-top: 0.7em; }
       #focus-info {
         margin: 0;
