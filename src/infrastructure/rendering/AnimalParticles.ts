@@ -1,5 +1,4 @@
 import {
-  AdditiveBlending,
   BufferGeometry,
   Color,
   DataTexture,
@@ -8,7 +7,6 @@ import {
   InstancedMesh,
   Matrix4,
   MeshStandardMaterial,
-  NormalBlending,
   Object3D,
   Quaternion,
   RGBAFormat,
@@ -21,15 +19,15 @@ import {
 import type { ParticleEffect, ParticleKind } from '@domain/value-objects/ParticleEffect';
 
 /**
- * Las partículas que acompañan los movimientos de un animal: hojas, polvo
- * de arena o luciérnagas (ver ParticleEffect).
+ * Las partículas que acompañan los movimientos de un animal: hojas o granos
+ * de arena (ver ParticleEffect).
  *
  * No toca las animaciones. Cada fotograma mira dónde están los huesos del
  * catálogo y, si uno se mueve más deprisa que su umbral, suelta partículas
  * en proporción a ese exceso —con una pausa mínima entre una y otra, para
  * que acompañen y no tapen—. Así salen del gesto mismo: la pava sacude la
- * cabeza y le caen unas hojas, cada paso del cangrejo levanta su polvito de
- * arena, la rana salta y se espantan unas luciérnagas.
+ * cabeza y le caen unas hojas; el cangrejo corretea deprisa y sus patas
+ * levantan unos granos de arena.
  *
  * Viven al lado del icono, en su mismo padre (`lift` sobre el mapa, el
  * escenario o su hueco en el primer plano). En los dos sitios +Y es el
@@ -37,11 +35,11 @@ import type { ParticleEffect, ParticleKind } from '@domain/value-objects/Particl
  * está; si el icono cambia de padre, el grupo se muda con él y empieza de
  * cero. Las medidas van en tamaños del animal, como el salpicón.
  *
- * Hubo una primera versión con burbujas para la tortuga y la ballena, granos
- * facetados para el cangrejo y gotas de rocío para la rana: las burbujas
- * sobraban (las dos ya estaban bien), los granos parecían piedritas y no
- * arena, y el rocío se leía como más burbujas. Y la pava soltaba una lluvia
- * de hojas que tapaba su canto.
+ * Lo que se probó y no quedó: burbujas en la tortuga y la ballena (ya
+ * estaban bien), granos grandes y facetados en el cangrejo (piedritas, no
+ * arena), nubes de polvo (demasiado), gotas de rocío y luego luciérnagas en
+ * la rana (ninguna convenció: la rana va sin efecto) y una lluvia de hojas
+ * en la pava que tapaba su canto.
  */
 
 interface KindSpec {
@@ -64,8 +62,10 @@ interface KindSpec {
   readonly sway: number;
   /** Giro, en vueltas por segundo. */
   readonly spin: number;
-  /** Cuánto crece a lo largo de su vida (el polvo se abre). */
+  /** Cuánto crece a lo largo de su vida. */
   readonly grow: number;
+  /** Si se posa al tocar el suelo (la pata más baja): se queda quieta y se apaga. */
+  readonly lands: boolean;
   /** Pausa mínima entre dos partículas del mismo hueso, en segundos. */
   readonly cooldown: number;
   /** Cuántas salen de golpe cada vez (el polvo, en varias nubecillas). */
@@ -76,29 +76,22 @@ interface KindSpec {
 const SPECS: Record<ParticleKind, KindSpec> = {
   // Pocas, desde arriba, lentas: como si al moverse rozara las ramas.
   leaves: {
-    capacity: 10, size: [0.1, 0.15], life: [3, 4], gravity: -0.35, drag: 2.4,
+    capacity: 14, size: [0.1, 0.15], life: [3, 4], gravity: -0.35, drag: 2.4,
     up: [-0.05, 0.05], out: [0.05, 0.15], spread: 0.3, above: [0.35, 0.7],
-    sway: 0.3, spin: 0.6, grow: 0, cooldown: 0.8, burst: 1,
+    sway: 0.3, spin: 0.6, grow: 0, lands: false, cooldown: 0.6, burst: 2,
     colors: [0x4f8a2c, 0x6aa335, 0x3d7a33, 0x8fae3f],
   },
-  // Nubecillas de polvo de arena a ras de suelo, que se abren y se van.
+  // Granitos de arena: saltan de la pata en un arco corto y caen al suelo.
   sand: {
-    capacity: 36, size: [0.13, 0.2], life: [0.7, 1.1], gravity: 0.05, drag: 3.5,
-    up: [0.05, 0.18], out: [0.15, 0.35], spread: 0.04, above: [0, 0.02],
-    sway: 0, spin: 0.1, grow: 1.4, cooldown: 0.22, burst: 2,
-    colors: [0xd8b47a, 0xe6c88f, 0xc79d5e],
-  },
-  // Luciérnagas: suben despacio, vagan y parpadean.
-  fireflies: {
-    capacity: 14, size: [0.1, 0.15], life: [2.8, 4], gravity: 0.12, drag: 1.2,
-    up: [0.2, 0.45], out: [0.15, 0.4], spread: 0.12, above: [0.05, 0.2],
-    sway: 0.35, spin: 0, grow: 0, cooldown: 0.5, burst: 1,
-    colors: [0xfff3a0, 0xe6ff8a, 0xffe27a],
+    capacity: 60, size: [0.026, 0.042], life: [1.2, 1.6], gravity: -3.6, drag: 0.6,
+    up: [0.7, 1.25], out: [0.2, 0.45], spread: 0.03, above: [0, 0.01],
+    sway: 0, spin: 0, grow: 0, lands: true, cooldown: 0.2, burst: 3,
+    colors: [0xd3ab70, 0xe2c38c, 0xbf9458, 0xe9d2a4],
   },
 };
 
 /** Las que se dibujan como sprite (siempre de cara a la cámara). */
-const SPRITE_KINDS: ReadonlySet<ParticleKind> = new Set(['sand', 'fireflies']);
+const SPRITE_KINDS: ReadonlySet<ParticleKind> = new Set(['sand']);
 
 /** Una hoja: dos curvas que se juntan en punta, un poco combada. */
 function leafGeometry(): BufferGeometry {
@@ -118,9 +111,9 @@ function leafGeometry(): BufferGeometry {
 
 /**
  * Textura de un disco suave, hecha a mano (sin canvas, para que funcione
- * también fuera del navegador). `core`: cuánto del centro es pleno —el
- * polvo es una nube difusa, la luciérnaga un punto brillante con halo—.
- * `grain`: moteado, para que el polvo no sea un círculo liso.
+ * también fuera del navegador). `core`: cuánto del centro es pleno; un
+ * grano de arena es casi todo grano, con el borde apenas suavizado.
+ * `grain`: moteado, para que no sea un círculo liso.
  */
 function softTexture(core: number, grain: number): DataTexture {
   const size = 64;
@@ -150,6 +143,7 @@ interface Particle {
   age: number;
   life: number;
   size: number;
+  ground: number;
   readonly position: Vector3;
   readonly velocity: Vector3;
   readonly axis: Vector3;
@@ -159,6 +153,9 @@ interface Particle {
 }
 
 const random = (range: readonly [number, number]): number => range[0] + Math.random() * (range[1] - range[0]);
+
+/** Lo que tarda en apagarse una partícula que se posa en el suelo. */
+const SETTLE_SECONDS = 0.3;
 
 /** Como mucho, tantos huesos sueltan por fotograma y efecto. */
 const MAX_PER_FRAME = 4;
@@ -198,14 +195,13 @@ class Emitter {
     this.quiet = this.bones.map(() => Infinity);
     this.debts = this.bones.map(() => 0);
     this.particles = Array.from({ length: this.spec.capacity }, () => ({
-      alive: false, age: 0, life: 1, size: 0, angle: 0, spin: 0, phase: 0,
+      alive: false, age: 0, life: 1, size: 0, ground: 0, angle: 0, spin: 0, phase: 0,
       position: new Vector3(), velocity: new Vector3(), axis: new Vector3(0, 1, 0),
     }));
 
     if (SPRITE_KINDS.has(effect.kind)) {
       // Cada sprite con su material: su opacidad es suya (se desvanece sola).
-      const glow = effect.kind === 'fireflies';
-      const texture = glow ? softTexture(0.22, 0) : softTexture(0.38, 0.3);
+      const texture = softTexture(0.55, 0.2);
       this.mesh = null;
       this.sprites = this.particles.map((_, index) => {
         const sprite = new Sprite(new SpriteMaterial({
@@ -214,7 +210,6 @@ class Emitter {
           transparent: true,
           opacity: 0,
           depthWrite: false,
-          blending: glow ? AdditiveBlending : NormalBlending,
         }));
         sprite.visible = false;
         sprite.raycast = () => {};
@@ -266,15 +261,26 @@ class Emitter {
     this.hideAll();
   }
 
-  update(dt: number, parent: Object3D, unit: number, emitting: boolean): void {
+  update(dt: number, parent: Object3D, unit: number, emitting: boolean, gesturing: boolean): void {
     if (unit <= 0) return;
     for (let index = 0; index < this.quiet.length; index += 1) this.quiet[index]! += dt;
-    if (emitting && dt > 0) this.emitFromBones(dt, parent, unit);
+    const now = emitting && (this.effect.during === 'always' || gesturing);
+    if (now && dt > 0) this.emitFromBones(dt, parent, unit);
+    // Fuera de su momento, se olvidan las posiciones: al volver, la primera
+    // distancia no es una velocidad.
+    else if (!now) this.forget();
     this.simulate(dt, unit);
   }
 
   private emitFromBones(dt: number, parent: Object3D, unit: number): void {
     const { threshold, rate } = this.effect;
+    // El suelo: el hueso más bajo ahora mismo (la pata apoyada). Medirlo
+    // desde la pata que suelta —levantada— hacía morir la arena en el aire.
+    let ground = Infinity;
+    for (const bone of this.bones) {
+      bone.getWorldPosition(this.here);
+      ground = Math.min(ground, parent.worldToLocal(this.here).y);
+    }
     let spawned = 0;
     this.bones.forEach((bone, index) => {
       bone.getWorldPosition(this.here);
@@ -293,7 +299,7 @@ class Emitter {
         if (this.debts[index]! >= 1 && this.quiet[index]! >= this.spec.cooldown && spawned < MAX_PER_FRAME) {
           this.debts[index] = 0;
           this.quiet[index] = 0;
-          for (let i = 0; i < this.spec.burst; i += 1) this.spawn(this.here, unit);
+          for (let i = 0; i < this.spec.burst; i += 1) this.spawn(this.here, unit, ground);
           spawned += 1;
         }
       }
@@ -301,7 +307,7 @@ class Emitter {
     });
   }
 
-  private spawn(origin: Vector3, unit: number): void {
+  private spawn(origin: Vector3, unit: number, ground: number): void {
     this.emitted += 1;
     const particle = this.particles[this.next]!;
     this.next = (this.next + 1) % this.particles.length;
@@ -316,6 +322,7 @@ class Emitter {
       origin.y + random(spec.above) * unit,
       origin.z + (Math.random() - 0.5) * 2 * spec.spread * unit,
     );
+    particle.ground = Math.min(origin.y, ground) - 0.02 * unit;
     const out = random(spec.out) * unit;
     particle.velocity.set(Math.cos(angle) * out, random(spec.up) * unit, Math.sin(angle) * out);
     particle.axis.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
@@ -335,11 +342,18 @@ class Emitter {
       particle.velocity.multiplyScalar(Math.exp(-spec.drag * dt));
       particle.position.addScaledVector(particle.velocity, dt);
       if (spec.sway > 0) {
-        // Hojas y luciérnagas no van en línea recta: se mecen, vagan.
+        // Las hojas no caen en línea recta: se mecen.
         particle.position.x += Math.sin(particle.age * 2.7 + particle.phase) * spec.sway * unit * dt;
         particle.position.z += Math.cos(particle.age * 1.9 + particle.phase) * spec.sway * 0.7 * unit * dt;
       }
       particle.angle += particle.spin * dt;
+      if (spec.lands && particle.velocity.y < 0 && particle.position.y < particle.ground) {
+        // Se posa: queda en el suelo y se apaga en un momento, como la arena
+        // que cae sobre la arena. Morir al tocarlo la hacía casi invisible.
+        particle.position.y = particle.ground;
+        particle.velocity.set(0, 0, 0);
+        particle.life = Math.min(particle.life, particle.age + SETTLE_SECONDS);
+      }
       if (particle.age >= particle.life) {
         particle.alive = false;
         this.hide(index);
@@ -368,14 +382,8 @@ class Emitter {
     const size = particle.size * (1 + spec.grow * t);
     sprite.scale.set(size, size, 1);
     material.rotation = particle.angle;
-    if (this.effect.kind === 'fireflies') {
-      // Parpadean, se encienden al salir y se apagan al final.
-      const blink = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(particle.age * 7 + particle.phase));
-      material.opacity = blink * Math.min(1, t / 0.12, (1 - t) / 0.3);
-    } else {
-      // El polvo nace denso y se aclara mientras se abre.
-      material.opacity = 0.85 * Math.min(1, t / 0.08) * (1 - t) ** 1.5;
-    }
+    // El grano se ve entero mientras vuela y solo se apaga al final.
+    material.opacity = 0.95 * Math.min(1, t / 0.05, (1 - t) / 0.2);
   }
 
   private hide(index: number): void {
@@ -419,9 +427,10 @@ export class AnimalParticles {
   /**
    * Un fotograma. `unit`: el tamaño del animal en el espacio de su padre (lo
    * mismo que mide el salpicón). `emitting`: si puede soltar —un animal que
-   * aún es un contorno no suelta nada—.
+   * aún es un contorno no suelta nada—. `gesturing`: si está haciendo el
+   * gesto del toque (para los efectos que solo salen entonces).
    */
-  update(dt: number, unit: number, emitting: boolean): void {
+  update(dt: number, unit: number, emitting: boolean, gesturing = false): void {
     const parent = this.icon.parent;
     if (parent === null) return;
     if (this.group.parent !== parent) {
@@ -434,7 +443,7 @@ export class AnimalParticles {
     // es una velocidad.
     if (dt > 0.2) for (const emitter of this.emitters) emitter.forget();
     this.icon.updateWorldMatrix(true, true);
-    for (const emitter of this.emitters) emitter.update(Math.min(dt, 0.1), parent, unit, emitting);
+    for (const emitter of this.emitters) emitter.update(Math.min(dt, 0.1), parent, unit, emitting, gesturing);
   }
 
   /** Para calibrar en /verify.html: huesos encontrados, vivas, soltadas y velocidad máxima. */

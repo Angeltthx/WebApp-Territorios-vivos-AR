@@ -285,14 +285,14 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         sentences: [[0, 1.5, 7.55], [0, 4.29]],
       },
     },
-    // PARTÍCULAS: cuando mueve la cabeza le caen unas pocas hojas desde
-    // arriba, como si rozara las ramas. Solo de la cabeza y con una pausa
-    // entre hoja y hoja: con las alas también, y sin pausa, era una lluvia
-    // que tapaba su canto. Salen del movimiento de esos
+    // PARTÍCULAS: cuando mueve la cabeza le caen unas hojas desde arriba,
+    // como si rozara las ramas: unas seis en todo su canto. Solo de la cabeza
+    // y con una pausa entre hoja y hoja: con las alas también, y sin pausa,
+    // era una lluvia que tapaba su canto. Salen del movimiento de esos
     // huesos, sin tocar la animación (ver ParticleEffect); umbral y ritmo,
     // calibrados en /verify.html con particleStats().
     particles: [
-      { kind: 'leaves', from: ['Head_jnt'], threshold: 0.2, rate: 200 },
+      { kind: 'leaves', from: ['Head_jnt', 'Neck1_jnt'], threshold: 0.2, rate: 300 },
     ],
     source: ModelSource.gltf('/models/Pava_Ani.glb'),
     animation: {
@@ -399,12 +399,15 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         sentences: [[0, 3], [0, 3.38, 7.8, 12.26]],
       },
     },
-    // PARTÍCULAS: cada paso levanta un polvito de arena que se abre a ras
-    // de suelo. Antes eran granos facetados y parecían piedritas. Salen del movimiento de esos
+    // PARTÍCULAS: cuando corretea DEPRISA (al tocarlo), sus patas levantan
+    // unos granitos de arena que caen al suelo. Caminando tranquilo, nada: el
+    // umbral queda por encima de su Walk (1.06) y por debajo del correteo
+    // (1.52). Antes fueron granos grandes (piedritas) y luego nubes de polvo
+    // (demasiado). Salen del movimiento de esos
     // huesos, sin tocar la animación (ver ParticleEffect); umbral y ritmo,
     // calibrados en /verify.html con particleStats().
     particles: [
-      { kind: 'sand', from: ['Foot_B_jnt', 'Foot_F_jnt', 'Foot_M_jnt'], threshold: 0.45, rate: 40 },
+      { kind: 'sand', from: ['Foot_B_jnt', 'Foot_F_jnt', 'Foot_M_jnt'], threshold: 0.6, rate: 40, during: 'gesture' },
     ],
     source: ModelSource.gltf('/models/Cangrejo_Ani.glb'),
     animation: {
@@ -629,14 +632,6 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       ],
       ambience: '/audio/frog/ambience.mp3',
     },
-    // PARTÍCULAS: al impulsarse y al caer del salto se espantan unas
-    // luciérnagas que suben parpadeando. Antes eran gotas de rocío, que se
-    // leían como burbujas. Salen del movimiento de esos
-    // huesos, sin tocar la animación (ver ParticleEffect); umbral y ritmo,
-    // calibrados en /verify.html con particleStats().
-    particles: [
-      { kind: 'fireflies', from: ['RanaLeftToe_End', 'RanaRightToe_End'], threshold: 2.2, rate: 30 },
-    ],
     source: ModelSource.gltf('/models/Rana_Ani.glb'),
     animation: {
       // A su aire (`wander`): Walk —unos pasos (0–1.25 s) y un rato

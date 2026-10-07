@@ -658,7 +658,7 @@ export class MarkerPin {
     this.sync();
     // Después de colocarlo: los huesos ya están donde se van a ver. Solo
     // cuando ya es un animal —un contorno no levanta arena—.
-    this.particles?.update(deltaSeconds, this.reach * this.icon.scale.x, this.revealProgress >= 1);
+    this.particles?.update(deltaSeconds, this.reach * this.icon.scale.x, this.revealProgress >= 1, this.isGesturing);
   }
 
   /** Para calibrar los umbrales en /verify.html (ver ParticleEffect). */

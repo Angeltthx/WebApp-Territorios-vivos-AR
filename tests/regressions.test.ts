@@ -2327,9 +2327,22 @@ test('los efectos de partículas salen del movimiento de sus huesos, no de la an
     particles.update(1 / 60, 1, false);
   }
   assert.equal(particles.stats[0]!.emitted, 0);
-  // El polvo se abre y se va: al rato no queda nada.
+  // La arena cae, se posa y se apaga: al rato no queda nada.
   for (let i = 0; i < 120; i += 1) particles.update(1 / 60, 1, false);
   assert.equal(particles.stats[0]!.live, 0);
+  // Un efecto 'gesture' (la arena del cangrejo) solo suelta durante el gesto del toque.
+  const onlyGesture = new AnimalParticles([ParticleEffect.of({ kind: 'sand', from: ['Foot_F_jnt'], threshold: 0.5, rate: 20, during: 'gesture' })], icon);
+  for (let i = 0; i < 30; i += 1) {
+    foot.position.x += 2 / 60;
+    onlyGesture.update(1 / 60, 1, true, false);
+  }
+  assert.equal(onlyGesture.stats[0]!.emitted, 0, 'caminando tranquilo, nada');
+  for (let i = 0; i < 30; i += 1) {
+    foot.position.x += 2 / 60;
+    onlyGesture.update(1 / 60, 1, true, true);
+  }
+  assert.ok(onlyGesture.stats[0]!.emitted > 0, 'correteando, sí');
+  onlyGesture.dispose();
   // Si el icono se muda (al primer plano), el grupo se muda con él y empieza de cero.
   const stage = new Group();
   stage.add(icon);
@@ -2341,8 +2354,8 @@ test('los efectos de partículas salen del movimiento de sus huesos, no de la an
 });
 
 test('cada animal del catálogo tiene su efecto y sus huesos existen en el modelo', () => {
-  // La ballena y la tortuga, sin: tuvieron burbujas y sobraban.
-  const expected: Record<string, string | undefined> = { whale: undefined, bird: 'leaves', crab: 'sand', turtle: undefined, frog: 'fireflies' };
+  // La ballena, la tortuga y la rana, sin: se probaron y estaban mejor así.
+  const expected: Record<string, string | undefined> = { whale: undefined, bird: 'leaves', crab: 'sand', turtle: undefined, frog: undefined };
   for (const entry of NUQUI_CATALOG) {
     const model = ArModel.fromSnapshot(entry);
     assert.equal(model.particles[0]?.kind, expected[entry.id], `${entry.id}`);

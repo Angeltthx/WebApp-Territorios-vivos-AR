@@ -1,7 +1,7 @@
 /**
  * Un efecto de partículas que acompaña al animal cuando se mueve: unas hojas
- * que le caen a la pava al mover la cabeza, el polvito de arena de cada paso
- * del cangrejo, las luciérnagas que se espantan cuando salta la rana.
+ * que le caen a la pava al mover la cabeza, unos granos de arena que saltan
+ * de las patas del cangrejo cuando corretea deprisa.
  *
  * Es vocabulario, como `TapMove`: el catálogo dice QUÉ y DESDE DÓNDE (qué
  * huesos del esqueleto), y la capa de render sabe dibujarlo. Las
@@ -9,14 +9,14 @@
  * suelta partículas cuando se mueve deprisa, así que nace del gesto mismo,
  * sea el de un toque o el de su bucle.
  *
- *   'leaves'     unas pocas hojas que caen desde arriba, meciéndose
- *   'sand'       nubecillas de polvo de arena que se abren a ras de suelo
- *   'fireflies'  luciérnagas que suben, vagan y parpadean
+ *   'leaves'  unas hojas que caen desde arriba, meciéndose
+ *   'sand'    granitos de arena que saltan de la pata y caen al suelo
  *
- * La ballena y la tortuga no llevan: tuvieron burbujas y sobraban.
+ * La ballena, la tortuga y la rana no llevan: se probaron burbujas, rocío y
+ * luciérnagas, y estaban mejor sin nada.
  */
-export type ParticleKind = 'leaves' | 'sand' | 'fireflies';
-const KINDS: readonly ParticleKind[] = ['leaves', 'sand', 'fireflies'];
+export type ParticleKind = 'leaves' | 'sand';
+const KINDS: readonly ParticleKind[] = ['leaves', 'sand'];
 
 export interface ParticleEffectSnapshot {
   readonly kind: ParticleKind;
@@ -40,6 +40,13 @@ export interface ParticleEffectSnapshot {
    * del animal, y un animal grande las haría enormes.
    */
   readonly scale?: number;
+  /**
+   * Cuándo suelta: siempre que el hueso vaya deprisa ('always', por
+   * defecto) o solo durante el gesto del toque ('gesture'). El cangrejo
+   * mueve las patas casi igual caminando tranquilo que correteando, y la
+   * arena se pidió solo para el correteo.
+   */
+  readonly during?: 'always' | 'gesture';
 }
 
 export class ParticleEffect {
@@ -49,6 +56,7 @@ export class ParticleEffect {
     readonly threshold: number,
     readonly rate: number,
     readonly scale: number,
+    readonly during: 'always' | 'gesture',
   ) {
     Object.freeze(this.from);
     Object.freeze(this);
@@ -63,9 +71,11 @@ export class ParticleEffect {
     const threshold = snapshot.threshold ?? 1;
     const rate = snapshot.rate ?? 10;
     if (!Number.isFinite(threshold) || threshold < 0) throw new RangeError(`Umbral inválido: ${threshold}`);
-    if (!Number.isFinite(rate) || rate <= 0 || rate > 500) throw new RangeError(`Ritmo inválido: ${rate}`);
+    if (!Number.isFinite(rate) || rate <= 0 || rate > 2000) throw new RangeError(`Ritmo inválido: ${rate}`);
     const scale = snapshot.scale ?? 1;
     if (!Number.isFinite(scale) || scale < 0.1 || scale > 5) throw new RangeError(`Escala inválida: ${scale}`);
-    return new ParticleEffect(snapshot.kind, from, threshold, rate, scale);
+    const during = snapshot.during ?? 'always';
+    if (during !== 'always' && during !== 'gesture') throw new RangeError(`Momento inválido: ${String(during)}`);
+    return new ParticleEffect(snapshot.kind, from, threshold, rate, scale, during);
   }
 }
