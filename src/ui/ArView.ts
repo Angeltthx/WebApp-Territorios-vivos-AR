@@ -1,4 +1,4 @@
-import type { MapText, MapTextBlock } from '@domain/value-objects/MapText';
+import { instagramUrl, type MapText, type MapTextBlock } from '@domain/value-objects/MapText';
 import type { ArModel } from '@domain/entities/ArModel';
 import type { ArSession } from '@domain/entities/ArSession';
 import { detectLanguage, isLanguage, type Language } from '@domain/value-objects/Language';
@@ -45,6 +45,9 @@ const GUIDE_CALL_TO_ACTION_MS = 5000;
  * pide ya sabe lo que busca, solo quiere recordar el encuadre.
  */
 const GUIDE_HELP_MS = 5000;
+
+/** El directorio no se encoge más que esto para caber en una línea (ver fitDirectory). */
+const MIN_DIRECTORY_PX = 10;
 
 export interface ArViewCallbacks {
   /** Empezar a bajar los modelos. Se dispara al instante, sin esperar. */
@@ -160,6 +163,7 @@ export class ArView {
    * en ese momento sin inventarse un estado que no existe.
    */
   private lastSession: ArSession | null = null;
+  private directoryResizeWatched = false;
 
   private guideTimer: number | null = null;
   /** Cuenta los 5 s de guía sin mapa antes del llamado a la acción. */
@@ -749,18 +753,21 @@ export class ArView {
       const lone = shown.length === 1 && shown[0]!.kind !== 'paragraph'
         && shown[0]!.kind !== 'directory' && shown[0]!.kind !== 'pin';
       this.readingCard.dataset['centered'] = lone ? 'true' : 'false';
-      const blocks = shown.map(renderBlock);
-      if (text?.illustration) {
-        // El dibujo del mapa, recortado sin fondo, encima de su texto.
-        const image = document.createElement('img');
-        image.className = 'rt-illustration';
-        image.src = text.illustration;
-        image.alt = '';
-        image.decoding = 'async';
-        blocks.unshift(image);
-      }
+      const blocks = shown.flatMap((block) => {
+        const rendered = renderBlock(block);
+        if (block.kind !== 'directory') return [rendered];
+        // Encima del directorio, que los @ se tocan: en el afiche no se
+        // tocan, y como aquí se ven igual nadie lo adivinaría.
+        const hint = element('p', 'rt-hint');
+        writeRich(hint, this.strings.instagramHint);
+        return [hint, rendered];
+      });
+      // Fotos reales del lugar, encima de su texto (antes, el dibujo del mapa
+      // recortado sin fondo).
+      if (text !== undefined && text.photos.length > 0) blocks.unshift(this.renderPhotos(text));
       this.readingCard.replaceChildren(...blocks);
       this.readingCard.scrollTop = 0;
+      this.fitDirectory();
       this.reading.setAttribute('aria-label', text?.labelIn(this.language) ?? this.strings.mapText);
     }
     if (id === null) {
@@ -770,6 +777,79 @@ export class ArView {
     const show = id !== null;
     this.reading.dataset['visible'] = show ? 'true' : 'false';
     this.reading.setAttribute('aria-hidden', show ? 'false' : 'true');
+  }
+
+  /**
+   * El directorio va como en el afiche, cada negocio en UNA línea (nombre y
+   * @). En un teléfono la más larga no cabe al tamaño de lectura, así que se
+   * encoge la lista entera —todas las líneas al mismo tamaño, como en el
+   * papel— hasta que quepa, sin bajar de MIN_DIRECTORY_PX. Se mide después
+   * de pintar, y otra vez si cambia el ancho (girar el teléfono).
+   */
+  private fitDirectory(): void {
+    const list = this.readingCard.querySelector<HTMLElement>('.rt-directory');
+    if (list === null) return;
+    const fit = (): void => {
+      list.style.fontSize = '';
+      const available = list.clientWidth;
+      if (available === 0) return;
+      const widest = (): number => Math.max(...[...list.children].map((item) => (item as HTMLElement).scrollWidth));
+      // Unas pocas vueltas: el tamaño no encoge la línea en proporción
+      // exacta (la cápsula y el redondeo de las letras), y una sola pasada
+      // la dejaba unos píxeles por fuera.
+      for (let round = 0; round < 4 && widest() > available; round += 1) {
+        const current = parseFloat(getComputedStyle(list).fontSize);
+        if (current <= MIN_DIRECTORY_PX) break;
+        const next = Math.floor(current * (available / widest()) * 0.99 * 10) / 10;
+        list.style.fontSize = `${Math.max(MIN_DIRECTORY_PX, next)}px`;
+      }
+    };
+    requestAnimationFrame(fit);
+    // Y otra vez cuando llega la tipografía del afiche (Merriweather, más
+    // ancha que la de reserva): medida con la otra, la línea se salía.
+    void list.ownerDocument.fonts?.ready.then(() => requestAnimationFrame(fit));
+    if (!this.directoryResizeWatched) {
+      this.directoryResizeWatched = true;
+      window.addEventListener('resize', () => {
+        if (this.readingCard.querySelector('.rt-directory') !== null) this.fitDirectory();
+      });
+    }
+  }
+
+  /**
+   * Las fotos de un lugar: una tira que se desliza de lado, con la siguiente
+   * asomando (así se entiende que hay más) y unos puntos que siguen a la que
+   * se ve. Con una sola foto, a todo el ancho y sin puntos.
+   */
+  private renderPhotos(text: MapText): HTMLElement {
+    const figure = element('figure', 'rt-photos');
+    figure.dataset['count'] = String(text.photos.length);
+    const track = element('div', 'rt-photos-track');
+    for (const photo of text.photos) {
+      const image = document.createElement('img');
+      image.className = 'rt-photo';
+      image.src = photo.src;
+      image.alt = text.photoAltIn(photo, this.language);
+      image.decoding = 'async';
+      image.draggable = false;
+      track.append(image);
+    }
+    figure.append(track);
+    if (text.photos.length > 1) {
+      const dots = element('div', 'rt-photos-dots');
+      dots.setAttribute('aria-hidden', 'true');
+      const marks = text.photos.map(() => element('span', 'rt-photos-dot'));
+      dots.append(...marks);
+      const mark = (): void => {
+        const step = track.scrollWidth / text.photos.length;
+        const current = step > 0 ? Math.round(track.scrollLeft / step) : 0;
+        marks.forEach((dot, index) => { dot.dataset['active'] = index === current ? 'true' : 'false'; });
+      };
+      track.addEventListener('scroll', mark, { passive: true });
+      mark();
+      figure.append(dots);
+    }
+    return figure;
   }
 
   /**
@@ -805,14 +885,16 @@ export class ArView {
   }
 }
 
+/** Un elemento con su clase y, si lo lleva, su texto (siempre como texto). */
+function element(tag: string, className: string, text?: string): HTMLElement {
+  const node = document.createElement(tag);
+  node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
 /** Un bloque de texto del mapa, con el aspecto que tiene impreso. */
 function renderBlock(block: MapTextBlock): HTMLElement {
-  const element = (tag: string, className: string, text?: string): HTMLElement => {
-    const node = document.createElement(tag);
-    node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  };
   switch (block.kind) {
     case 'paragraph':
       return element('p', 'rt-paragraph', block.text);
@@ -836,7 +918,20 @@ function renderBlock(block: MapTextBlock): HTMLElement {
       const list = element('ul', 'rt-directory');
       for (const entry of block.entries) {
         const item = element('li', '', `${entry.name} `);
-        item.append(element('span', 'rt-handle', entry.handle));
+        // El @ abre su Instagram. Aparte (en la app de Instagram o en otra
+        // pestaña), nunca en esta: navegar fuera cerraría la experiencia
+        // (ver «pagehide» en main.ts) y habría que volver a empezar.
+        const url = instagramUrl(entry.handle);
+        if (url === null) {
+          item.append(element('span', 'rt-handle', entry.handle));
+        } else {
+          const link = element('a', 'rt-handle', entry.handle) as HTMLAnchorElement;
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.setAttribute('aria-label', `Instagram: ${entry.name} (${entry.handle})`);
+          item.append(link);
+        }
         list.append(item);
       }
       return list;

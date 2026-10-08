@@ -2364,3 +2364,47 @@ test('cada animal del catálogo tiene su efecto y sus huesos existen en el model
     for (const companion of model.companions) assert.deepEqual(companion.particles, model.particles);
   }
 });
+
+test('los puntos del mapa enseñan fotos reales del lugar: como mucho tres, que existen y descritas en los dos idiomas', () => {
+  const withPhotos = NUQUI_MAP_TEXTS.map(MapText.of).filter((text) => text.photos.length > 0);
+  // Solo los tres que pidió el cliente: la posada de Chachita, la compañía de danza y Kipará Té.
+  assert.deepEqual(withPhotos.map((text) => text.id).sort(), ['chachita', 'danza', 'kipara']);
+  // La danza va aparte de los cuatro lugares de su lado (que no llevan fotos).
+  const places = NUQUI_MAP_TEXTS.map(MapText.of).find((text) => text.id === 'lugares')!;
+  assert.equal(places.blocks.length, 4);
+  assert.equal(places.photos.length, 0);
+  assert.equal(withPhotos.find((text) => text.id === 'danza')!.blocks.length, 1);
+  for (const text of withPhotos) {
+    assert.ok(text.photos.length <= 3, `${text.id}: más de tres fotos`);
+    for (const photo of text.photos) {
+      assert.ok(existsSync(`public${photo.src}`), `falta ${photo.src}`);
+      assert.ok(text.photoAltIn(photo, 'es').length > 10);
+      assert.notEqual(text.photoAltIn(photo, 'en'), text.photoAltIn(photo, 'es'), `${photo.src} sin descripción en inglés`);
+    }
+  }
+  const [first] = NUQUI_MAP_TEXTS;
+  const photo = { src: '/photos/x.webp', alt: 'Una foto' };
+  assert.throws(() => MapText.of({ ...first!, photos: [photo, photo, photo, photo] }), /máximo/);
+  assert.throws(() => MapText.of({ ...first!, photos: [{ src: '/photos/x.webp', alt: ' ' }] }));
+});
+
+test('cada @ del directorio abre su Instagram, con el enlace limpio', async () => {
+  const { instagramUrl } = await import('../src/domain/value-objects/MapText');
+  assert.equal(instagramUrl('@kiparatenuqui'), 'https://www.instagram.com/kiparatenuqui/');
+  assert.equal(instagramUrl('@carlitours.nuqui'), 'https://www.instagram.com/carlitours.nuqui/');
+  assert.equal(instagramUrl('@museo_melele'), 'https://www.instagram.com/museo_melele/');
+  assert.equal(instagramUrl('kiparatenuqui'), null);
+  assert.equal(instagramUrl('@con espacio'), null);
+  // Las diez cuentas que pasó el cliente, todas en el directorio (en los dos idiomas).
+  const expected = ['kiparatenuqui', 'lobosdelmanglar', 'vientosdeyubarta', 'carlitours.nuqui', 'museo_melele',
+    'escombrosdelmarhostal', 'posadaecoturisticachachita', 'sononaecolodge', 'posadanativajara.jovi', 'orfelinamarmolejo'];
+  const directory = MapText.of(NUQUI_MAP_TEXTS.find((text) => text.id === 'directorio')!);
+  for (const language of ['es', 'en'] as const) {
+    const block = directory.blocksIn(language).find((b) => b.kind === 'directory');
+    assert.ok(block && block.kind === 'directory');
+    assert.deepEqual(block.entries.map((entry) => instagramUrl(entry.handle)), expected.map((name) => `https://www.instagram.com/${name}/`));
+  }
+  // Un @ mal escrito en el catálogo no pasa.
+  assert.throws(() => MapText.of({ id: 'x', label: 'x', area: { u0: 0, v0: 0, u1: 0.1, v1: 0.1 },
+    blocks: [{ kind: 'directory', entries: [{ name: 'Algo', handle: 'sin arroba' }] }] }), /Instagram/);
+});

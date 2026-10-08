@@ -30,6 +30,20 @@ export type MapTextBlock =
   | { readonly kind: 'species'; readonly name: string; readonly scientific: string }
   | { readonly kind: 'directory'; readonly entries: readonly { readonly name: string; readonly handle: string }[] };
 
+/** Un @ de Instagram válido: letras, números, punto y guion bajo, hasta 30. */
+const INSTAGRAM_HANDLE = /^@[A-Za-z0-9._]{1,30}$/;
+
+/**
+ * La cuenta de Instagram de un @ del directorio. El enlace se arma con el
+ * @ impreso en el mapa —son las mismas cuentas que pasó el cliente—, limpio:
+ * los que se copian de la app traen un `?stkn=…` de seguimiento que no hace
+ * falta. Null si el @ no tiene forma de cuenta.
+ */
+export function instagramUrl(handle: string): string | null {
+  const trimmed = handle.trim();
+  return INSTAGRAM_HANDLE.test(trimmed) ? `https://www.instagram.com/${trimmed.slice(1)}/` : null;
+}
+
 export interface MapTextArea {
   readonly u0: number;
   readonly v0: number;
@@ -46,11 +60,12 @@ export interface MapTextSnapshot {
   /** Sonido de fondo mientras se lee: el lugar del que habla el texto. */
   readonly ambience?: string;
   /**
-   * El dibujo que acompaña al texto en el mapa, recortado sin fondo
-   * (`npm run cut-illustrations`): la choza sobre «Etnoaldea Kipara Té»,
-   * los bailarines junto a la danza. Se enseña en grande encima del texto.
+   * Fotos REALES del lugar del que habla el texto (de la grabación del
+   * webdoc, ver `npm run make-photos`), como mucho tres: se ven encima del
+   * texto en una tira que se desliza. Sustituyen a los dibujos del mapa
+   * recortados sin fondo, que se veían mal recortados.
    */
-  readonly illustration?: string;
+  readonly photos?: readonly MapPhoto[];
   /**
    * El texto en inglés. Solo lo que cambia: los nombres propios (lugares,
    * negocios, la web) se quedan como están en el mapa. Sin él, en inglés se
@@ -62,6 +77,16 @@ export interface MapTextSnapshot {
   };
 }
 
+/** Una foto de un lugar: la imagen y lo que se ve en ella, en los dos idiomas. */
+export interface MapPhoto {
+  readonly src: string;
+  readonly alt: string;
+  readonly altEn?: string;
+}
+
+/** Como mucho, tantas fotos por texto: acompañan, no son una galería. */
+export const MAX_PHOTOS = 3;
+
 export class MapText {
   private constructor(
     readonly id: string,
@@ -69,7 +94,7 @@ export class MapText {
     readonly area: MapTextArea,
     readonly blocks: readonly MapTextBlock[],
     readonly ambience: string | null,
-    readonly illustration: string | null,
+    readonly photos: readonly MapPhoto[],
     private readonly english: { readonly label: string; readonly blocks: readonly MapTextBlock[] } | null,
   ) {
     Object.freeze(this);
@@ -78,6 +103,11 @@ export class MapText {
   /** Lo que se lee en grande, en ese idioma. */
   blocksIn(language: Language): readonly MapTextBlock[] {
     return language === 'en' && this.english !== null ? this.english.blocks : this.blocks;
+  }
+
+  /** Lo que se ve en cada foto, en ese idioma (para lectores de pantalla). */
+  photoAltIn(photo: MapPhoto, language: Language): string {
+    return language === 'en' && photo.altEn !== undefined ? photo.altEn : photo.alt;
   }
 
   labelIn(language: Language): string {
@@ -94,6 +124,11 @@ export class MapText {
     }
     checkBlocks(id, snapshot.blocks);
     if (snapshot.english !== undefined) checkBlocks(`${id} (inglés)`, snapshot.english.blocks);
+    const photos = (snapshot.photos ?? []).map((photo) => Object.freeze({ ...photo, src: photo.src.trim() }));
+    if (photos.length > MAX_PHOTOS) throw new RangeError(`"${id}": ${photos.length} fotos; el máximo es ${MAX_PHOTOS}`);
+    if (photos.some((photo) => photo.src.length === 0 || photo.alt.trim().length === 0)) {
+      throw new RangeError(`"${id}": cada foto necesita su imagen y su descripción`);
+    }
     const label = snapshot.label.trim() || id;
     return new MapText(
       id,
@@ -101,7 +136,7 @@ export class MapText {
       Object.freeze({ u0, v0, u1, v1 }),
       Object.freeze([...snapshot.blocks]),
       snapshot.ambience?.trim() || null,
-      snapshot.illustration?.trim() || null,
+      Object.freeze(photos),
       snapshot.english === undefined
         ? null
         : Object.freeze({
@@ -125,5 +160,10 @@ function checkBlocks(id: string, blocks: readonly MapTextBlock[]): void {
       ? block.entries.length === 0 || block.entries.some((entry) => blank(entry.name))
       : block.kind === 'species' ? blank(block.name) : blank(block.text);
     if (empty) throw new RangeError(`"${id}" tiene un bloque '${block.kind}' vacío`);
+    // Cada @ del directorio abre su Instagram: tiene que ser un @ de verdad.
+    if (block.kind === 'directory') {
+      const wrong = block.entries.find((entry) => instagramUrl(entry.handle) === null);
+      if (wrong !== undefined) throw new RangeError(`"${id}": "${wrong.handle}" no es un @ de Instagram`);
+    }
   }
 }

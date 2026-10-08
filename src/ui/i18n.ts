@@ -43,6 +43,8 @@ export interface Strings {
   readonly closeCard: string;
   readonly closeText: string;
   readonly mapText: string;
+  /** Encima del directorio: que los @ se tocan y abren su Instagram. */
+  readonly instagramHint: Rich;
   readonly openMenu: string;
   readonly showGuide: string;
   readonly sound: string;
@@ -88,6 +90,7 @@ export const STRINGS: Readonly<Record<Language, Strings>> = {
     closeCard: 'Cerrar la ficha',
     closeText: 'Cerrar el texto',
     mapText: 'Texto del mapa',
+    instagramHint: ['Toca un ', '@', ' para ver su Instagram'],
     openMenu: 'Abrir el menú',
     showGuide: 'Volver a mostrar la guía',
     sound: 'Sonido',
@@ -135,6 +138,7 @@ export const STRINGS: Readonly<Record<Language, Strings>> = {
     closeCard: 'Close the card',
     closeText: 'Close the text',
     mapText: 'Map text',
+    instagramHint: ['Tap an ', '@', ' to see their Instagram'],
     openMenu: 'Open the menu',
     showGuide: 'Show the guide again',
     sound: 'Sound',

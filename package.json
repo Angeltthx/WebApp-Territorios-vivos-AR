@@ -16,7 +16,7 @@
     "make-icons": "node scripts/make-icons.mjs",
     "optimize-splash": "node scripts/optimize-splash.mjs",
     "build-audio": "node scripts/build-audio.mjs",
-    "cut-illustrations": "node scripts/cut-illustrations.mjs"
+    "make-photos": "node scripts/make-photos.mjs"
   },
   "dependencies": {
     "mind-ar": "1.2.5",

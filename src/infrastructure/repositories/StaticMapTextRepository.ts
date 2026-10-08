@@ -1,4 +1,4 @@
-import { MapText, type MapTextSnapshot } from '@domain/value-objects/MapText';
+import { MapText, type MapPhoto, type MapTextSnapshot } from '@domain/value-objects/MapText';
 import type { MapTextRepository } from '@application/ports/MapTextRepository';
 
 export class StaticMapTextRepository implements MapTextRepository {
@@ -30,6 +30,33 @@ const COAST = '/audio/coast/ambience.mp3';
 const FOREST = '/audio/bird/ambience.mp3';
 /** Playa con manglar. */
 const MANGROVE = '/audio/crab/ambience.mp3';
+
+/**
+ * Fotos REALES de los lugares, de la grabación del webdoc (ver
+ * `npm run make-photos` y photos-src/photos.json, que dice de qué foto
+ * original sale cada una). Como mucho tres por texto, y SOLO en los tres que
+ * pidió el cliente: la posada de Chachita (lleva el delantal de su posada),
+ * la compañía de danza de Orfelina Marmolejo (la del directorio,
+ * @orfelinamarmolejo) y la Etnoaldea Kipará Té. Hubo también en Lobos del
+ * Manglar, Nuquí, Panguí y el texto de turismo: se quitaron.
+ */
+const PHOTOS: Record<string, readonly MapPhoto[]> = {
+  danza: [
+    { src: '/photos/danza-1.webp', alt: 'El grupo de danza tradicional con sus trajes, alrededor de Orfelina Marmolejo', altEn: 'The traditional dance group in costume, around Orfelina Marmolejo' },
+    { src: '/photos/danza-2.webp', alt: 'Una bailarina de amarillo sonríe junto a su pareja de baile', altEn: 'A dancer in yellow smiles next to her dance partner' },
+    { src: '/photos/danza-3.webp', alt: 'Bailarinas con flores rojas en el cabello', altEn: 'Dancers with red flowers in their hair' },
+  ],
+  kipara: [
+    { src: '/photos/kipara-1.webp', alt: 'Tambos embera con techo de palma, unidos por pasarelas de madera', altEn: 'Emberá tambos with palm-thatched roofs, joined by wooden walkways' },
+    { src: '/photos/kipara-2.webp', alt: 'Danza embera de noche bajo el techo de un tambo', altEn: 'An Emberá dance at night under the roof of a tambo' },
+    { src: '/photos/kipara-3.webp', alt: 'Mujeres y niñas embera con su vestimenta tradicional', altEn: 'Emberá women and girls in traditional dress' },
+  ],
+  chachita: [
+    { src: '/photos/chachita-1.webp', alt: 'Chachita sonríe con el delantal de su posada ecoturística', altEn: 'Chachita smiles in the apron of her eco-lodge' },
+    { src: '/photos/chachita-2.webp', alt: 'Chachita en la playa, con frutas y platos de la región', altEn: 'Chachita on the beach, with fruit and local dishes' },
+    { src: '/photos/chachita-3.webp', alt: 'Chachita con plantas de su huerta junto al mar', altEn: 'Chachita with plants from her garden by the sea' },
+  ],
+};
 
 /**
  * Los textos del mapa de Nuquí que se pueden leer en grande.
@@ -145,28 +172,39 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
     },
     ambience: COAST,
   },
+  // Las cuatro etiquetas rosadas de arriba y la de la compañía de danza
+  // fueron UN texto; el cliente pidió separarlas: estas cuatro solas, y la
+  // danza aparte con las fotos del grupo de Orfelina. Zonas medidas sobre
+  // map.jpg: los cuatro lugares de y=752 a 840, la danza de 843 a 868.
   {
-    id: 'danza',
-    label: 'Lugares de Nuquí y danza tradicional',
-    area: { u0: 0.59, v0: 0.5251, u1: 0.77, v1: 0.6061 },
+    id: 'lugares',
+    label: 'Lugares de Nuquí',
+    area: { u0: 0.605, v0: 0.5251, u1: 0.742, v1: 0.5866 },
     blocks: [
       { kind: 'pin', text: 'Vientos de Yubarta' },
       { kind: 'pin', text: 'Carlitours Nuquí' },
       { kind: 'pin', text: 'Museo Melelé' },
       { kind: 'pin', text: 'Escombros del Mar' },
-      { kind: 'pin', text: 'Compañía de danza tradicional Las Serranía' },
     ],
+    english: { label: 'Places in Nuquí', blocks: [
+      { kind: 'pin', text: 'Vientos de Yubarta' },
+      { kind: 'pin', text: 'Carlitours Nuquí' },
+      { kind: 'pin', text: 'Museo Melelé' },
+      { kind: 'pin', text: 'Escombros del Mar' },
+    ] },
+    ambience: COAST,
+  },
+  {
+    id: 'danza',
+    label: 'Compañía de danza tradicional Las Serranía',
+    // La etiqueta y, a su derecha, los pies de los bailarines.
+    area: { u0: 0.583, v0: 0.5887, u1: 0.77, v1: 0.6061 },
+    blocks: [{ kind: 'pin', text: 'Compañía de danza tradicional Las Serranía' }],
     english: {
-      label: 'Places in Nuquí and traditional dance',
-      blocks: [
-        { kind: 'pin', text: 'Vientos de Yubarta' },
-        { kind: 'pin', text: 'Carlitours Nuquí' },
-        { kind: 'pin', text: 'Museo Melelé' },
-        { kind: 'pin', text: 'Escombros del Mar' },
-        { kind: 'pin', text: 'Las Serranía traditional dance company' },
-      ],
+      label: 'Las Serranía traditional dance company',
+      blocks: [{ kind: 'pin', text: 'Las Serranía traditional dance company' }],
     },
-    illustration: '/illustrations/danza.webp',
+    photos: PHOTOS['danza']!,
     ambience: COAST,
   },
   {
@@ -174,7 +212,7 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
     label: 'Etnoaldea Kipara Té',
     area: { u0: 0.735, v0: 0.0594, u1: 0.935, v1: 0.1362 },
     blocks: [{ kind: 'pin', text: 'Etnoaldea Kipara Té' }],
-    illustration: '/illustrations/kipara.webp',
+    photos: PHOTOS['kipara']!,
     ambience: FOREST,
   },
   {
@@ -189,6 +227,7 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
     label: 'Posada ecoturistica Chachita',
     area: { u0: 0.388, v0: 0.6879, u1: 0.468, v1: 0.7214 },
     blocks: [{ kind: 'pin', text: 'Posada ecoturistica Chachita' }],
+    photos: PHOTOS['chachita']!,
     ambience: FOREST,
   },
   {
