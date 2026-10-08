@@ -2387,3 +2387,24 @@ test('los puntos del mapa enseñan fotos reales del lugar: como mucho tres, que 
   assert.throws(() => MapText.of({ ...first!, photos: [photo, photo, photo, photo] }), /máximo/);
   assert.throws(() => MapText.of({ ...first!, photos: [{ src: '/photos/x.webp', alt: ' ' }] }));
 });
+
+test('cada @ del directorio abre su Instagram, con el enlace limpio', async () => {
+  const { instagramUrl } = await import('../src/domain/value-objects/MapText');
+  assert.equal(instagramUrl('@kiparatenuqui'), 'https://www.instagram.com/kiparatenuqui/');
+  assert.equal(instagramUrl('@carlitours.nuqui'), 'https://www.instagram.com/carlitours.nuqui/');
+  assert.equal(instagramUrl('@museo_melele'), 'https://www.instagram.com/museo_melele/');
+  assert.equal(instagramUrl('kiparatenuqui'), null);
+  assert.equal(instagramUrl('@con espacio'), null);
+  // Las diez cuentas que pasó el cliente, todas en el directorio (en los dos idiomas).
+  const expected = ['kiparatenuqui', 'lobosdelmanglar', 'vientosdeyubarta', 'carlitours.nuqui', 'museo_melele',
+    'escombrosdelmarhostal', 'posadaecoturisticachachita', 'sononaecolodge', 'posadanativajara.jovi', 'orfelinamarmolejo'];
+  const directory = MapText.of(NUQUI_MAP_TEXTS.find((text) => text.id === 'directorio')!);
+  for (const language of ['es', 'en'] as const) {
+    const block = directory.blocksIn(language).find((b) => b.kind === 'directory');
+    assert.ok(block && block.kind === 'directory');
+    assert.deepEqual(block.entries.map((entry) => instagramUrl(entry.handle)), expected.map((name) => `https://www.instagram.com/${name}/`));
+  }
+  // Un @ mal escrito en el catálogo no pasa.
+  assert.throws(() => MapText.of({ id: 'x', label: 'x', area: { u0: 0, v0: 0, u1: 0.1, v1: 0.1 },
+    blocks: [{ kind: 'directory', entries: [{ name: 'Algo', handle: 'sin arroba' }] }] }), /Instagram/);
+});

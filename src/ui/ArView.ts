@@ -1,4 +1,4 @@
-import type { MapText, MapTextBlock } from '@domain/value-objects/MapText';
+import { instagramUrl, type MapText, type MapTextBlock } from '@domain/value-objects/MapText';
 import type { ArModel } from '@domain/entities/ArModel';
 import type { ArSession } from '@domain/entities/ArSession';
 import { detectLanguage, isLanguage, type Language } from '@domain/value-objects/Language';
@@ -868,7 +868,20 @@ function renderBlock(block: MapTextBlock): HTMLElement {
       const list = element('ul', 'rt-directory');
       for (const entry of block.entries) {
         const item = element('li', '', `${entry.name} `);
-        item.append(element('span', 'rt-handle', entry.handle));
+        // El @ abre su Instagram. Aparte (en la app de Instagram o en otra
+        // pestaña), nunca en esta: navegar fuera cerraría la experiencia
+        // (ver «pagehide» en main.ts) y habría que volver a empezar.
+        const url = instagramUrl(entry.handle);
+        if (url === null) {
+          item.append(element('span', 'rt-handle', entry.handle));
+        } else {
+          const link = element('a', 'rt-handle', entry.handle) as HTMLAnchorElement;
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.setAttribute('aria-label', `Instagram: ${entry.name} (${entry.handle})`);
+          item.append(link);
+        }
         list.append(item);
       }
       return list;

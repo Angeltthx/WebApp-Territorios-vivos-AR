@@ -30,6 +30,20 @@ export type MapTextBlock =
   | { readonly kind: 'species'; readonly name: string; readonly scientific: string }
   | { readonly kind: 'directory'; readonly entries: readonly { readonly name: string; readonly handle: string }[] };
 
+/** Un @ de Instagram válido: letras, números, punto y guion bajo, hasta 30. */
+const INSTAGRAM_HANDLE = /^@[A-Za-z0-9._]{1,30}$/;
+
+/**
+ * La cuenta de Instagram de un @ del directorio. El enlace se arma con el
+ * @ impreso en el mapa —son las mismas cuentas que pasó el cliente—, limpio:
+ * los que se copian de la app traen un `?stkn=…` de seguimiento que no hace
+ * falta. Null si el @ no tiene forma de cuenta.
+ */
+export function instagramUrl(handle: string): string | null {
+  const trimmed = handle.trim();
+  return INSTAGRAM_HANDLE.test(trimmed) ? `https://www.instagram.com/${trimmed.slice(1)}/` : null;
+}
+
 export interface MapTextArea {
   readonly u0: number;
   readonly v0: number;
@@ -146,5 +160,10 @@ function checkBlocks(id: string, blocks: readonly MapTextBlock[]): void {
       ? block.entries.length === 0 || block.entries.some((entry) => blank(entry.name))
       : block.kind === 'species' ? blank(block.name) : blank(block.text);
     if (empty) throw new RangeError(`"${id}" tiene un bloque '${block.kind}' vacío`);
+    // Cada @ del directorio abre su Instagram: tiene que ser un @ de verdad.
+    if (block.kind === 'directory') {
+      const wrong = block.entries.find((entry) => instagramUrl(entry.handle) === null);
+      if (wrong !== undefined) throw new RangeError(`"${id}": "${wrong.handle}" no es un @ de Instagram`);
+    }
   }
 }
