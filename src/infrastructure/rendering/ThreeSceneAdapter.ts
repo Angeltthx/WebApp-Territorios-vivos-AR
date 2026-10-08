@@ -272,6 +272,8 @@ export class ThreeSceneAdapter implements ScenePort {
         pin.applyTransform(this.placement.scale.value, yaw, pitch);
       }
       if (this.discovery?.isUnlocked(model.id) === true) pin.setRevealed(true);
+      // Si otro animal ya está en primer plano, llega replegado.
+      if (this.focusedId !== null && this.focusedId !== model.id.value) pin.setReceded(true);
       this.overlay.add(pin.group);
       this.pins.set(instance === 0 ? model.id.value : `${model.id.value}#${instance}`, pin);
     });
@@ -359,6 +361,9 @@ export class ThreeSceneAdapter implements ScenePort {
     }
 
     this.focusedId = id;
+    // Los demás animales vuelven a su dibujo mientras uno está en primer
+    // plano, y salen otra vez al cerrarlo (ver MarkerPin.setReceded).
+    for (const pin of this.pins.values()) pin.setReceded(id !== null && pin.modelId !== id);
     this.stageHit.visible = false;
     delete this.stage.userData['modelId'];
 

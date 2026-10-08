@@ -2408,3 +2408,62 @@ test('cada @ del directorio abre su Instagram, con el enlace limpio', async () =
   assert.throws(() => MapText.of({ id: 'x', label: 'x', area: { u0: 0, v0: 0, u1: 0.1, v1: 0.1 },
     blocks: [{ kind: 'directory', entries: [{ name: 'Algo', handle: 'sin arroba' }] }] }), /Instagram/);
 });
+
+test('con un animal en primer plano, los demás vuelven a su dibujo poco a poco, y salen otra vez al cerrarlo', async () => {
+  globalThis.document = { createElement: () => ({ getContext: () => null }) } as unknown as Document;
+  const scene = new Scene();
+  const camera = new PerspectiveCamera(60, 0.46, 0.01, 100);
+  let advance = (_delta: number): unknown => undefined;
+  const runtime = {
+    prepare: async () => {},
+    init: () => ({ scene, renderer: {} }),
+    mindar: { scene, camera, renderer: {} },
+    onFrame: (fn: (delta: number) => unknown) => { advance = fn; return () => {}; },
+    // El mapa a la vista: un ancla quieta en el origen.
+    anchorVisible: true,
+    anchor: { group: new Group() },
+  };
+  const outline = [{ u: 0.4, v: 0.4 }, { u: 0.6, v: 0.4 }, { u: 0.5, v: 0.6 }];
+  const make = (id: 'whale' | 'crab', u: number) => ArModel.fromSnapshot({
+    id, name: id, description: 'Ficha', source: ModelSource.primitive(id, 0x224466), spot: { u, v: 0.5 },
+    outlineShape: outline, sound: { waveform: 'sine', rootFrequencyHz: 90, overtoneRatios: [1], durationMs: 1800 },
+  });
+  const whale = make('whale', 0.3);
+  const crab = make('crab', 0.7);
+  const adapter = new ThreeSceneAdapter(runtime as never, 1.432);
+  await adapter.preload([whale, crab]);
+  const crabPin = (adapter as unknown as { pins: Map<string, MarkerPin> }).pins.get('crab')!;
+  const crabIcon = (crabPin as unknown as { icon: Object3D }).icon;
+  const crabLift = (crabPin as unknown as { lift: Object3D }).lift;
+  const materials: MeshStandardMaterial[] = [];
+  crabIcon.traverse((node) => { if (node instanceof Mesh) materials.push(node.material as MeshStandardMaterial); });
+  // Los dos descubiertos, en el mapa.
+  let discovery = ArSession.idle().discovery.unlock(whale.id).focus(null).unlock(crab.id).focus(null);
+  adapter.applyDiscovery(discovery);
+  for (let i = 0; i < 120; i += 1) advance(1 / 60);
+  const full = crabIcon.scale.x;
+  assert.ok(full > 0.01 && crabLift.visible);
+  assert.equal(materials[0]!.opacity, 1);
+  // Se abre la ballena: el cangrejo NO desaparece de golpe…
+  discovery = discovery.focus(whale.id);
+  adapter.applyDiscovery(discovery);
+  advance(1 / 60);
+  assert.ok(crabLift.visible, 'desapareció de golpe');
+  for (let i = 0; i < 15; i += 1) advance(1 / 60);
+  assert.ok(crabIcon.scale.x < full && crabIcon.scale.x > 0.0001, 'a mitad, encoge');
+  assert.ok(materials[0]!.opacity < 1 && materials[0]!.opacity > 0, 'a mitad, se desvanece');
+  assert.equal(materials[0]!.transparent, true);
+  // …y al rato ya no se ve.
+  for (let i = 0; i < 60; i += 1) advance(1 / 60);
+  assert.equal(crabPin.isReceded, true);
+  assert.equal(crabLift.visible, false);
+  // Al cerrar la ficha vuelve a salir, entero y opaco como era.
+  adapter.applyDiscovery(discovery.focus(null));
+  for (let i = 0; i < 60; i += 1) advance(1 / 60);
+  assert.equal(crabPin.isReceded, false);
+  assert.ok(crabLift.visible);
+  assert.ok(Math.abs(crabIcon.scale.x - full) < 1e-6);
+  assert.equal(materials[0]!.opacity, 1);
+  assert.equal(materials[0]!.transparent, false);
+  adapter.clear();
+});
