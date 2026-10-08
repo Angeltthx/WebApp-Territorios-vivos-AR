@@ -34,13 +34,11 @@ const MANGROVE = '/audio/crab/ambience.mp3';
 /**
  * Fotos REALES de los lugares, de la grabación del webdoc (ver
  * `npm run make-photos` y photos-src/photos.json, que dice de qué foto
- * original sale cada una). Como mucho tres por texto. La danza es la de
- * Orfelina Marmolejo, la misma compañía del directorio (@orfelinamarmolejo);
- * Chachita lleva el delantal de su posada.
- *
- * Kipará Té, Lobos del Manglar y Panguí llevan fotos de las estaciones del
- * webdoc que el equipo situó en una comunidad embera y en el manglar de
- * Panguí: hay que confirmar con el equipo que cada una es de ESE lugar.
+ * original sale cada una). Como mucho tres por texto, y SOLO en los tres que
+ * pidió el cliente: la posada de Chachita (lleva el delantal de su posada),
+ * la compañía de danza de Orfelina Marmolejo (la del directorio,
+ * @orfelinamarmolejo) y la Etnoaldea Kipará Té. Hubo también en Lobos del
+ * Manglar, Nuquí, Panguí y el texto de turismo: se quitaron.
  */
 const PHOTOS: Record<string, readonly MapPhoto[]> = {
   danza: [
@@ -57,24 +55,6 @@ const PHOTOS: Record<string, readonly MapPhoto[]> = {
     { src: '/photos/chachita-1.webp', alt: 'Chachita sonríe con el delantal de su posada ecoturística', altEn: 'Chachita smiles in the apron of her eco-lodge' },
     { src: '/photos/chachita-2.webp', alt: 'Chachita en la playa, con frutas y platos de la región', altEn: 'Chachita on the beach, with fruit and local dishes' },
     { src: '/photos/chachita-3.webp', alt: 'Chachita con plantas de su huerta junto al mar', altEn: 'Chachita with plants from her garden by the sea' },
-  ],
-  lobos: [
-    { src: '/photos/lobos-1.webp', alt: 'Una mujer camina por un túnel de raíces de manglar', altEn: 'A woman walks through a tunnel of mangrove roots' },
-    { src: '/photos/lobos-2.webp', alt: 'El manglar reflejado en el agua, con garzas', altEn: 'The mangrove reflected in the water, with herons' },
-  ],
-  nuqui: [
-    { src: '/photos/nuqui-1.webp', alt: 'Un pescador rema en su canoa frente a una isla', altEn: 'A fisherman paddles his canoe in front of an island' },
-    { src: '/photos/nuqui-2.webp', alt: 'Una calle de Nuquí después de la lluvia', altEn: 'A street in Nuquí after the rain' },
-  ],
-  pangui: [
-    { src: '/photos/pangui-1.webp', alt: 'El río y la selva de Panguí desde el aire', altEn: 'The river and the forest of Panguí from the air' },
-    { src: '/photos/pangui-2.webp', alt: 'Una mujer toca las ramas del manglar', altEn: 'A woman touches the branches of the mangrove' },
-    { src: '/photos/pangui-3.webp', alt: 'Una mujer camina hacia el mar al atardecer', altEn: 'A woman walks into the sea at sunset' },
-  ],
-  turismo: [
-    { src: '/photos/turismo-1.webp', alt: 'Un pescador sonríe con su red al hombro', altEn: 'A fisherman smiles with his net over his shoulder' },
-    { src: '/photos/turismo-2.webp', alt: 'Un pescador camina por la playa junto a una canoa', altEn: 'A fisherman walks along the beach next to a canoe' },
-    { src: '/photos/turismo-3.webp', alt: 'Atardecer sobre el Pacífico, entre rocas y selva', altEn: 'Sunset over the Pacific, between rocks and forest' },
   ],
 };
 
@@ -139,7 +119,6 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
         },
       ],
     },
-    photos: PHOTOS['turismo']!,
     ambience: COAST,
   },
   {
@@ -193,26 +172,37 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
     },
     ambience: COAST,
   },
+  // Las cuatro etiquetas rosadas de arriba y la de la compañía de danza
+  // fueron UN texto; el cliente pidió separarlas: estas cuatro solas, y la
+  // danza aparte con las fotos del grupo de Orfelina. Zonas medidas sobre
+  // map.jpg: los cuatro lugares de y=752 a 840, la danza de 843 a 868.
   {
-    id: 'danza',
-    label: 'Lugares de Nuquí y danza tradicional',
-    area: { u0: 0.59, v0: 0.5251, u1: 0.77, v1: 0.6061 },
+    id: 'lugares',
+    label: 'Lugares de Nuquí',
+    area: { u0: 0.605, v0: 0.5251, u1: 0.742, v1: 0.5866 },
     blocks: [
       { kind: 'pin', text: 'Vientos de Yubarta' },
       { kind: 'pin', text: 'Carlitours Nuquí' },
       { kind: 'pin', text: 'Museo Melelé' },
       { kind: 'pin', text: 'Escombros del Mar' },
-      { kind: 'pin', text: 'Compañía de danza tradicional Las Serranía' },
     ],
+    english: { label: 'Places in Nuquí', blocks: [
+      { kind: 'pin', text: 'Vientos de Yubarta' },
+      { kind: 'pin', text: 'Carlitours Nuquí' },
+      { kind: 'pin', text: 'Museo Melelé' },
+      { kind: 'pin', text: 'Escombros del Mar' },
+    ] },
+    ambience: COAST,
+  },
+  {
+    id: 'danza',
+    label: 'Compañía de danza tradicional Las Serranía',
+    // La etiqueta y, a su derecha, los pies de los bailarines.
+    area: { u0: 0.583, v0: 0.5887, u1: 0.77, v1: 0.6061 },
+    blocks: [{ kind: 'pin', text: 'Compañía de danza tradicional Las Serranía' }],
     english: {
-      label: 'Places in Nuquí and traditional dance',
-      blocks: [
-        { kind: 'pin', text: 'Vientos de Yubarta' },
-        { kind: 'pin', text: 'Carlitours Nuquí' },
-        { kind: 'pin', text: 'Museo Melelé' },
-        { kind: 'pin', text: 'Escombros del Mar' },
-        { kind: 'pin', text: 'Las Serranía traditional dance company' },
-      ],
+      label: 'Las Serranía traditional dance company',
+      blocks: [{ kind: 'pin', text: 'Las Serranía traditional dance company' }],
     },
     photos: PHOTOS['danza']!,
     ambience: COAST,
@@ -230,7 +220,6 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
     label: 'Lobos del Manglar',
     area: { u0: 0.688, v0: 0.3031, u1: 0.757, v1: 0.3282 },
     blocks: [{ kind: 'pin', text: 'Lobos del Manglar' }],
-    photos: PHOTOS['lobos']!,
     ambience: MANGROVE,
   },
   {
@@ -263,7 +252,7 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
   },
   { id: 'jurubida', label: 'Jurubidá', area: { u0: 0.48, v0: 0.0433, u1: 0.605, v1: 0.0615 }, blocks: [{ kind: 'place', text: 'Jurubidá' }], ambience: COAST },
   { id: 'tribuga', label: 'Tribugá', area: { u0: 0.672, v0: 0.3527, u1: 0.8, v1: 0.3701 }, blocks: [{ kind: 'place', text: 'Tribugá' }], ambience: COAST },
-  { id: 'nuqui', label: 'Nuquí', area: { u0: 0.51, v0: 0.618, u1: 0.605, v1: 0.6362 }, blocks: [{ kind: 'place', text: 'Nuquí' }], photos: PHOTOS['nuqui']!, ambience: COAST },
-  { id: 'pangui', label: 'Pangui', area: { u0: 0.378, v0: 0.7367, u1: 0.477, v1: 0.7556 }, blocks: [{ kind: 'place', text: 'Pangui' }], photos: PHOTOS['pangui']!, ambience: COAST },
+  { id: 'nuqui', label: 'Nuquí', area: { u0: 0.51, v0: 0.618, u1: 0.605, v1: 0.6362 }, blocks: [{ kind: 'place', text: 'Nuquí' }], ambience: COAST },
+  { id: 'pangui', label: 'Pangui', area: { u0: 0.378, v0: 0.7367, u1: 0.477, v1: 0.7556 }, blocks: [{ kind: 'place', text: 'Pangui' }], ambience: COAST },
   { id: 'coqui', label: 'Coqui', area: { u0: 0.118, v0: 0.8834, u1: 0.215, v1: 0.9015 }, blocks: [{ kind: 'place', text: 'Coqui' }], ambience: COAST },
 ];

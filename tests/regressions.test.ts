@@ -2367,10 +2367,13 @@ test('cada animal del catálogo tiene su efecto y sus huesos existen en el model
 
 test('los puntos del mapa enseñan fotos reales del lugar: como mucho tres, que existen y descritas en los dos idiomas', () => {
   const withPhotos = NUQUI_MAP_TEXTS.map(MapText.of).filter((text) => text.photos.length > 0);
-  // Los dos que tenían dibujo recortado (la danza y la etnoaldea) llevan fotos, y otros cinco más.
-  for (const id of ['danza', 'kipara', 'chachita', 'lobos', 'nuqui', 'pangui', 'turismo']) {
-    assert.ok(withPhotos.some((text) => text.id === id), `${id} sin fotos`);
-  }
+  // Solo los tres que pidió el cliente: la posada de Chachita, la compañía de danza y Kipará Té.
+  assert.deepEqual(withPhotos.map((text) => text.id).sort(), ['chachita', 'danza', 'kipara']);
+  // La danza va aparte de los cuatro lugares de su lado (que no llevan fotos).
+  const places = NUQUI_MAP_TEXTS.map(MapText.of).find((text) => text.id === 'lugares')!;
+  assert.equal(places.blocks.length, 4);
+  assert.equal(places.photos.length, 0);
+  assert.equal(withPhotos.find((text) => text.id === 'danza')!.blocks.length, 1);
   for (const text of withPhotos) {
     assert.ok(text.photos.length <= 3, `${text.id}: más de tres fotos`);
     for (const photo of text.photos) {
