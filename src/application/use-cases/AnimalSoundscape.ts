@@ -127,6 +127,10 @@ export class AnimalSoundscape {
     if (soundscape === null) return;
     this.focusedId = model.id.value;
     this.focusedModel = model;
+    // Lo que siguiera sonando de otro animal (el canto de la ballena que se
+    // acaba de cerrar, un toque que llega tarde) se aleja con un fundido
+    // mientras entra el ambiente de este, que ya llega con el suyo.
+    this.audio.fadeOutClips(model.id.value);
     if (soundscape.ambience !== null) this.audio.startAmbience(soundscape.ambience);
     if (soundscape.narrationIn(this.language) === null || this.narrated.has(model.id.value)) {
       this.scheduleCall(model, FIRST_CALL_MS);
@@ -222,7 +226,7 @@ export class AnimalSoundscape {
 
   /** Suena el toque. Sin grabaciones, el timbre sintetizado del catálogo. */
   tapped(model: ArModel): void {
-    if (this.voiceHasTheFloor()) return;
+    if (this.voiceHasTheFloor() || this.belongsElsewhere(model)) return;
     const taps = model.soundscape?.taps ?? [];
     const url = pickDifferent(taps, this.lastTap.get(model.id.value) ?? null, this.random);
     if (url === null) {
@@ -230,7 +234,7 @@ export class AnimalSoundscape {
       return;
     }
     this.lastTap.set(model.id.value, url);
-    this.audio.playClip(url);
+    this.playOwn(model, url);
   }
 
   /**
@@ -241,8 +245,28 @@ export class AnimalSoundscape {
    */
   splashed(model: ArModel, strength: number): void {
     const url = model.soundscape?.splash ?? null;
-    if (url === null || this.voiceHasTheFloor()) return;
-    this.audio.playClip(url, Math.min(1, Math.max(0.3, strength)));
+    if (url === null || this.voiceHasTheFloor() || this.belongsElsewhere(model)) return;
+    this.playOwn(model, url, Math.min(1, Math.max(0.3, strength)));
+  }
+
+  /**
+   * En primer plano solo suena el animal que se mira. Un sonido de OTRO
+   * —el soplido que la ballena tenía pendiente de un salto, un chapuzón
+   * rezagado— no empieza. Sobre el mapa, sin nada abierto, todos suenan
+   * como siempre: la regla es solo del primer plano.
+   */
+  private belongsElsewhere(model: ArModel): boolean {
+    return this.focusedModel !== null && !this.focusedModel.id.equals(model.id);
+  }
+
+  /**
+   * Un sonido del animal. En primer plano, lo que quedara sonando de otros
+   * se aleja con un fundido al empezar este: cada sonido nuevo del que se
+   * mira se oye solo.
+   */
+  private playOwn(model: ArModel, url: string, volume?: number): void {
+    if (this.focusedModel !== null) this.audio.fadeOutClips(model.id.value);
+    this.audio.playClip(url, volume, model.id.value);
   }
 
   /**
@@ -277,6 +301,8 @@ export class AnimalSoundscape {
     if (narration === null || url === undefined) return;
     this.inCue = false;
     this.voicePart = part;
+    // La voz se oye sola: lo que quedara de otro animal se aleja.
+    this.audio.fadeOutClips(model.id.value);
     void this.audio.playVoice(url, fromSeconds).then((ended) => {
       if (run !== this.narrationRun || !this.isStillFocused(model)) return;
       this.voicePart = null;
@@ -313,7 +339,7 @@ export class AnimalSoundscape {
     const url = cue.clip ?? pickDifferent(calls, this.lastCall.get(model.id.value) ?? null, this.random);
     if (url === null) return;
     this.lastCall.set(model.id.value, url);
-    this.audio.playClip(url);
+    this.playOwn(model, url);
   }
 
   /** Narra y no está en una pausa suya: los sonidos del animal callan. */
@@ -348,7 +374,7 @@ export class AnimalSoundscape {
       const url = pickDifferent(calls, this.lastCall.get(model.id.value) ?? null, this.random);
       if (url !== null) {
         this.lastCall.set(model.id.value, url);
-        this.audio.playClip(url);
+        this.playOwn(model, url);
       }
       const gap = CALL_EVERY_MIN_MS + this.random() * (CALL_EVERY_MAX_MS - CALL_EVERY_MIN_MS);
       this.scheduleCall(model, gap);

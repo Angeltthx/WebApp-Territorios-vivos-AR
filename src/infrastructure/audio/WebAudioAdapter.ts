@@ -61,6 +61,13 @@ const VOICE_STOP_S = 0.25;
 const AMBIENCE_FADE_S = 1.2;
 const AMBIENCE_CROSSFADE_S = 3;
 const CLIP_MAX_DELAY_S = 1.5;
+/**
+ * Lo que tarda en apagarse una grabación que se va (`fadeOutClips`): ni un
+ * corte, ni tanto que se quede compitiendo con la nueva.
+ */
+const CLIP_FADE_S = 1.2;
+/** Fundido de salida con forma de coseno: suena a alejarse, no a bajar un mando. */
+const CLIP_FADE_OUT = Float32Array.from({ length: 64 }, (_, i) => Math.cos((i / 63) * (Math.PI / 2)));
 
 interface Voice {
   /** null mientras el trozo se descarga. */
@@ -83,6 +90,8 @@ export class WebAudioAdapter implements AudioPort {
   private ambience: Ambience | null = null;
   /** El trozo de narración que suena, y cómo avisar de que se cortó. */
   private voice: Voice | null = null;
+  /** Las grabaciones que suenan ahora, con su ganancia y de quién son. */
+  private readonly clips = new Set<{ readonly source: AudioBufferSourceNode; readonly gain: GainNode; readonly owner: string | null; fading: boolean }>();
   private nowPlayingSet = false;
   /** Volumen general que ha elegido el usuario (menú), 0–1. */
   private volume = 1;
@@ -204,7 +213,7 @@ export class WebAudioAdapter implements AudioPort {
     void urls.reduce<Promise<unknown>>((chain, url) => chain.then(() => this.load(url)), Promise.resolve());
   }
 
-  playClip(url: string, volume = 1): void {
+  playClip(url: string, volume = 1, owner?: string): void {
     const context = this.ensureRunning();
     if (context === null) return;
     const requested = context.currentTime;
@@ -214,21 +223,33 @@ export class WebAudioAdapter implements AudioPort {
       if (context.currentTime - requested > CLIP_MAX_DELAY_S) return;
       const source = context.createBufferSource();
       source.buffer = buffer;
-      const bus = this.bus(context, 'clips');
-      if (volume >= 1) {
-        source.connect(bus);
-        source.onended = () => source.disconnect();
-      } else {
-        const gain = context.createGain();
-        gain.gain.value = Math.max(0, volume);
-        source.connect(gain).connect(bus);
-        source.onended = () => {
-          source.disconnect();
-          gain.disconnect();
-        };
-      }
+      // Siempre con su ganancia: es por donde se apaga con un fundido.
+      const gain = context.createGain();
+      gain.gain.value = Math.max(0, Math.min(1, volume));
+      source.connect(gain).connect(this.bus(context, 'clips'));
+      const clip = { source, gain, owner: owner ?? null, fading: false };
+      this.clips.add(clip);
+      source.onended = () => {
+        this.clips.delete(clip);
+        source.disconnect();
+        gain.disconnect();
+      };
       source.start();
     });
+  }
+
+  fadeOutClips(keep: string | null): void {
+    const context = this.context;
+    if (context === null) return;
+    const now = context.currentTime;
+    for (const clip of this.clips) {
+      if (clip.fading || (keep !== null && clip.owner === keep)) continue;
+      clip.fading = true;
+      const from = clip.gain.gain.value;
+      clip.gain.gain.cancelScheduledValues(now);
+      clip.gain.gain.setValueCurveAtTime(CLIP_FADE_OUT.map((step) => step * from), now, CLIP_FADE_S);
+      clip.source.stop(now + CLIP_FADE_S + 0.02);
+    }
   }
 
   playVoice(url: string, fromSeconds = 0): Promise<boolean> {

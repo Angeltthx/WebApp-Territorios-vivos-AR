@@ -98,7 +98,7 @@ function harness() {
   };
   const audio = {
     unlock: async () => { calls.unlocks++; }, play() {}, dispose() {},
-    preload() {}, playClip() {}, startAmbience() {}, stopAmbience() {},
+    preload() {}, playClip() {}, fadeOutClips() {}, startAmbience() {}, stopAmbience() {},
     playVoice: async () => true, stopVoice() {},
   };
   const app = new StartArExperience(tracking, scene, audio, models, analytics, () => {});
@@ -764,6 +764,7 @@ function soundHarness() {
     unlock: async () => {}, dispose() {}, preload() {},
     play: () => { log.push('synth'); },
     playClip: (url: string) => { log.push(`clip ${url}`); },
+    fadeOutClips() {},
     startAmbience: (url: string) => { log.push(`ambience ${url}`); },
     stopAmbience: () => { log.push('ambience off'); },
     playVoice: async (url: string) => { log.push(`voice ${url}`); return true; },
@@ -1151,6 +1152,7 @@ test('el chapuzón suena con el volumen del salpicón, y solo en quien cae al ag
   const audio = {
     unlock: async () => {}, dispose() {}, preload() {}, play() {},
     playClip: (url: string, volume?: number) => { played.push({ url, volume }); },
+    fadeOutClips() {},
     startAmbience() {}, stopAmbience() {}, playVoice: async () => true, stopVoice() {},
   };
   const sounds = new AnimalSoundscape(audio as never, () => ArSession.idle());
@@ -2466,4 +2468,46 @@ test('con un animal en primer plano, los demás vuelven a su dibujo poco a poco,
   assert.equal(materials[0]!.opacity, 1);
   assert.equal(materials[0]!.transparent, false);
   adapter.clear();
+});
+
+test('en primer plano solo suena el animal que se mira: lo de otros se aleja con un fundido y lo nuevo de otros no empieza', () => {
+  const h = soundHarness();
+  const owned: string[] = [];
+  h.audio.playClip = ((url: string, _volume?: number, owner?: string) => { owned.push(`${owner}:${url}`); }) as never;
+  h.audio.fadeOutClips = ((keep: string | null) => { h.log.push(`fade except ${keep}`); }) as never;
+  const whale = voiced('whale');
+  const crab = voiced('crab');
+  let state = ArSession.idle().searching(Placement.initial(whale.id, whale.defaultScale)).tracking();
+  const sounds = new AnimalSoundscape(h.audio, () => state, h.timers, () => 0);
+  // Sobre el mapa, sin nada abierto, cada uno suena como siempre.
+  sounds.tapped(crab);
+  sounds.splashed(whale, 1);
+  // (La ballena de prueba no tiene chapuzón: solo suena el toque del cangrejo.)
+  assert.deepEqual(owned, ['crab:/crab/t1']);
+  assert.ok(!h.log.some((line) => line.startsWith('fade')), 'sin primer plano no se apaga nada');
+  owned.length = 0;
+  // Se abre la ballena: lo que siguiera sonando de otros se aleja.
+  state = state.withDiscovery(state.discovery.unlock(whale.id));
+  sounds.focusOpened(whale);
+  assert.equal(h.log.at(-2), 'fade except whale');
+  assert.equal(h.log.at(-1), 'ambience /whale/amb');
+  // Un sonido rezagado del cangrejo no empieza…
+  sounds.tapped(crab);
+  sounds.splashed(crab, 1);
+  assert.deepEqual(owned, []);
+  // …y cada sonido de la ballena se oye solo: antes, se alejan los de otros.
+  h.log.length = 0;
+  sounds.tapped(whale);
+  assert.deepEqual(h.log, ['fade except whale']);
+  assert.deepEqual(owned, ['whale:/whale/t1']);
+  // Su llamada, igual.
+  h.fire();
+  assert.equal(owned.at(-1)?.startsWith('whale:/whale/c'), true);
+  // Cerrada la ficha, sobre el mapa, el cangrejo vuelve a sonar.
+  state = state.withDiscovery(state.discovery.focus(null));
+  sounds.focusClosed();
+  owned.length = 0;
+  sounds.tapped(crab);
+  // (Su otro toque: nunca la misma grabación dos veces seguidas.)
+  assert.deepEqual(owned, ['crab:/crab/t2']);
 });
