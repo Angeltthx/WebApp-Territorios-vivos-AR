@@ -1379,6 +1379,21 @@
          fuera igualito al papel. Para que la línea más larga («Posada
          ecoturistica Chachita @posadaecoturisticachachita») quepa en un
          teléfono, ArView.fitDirectory ajusta el tamaño de toda la lista. */
+      /* «Toca un @ para ver su Instagram», encima del directorio: discreta,
+         y el @ en el dorado que en toda la app dice "aquí se toca". */
+      .rt-hint {
+        /* Alineada con la lista, que toma 14 px del margen de la tarjeta. */
+        margin: 0 -14px 16px;
+        font-family: var(--font-text);
+        font-style: italic;
+        font-size: clamp(14px, 3.8vw, 16px);
+        color: rgba(255, 255, 255, 0.82);
+      }
+      .rt-hint strong {
+        font-style: normal;
+        font-weight: 700;
+        color: #ffc53d;
+      }
       .rt-directory {
         list-style: none;
         /* Toma parte del margen de la tarjeta: en un teléfono de 320 px la

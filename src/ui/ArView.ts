@@ -753,7 +753,15 @@ export class ArView {
       const lone = shown.length === 1 && shown[0]!.kind !== 'paragraph'
         && shown[0]!.kind !== 'directory' && shown[0]!.kind !== 'pin';
       this.readingCard.dataset['centered'] = lone ? 'true' : 'false';
-      const blocks = shown.map(renderBlock);
+      const blocks = shown.flatMap((block) => {
+        const rendered = renderBlock(block);
+        if (block.kind !== 'directory') return [rendered];
+        // Encima del directorio, que los @ se tocan: en el afiche no se
+        // tocan, y como aquí se ven igual nadie lo adivinaría.
+        const hint = element('p', 'rt-hint');
+        writeRich(hint, this.strings.instagramHint);
+        return [hint, rendered];
+      });
       // Fotos reales del lugar, encima de su texto (antes, el dibujo del mapa
       // recortado sin fondo).
       if (text !== undefined && text.photos.length > 0) blocks.unshift(this.renderPhotos(text));
