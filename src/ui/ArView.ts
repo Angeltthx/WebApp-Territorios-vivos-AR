@@ -46,6 +46,9 @@ const GUIDE_CALL_TO_ACTION_MS = 5000;
  */
 const GUIDE_HELP_MS = 5000;
 
+/** El directorio no se encoge más que esto para caber en una línea (ver fitDirectory). */
+const MIN_DIRECTORY_PX = 10;
+
 export interface ArViewCallbacks {
   /** Empezar a bajar los modelos. Se dispara al instante, sin esperar. */
   onPrepare: () => void;
@@ -160,6 +163,7 @@ export class ArView {
    * en ese momento sin inventarse un estado que no existe.
    */
   private lastSession: ArSession | null = null;
+  private directoryResizeWatched = false;
 
   private guideTimer: number | null = null;
   /** Cuenta los 5 s de guía sin mapa antes del llamado a la acción. */
@@ -755,6 +759,7 @@ export class ArView {
       if (text !== undefined && text.photos.length > 0) blocks.unshift(this.renderPhotos(text));
       this.readingCard.replaceChildren(...blocks);
       this.readingCard.scrollTop = 0;
+      this.fitDirectory();
       this.reading.setAttribute('aria-label', text?.labelIn(this.language) ?? this.strings.mapText);
     }
     if (id === null) {
@@ -764,6 +769,43 @@ export class ArView {
     const show = id !== null;
     this.reading.dataset['visible'] = show ? 'true' : 'false';
     this.reading.setAttribute('aria-hidden', show ? 'false' : 'true');
+  }
+
+  /**
+   * El directorio va como en el afiche, cada negocio en UNA línea (nombre y
+   * @). En un teléfono la más larga no cabe al tamaño de lectura, así que se
+   * encoge la lista entera —todas las líneas al mismo tamaño, como en el
+   * papel— hasta que quepa, sin bajar de MIN_DIRECTORY_PX. Se mide después
+   * de pintar, y otra vez si cambia el ancho (girar el teléfono).
+   */
+  private fitDirectory(): void {
+    const list = this.readingCard.querySelector<HTMLElement>('.rt-directory');
+    if (list === null) return;
+    const fit = (): void => {
+      list.style.fontSize = '';
+      const available = list.clientWidth;
+      if (available === 0) return;
+      const widest = (): number => Math.max(...[...list.children].map((item) => (item as HTMLElement).scrollWidth));
+      // Unas pocas vueltas: el tamaño no encoge la línea en proporción
+      // exacta (la cápsula y el redondeo de las letras), y una sola pasada
+      // la dejaba unos píxeles por fuera.
+      for (let round = 0; round < 4 && widest() > available; round += 1) {
+        const current = parseFloat(getComputedStyle(list).fontSize);
+        if (current <= MIN_DIRECTORY_PX) break;
+        const next = Math.floor(current * (available / widest()) * 0.99 * 10) / 10;
+        list.style.fontSize = `${Math.max(MIN_DIRECTORY_PX, next)}px`;
+      }
+    };
+    requestAnimationFrame(fit);
+    // Y otra vez cuando llega la tipografía del afiche (Merriweather, más
+    // ancha que la de reserva): medida con la otra, la línea se salía.
+    void list.ownerDocument.fonts?.ready.then(() => requestAnimationFrame(fit));
+    if (!this.directoryResizeWatched) {
+      this.directoryResizeWatched = true;
+      window.addEventListener('resize', () => {
+        if (this.readingCard.querySelector('.rt-directory') !== null) this.fitDirectory();
+      });
+    }
   }
 
   /**

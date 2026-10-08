@@ -1373,44 +1373,49 @@
         hyphens: auto;
       }
       .rt-paragraph + .rt-paragraph { margin-top: 1.1em; }
-      .rt-directory { list-style: none; margin: 0; padding: 0; }
-      .rt-directory li {
+      /* El directorio, COMO EN EL AFICHE: cada negocio en UNA línea, el
+         nombre y a su lado el @ en su cápsula naranja. Una versión lo partía
+         en dos líneas y le ponía icono y sombra al @: el cliente pidió que
+         fuera igualito al papel. Para que la línea más larga («Posada
+         ecoturistica Chachita @posadaecoturisticachachita») quepa en un
+         teléfono, ArView.fitDirectory ajusta el tamaño de toda la lista. */
+      .rt-directory {
+        list-style: none;
+        /* Toma parte del margen de la tarjeta: en un teléfono de 320 px la
+           línea más larga no cabía ni al tamaño mínimo. */
+        margin: 0 -14px;
+        padding: 0;
         font-family: var(--font-text);
         font-size: clamp(17px, 4.6vw, 20px);
-        line-height: 1.3;
       }
-      .rt-directory li + li { margin-top: 12px; }
+      .rt-directory li {
+        line-height: 1.3;
+        white-space: nowrap;
+      }
+      .rt-directory li + li { margin-top: 0.5em; }
+      /* La cápsula del @: el naranja del afiche (#e1633f, medido en
+         map.jpg), esquinas apenas redondeadas y letra sans redondeada. */
       .rt-handle {
         display: inline-block;
-        margin-top: 4px;
-        padding: 2px 10px 3px;
-        border-radius: 7px;
-        background: #e8744f;
-        font-size: 0.8em;
-        overflow-wrap: anywhere;
+        margin-left: 0.3em;
+        padding: 0 0.42em 0.06em;
+        border-radius: 0.3em;
+        background: #e1633f;
+        font-family: ui-rounded, 'SF Pro Rounded', 'Nunito', system-ui, sans-serif;
+        font-weight: 600;
+        font-size: 0.86em;
+        line-height: 1.35;
       }
-      /* El @ abre su Instagram: la misma cápsula del mapa, con el icono de
-         Instagram delante para que se lea como un enlace, y un hundido al
-         tocarla. Sin subrayado: en el papel no lo tiene. */
+      /* Además abre su Instagram (en otra pestaña): se toca, pero se ve
+         igual que en el papel, sin subrayado ni adornos. */
       a.rt-handle {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
         color: #fff;
         text-decoration: none;
         text-shadow: none;
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
-        transition: transform 0.12s ease, filter 0.12s ease;
         -webkit-tap-highlight-color: transparent;
+        transition: filter 0.12s ease;
       }
-      a.rt-handle::before {
-        content: '';
-        flex: none;
-        width: 1em;
-        height: 1em;
-        background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.2'%3E%3Crect x='3' y='3' width='18' height='18' rx='5.5'/%3E%3Ccircle cx='12' cy='12' r='4.2'/%3E%3Ccircle cx='17.4' cy='6.6' r='1.1' fill='white' stroke='none'/%3E%3C/svg%3E");
-      }
-      a.rt-handle:active { transform: scale(0.96); filter: brightness(1.1); }
+      a.rt-handle:active { filter: brightness(1.15); }
       .rt-pin {
         display: flex;
         align-items: center;
