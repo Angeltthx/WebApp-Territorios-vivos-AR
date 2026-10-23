@@ -98,7 +98,7 @@ function harness() {
   };
   const audio = {
     unlock: async () => { calls.unlocks++; }, play() {}, dispose() {},
-    preload() {}, playClip() {}, startAmbience() {}, stopAmbience() {},
+    preload() {}, playClip() {}, fadeOutClips() {}, startAmbience() {}, stopAmbience() {},
     playVoice: async () => true, stopVoice() {},
   };
   const app = new StartArExperience(tracking, scene, audio, models, analytics, () => {});
@@ -764,6 +764,7 @@ function soundHarness() {
     unlock: async () => {}, dispose() {}, preload() {},
     play: () => { log.push('synth'); },
     playClip: (url: string) => { log.push(`clip ${url}`); },
+    fadeOutClips() {},
     startAmbience: (url: string) => { log.push(`ambience ${url}`); },
     stopAmbience: () => { log.push('ambience off'); },
     playVoice: async (url: string) => { log.push(`voice ${url}`); return true; },
@@ -1151,6 +1152,7 @@ test('el chapuzón suena con el volumen del salpicón, y solo en quien cae al ag
   const audio = {
     unlock: async () => {}, dispose() {}, preload() {}, play() {},
     playClip: (url: string, volume?: number) => { played.push({ url, volume }); },
+    fadeOutClips() {},
     startAmbience() {}, stopAmbience() {}, playVoice: async () => true, stopVoice() {},
   };
   const sounds = new AnimalSoundscape(audio as never, () => ArSession.idle());
@@ -2407,4 +2409,105 @@ test('cada @ del directorio abre su Instagram, con el enlace limpio', async () =
   // Un @ mal escrito en el catálogo no pasa.
   assert.throws(() => MapText.of({ id: 'x', label: 'x', area: { u0: 0, v0: 0, u1: 0.1, v1: 0.1 },
     blocks: [{ kind: 'directory', entries: [{ name: 'Algo', handle: 'sin arroba' }] }] }), /Instagram/);
+});
+
+test('con un animal en primer plano, los demás vuelven a su dibujo poco a poco, y salen otra vez al cerrarlo', async () => {
+  globalThis.document = { createElement: () => ({ getContext: () => null }) } as unknown as Document;
+  const scene = new Scene();
+  const camera = new PerspectiveCamera(60, 0.46, 0.01, 100);
+  let advance = (_delta: number): unknown => undefined;
+  const runtime = {
+    prepare: async () => {},
+    init: () => ({ scene, renderer: {} }),
+    mindar: { scene, camera, renderer: {} },
+    onFrame: (fn: (delta: number) => unknown) => { advance = fn; return () => {}; },
+    // El mapa a la vista: un ancla quieta en el origen.
+    anchorVisible: true,
+    anchor: { group: new Group() },
+  };
+  const outline = [{ u: 0.4, v: 0.4 }, { u: 0.6, v: 0.4 }, { u: 0.5, v: 0.6 }];
+  const make = (id: 'whale' | 'crab', u: number) => ArModel.fromSnapshot({
+    id, name: id, description: 'Ficha', source: ModelSource.primitive(id, 0x224466), spot: { u, v: 0.5 },
+    outlineShape: outline, sound: { waveform: 'sine', rootFrequencyHz: 90, overtoneRatios: [1], durationMs: 1800 },
+  });
+  const whale = make('whale', 0.3);
+  const crab = make('crab', 0.7);
+  const adapter = new ThreeSceneAdapter(runtime as never, 1.432);
+  await adapter.preload([whale, crab]);
+  const crabPin = (adapter as unknown as { pins: Map<string, MarkerPin> }).pins.get('crab')!;
+  const crabIcon = (crabPin as unknown as { icon: Object3D }).icon;
+  const crabLift = (crabPin as unknown as { lift: Object3D }).lift;
+  const materials: MeshStandardMaterial[] = [];
+  crabIcon.traverse((node) => { if (node instanceof Mesh) materials.push(node.material as MeshStandardMaterial); });
+  // Los dos descubiertos, en el mapa.
+  let discovery = ArSession.idle().discovery.unlock(whale.id).focus(null).unlock(crab.id).focus(null);
+  adapter.applyDiscovery(discovery);
+  for (let i = 0; i < 120; i += 1) advance(1 / 60);
+  const full = crabIcon.scale.x;
+  assert.ok(full > 0.01 && crabLift.visible);
+  assert.equal(materials[0]!.opacity, 1);
+  // Se abre la ballena: el cangrejo NO desaparece de golpe…
+  discovery = discovery.focus(whale.id);
+  adapter.applyDiscovery(discovery);
+  advance(1 / 60);
+  assert.ok(crabLift.visible, 'desapareció de golpe');
+  for (let i = 0; i < 15; i += 1) advance(1 / 60);
+  assert.ok(crabIcon.scale.x < full && crabIcon.scale.x > 0.0001, 'a mitad, encoge');
+  assert.ok(materials[0]!.opacity < 1 && materials[0]!.opacity > 0, 'a mitad, se desvanece');
+  assert.equal(materials[0]!.transparent, true);
+  // …y al rato ya no se ve.
+  for (let i = 0; i < 60; i += 1) advance(1 / 60);
+  assert.equal(crabPin.isReceded, true);
+  assert.equal(crabLift.visible, false);
+  // Al cerrar la ficha vuelve a salir, entero y opaco como era.
+  adapter.applyDiscovery(discovery.focus(null));
+  for (let i = 0; i < 60; i += 1) advance(1 / 60);
+  assert.equal(crabPin.isReceded, false);
+  assert.ok(crabLift.visible);
+  assert.ok(Math.abs(crabIcon.scale.x - full) < 1e-6);
+  assert.equal(materials[0]!.opacity, 1);
+  assert.equal(materials[0]!.transparent, false);
+  adapter.clear();
+});
+
+test('en primer plano solo suena el animal que se mira: lo de otros se aleja con un fundido y lo nuevo de otros no empieza', () => {
+  const h = soundHarness();
+  const owned: string[] = [];
+  h.audio.playClip = ((url: string, _volume?: number, owner?: string) => { owned.push(`${owner}:${url}`); }) as never;
+  h.audio.fadeOutClips = ((keep: string | null) => { h.log.push(`fade except ${keep}`); }) as never;
+  const whale = voiced('whale');
+  const crab = voiced('crab');
+  let state = ArSession.idle().searching(Placement.initial(whale.id, whale.defaultScale)).tracking();
+  const sounds = new AnimalSoundscape(h.audio, () => state, h.timers, () => 0);
+  // Sobre el mapa, sin nada abierto, cada uno suena como siempre.
+  sounds.tapped(crab);
+  sounds.splashed(whale, 1);
+  // (La ballena de prueba no tiene chapuzón: solo suena el toque del cangrejo.)
+  assert.deepEqual(owned, ['crab:/crab/t1']);
+  assert.ok(!h.log.some((line) => line.startsWith('fade')), 'sin primer plano no se apaga nada');
+  owned.length = 0;
+  // Se abre la ballena: lo que siguiera sonando de otros se aleja.
+  state = state.withDiscovery(state.discovery.unlock(whale.id));
+  sounds.focusOpened(whale);
+  assert.equal(h.log.at(-2), 'fade except whale');
+  assert.equal(h.log.at(-1), 'ambience /whale/amb');
+  // Un sonido rezagado del cangrejo no empieza…
+  sounds.tapped(crab);
+  sounds.splashed(crab, 1);
+  assert.deepEqual(owned, []);
+  // …y cada sonido de la ballena se oye solo: antes, se alejan los de otros.
+  h.log.length = 0;
+  sounds.tapped(whale);
+  assert.deepEqual(h.log, ['fade except whale']);
+  assert.deepEqual(owned, ['whale:/whale/t1']);
+  // Su llamada, igual.
+  h.fire();
+  assert.equal(owned.at(-1)?.startsWith('whale:/whale/c'), true);
+  // Cerrada la ficha, sobre el mapa, el cangrejo vuelve a sonar.
+  state = state.withDiscovery(state.discovery.focus(null));
+  sounds.focusClosed();
+  owned.length = 0;
+  sounds.tapped(crab);
+  // (Su otro toque: nunca la misma grabación dos veces seguidas.)
+  assert.deepEqual(owned, ['crab:/crab/t2']);
 });

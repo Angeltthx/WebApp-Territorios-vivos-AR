@@ -5,6 +5,7 @@ import {
   CircleGeometry,
   DoubleSide,
   Group,
+  Material,
   Mesh,
   MeshBasicMaterial,
   Object3D,
@@ -92,6 +93,12 @@ const TAP_FOOTPRINT_MARGIN = 1.15;
 const DORMANT_TAP_MARGIN = 1.1;
 
 /** Lo que tarda un animal en materializarse, y en volver a esconderse. */
+/**
+ * Lo que tarda un animal en volver a su dibujo cuando otro pasa a primer
+ * plano (y en volver a salir al cerrarlo): lo bastante para verlo irse, no
+ * tanto como para que estorbe a la ficha que se abre.
+ */
+const RECEDE_TIME_S = 0.55;
 const REVEAL_TIME_S = 0.55;
 const CONCEAL_TIME_S = 0.3;
 
@@ -239,6 +246,14 @@ export class MarkerPin {
   private readonly splash: WaterSplash | null;
   /** Hojas, arena, rocío o burbujas que salen de sus movimientos (ver AnimalParticles). */
   private readonly particles: AnimalParticles | null;
+  /**
+   * Replegado: mientras OTRO animal está en primer plano, este vuelve a su
+   * dibujo (ver `setReceded`). 0 en el mapa, 1 replegado del todo.
+   */
+  private recededTarget = false;
+  private recededProgress = 0;
+  /** Los materiales del icono con su opacidad de siempre, para desvanecerlo y devolverla. */
+  private readonly fadeable: { readonly material: Material & { opacity: number; transparent: boolean }; readonly opacity: number; readonly transparent: boolean }[] = [];
   private readonly icon: Object3D;
   private readonly animator: IconAnimator;
   private readonly choreography: TapChoreography;
@@ -340,6 +355,15 @@ export class MarkerPin {
     // Solo salpica lo que vive en el agua y hace algo con ella al tocarlo.
     this.splash = tapMove === 'breach' || tapMove === 'leap' ? new WaterSplash() : null;
     this.particles = model.particles.length > 0 ? new AnimalParticles(model.particles, this.icon) : null;
+    const seen = new Set<Material>();
+    this.icon.traverse((node) => {
+      const material = (node as Mesh).material;
+      for (const one of Array.isArray(material) ? material : material === undefined ? [] : [material]) {
+        if (seen.has(one)) continue;
+        seen.add(one);
+        this.fadeable.push({ material: one, opacity: one.opacity, transparent: one.transparent });
+      }
+    });
 
     const { x, y } = anchorPositionOf(model.spot, targetAspect);
     this.group.position.set(x, y, 0);
@@ -449,6 +473,23 @@ export class MarkerPin {
     this.gestureTime = null;
     this.tapSoundPending = true;
     return true;
+  }
+
+  /**
+   * Otro animal pasa a primer plano (o vuelve al mapa): este se repliega en
+   * su dibujo —encoge hacia su sitio, se hunde en el papel y se desvanece,
+   * en RECEDE_TIME_S— o vuelve a salir. Con un animal abierto, los demás
+   * seguían ahí moviéndose y distraían; el desenfoque estilo iPhone se
+   * propuso y no gustó. Que vuelvan a su dibujo es lo mismo que hacen al
+   * aparecer, al revés: nunca desaparecen de golpe.
+   */
+  setReceded(receded: boolean): void {
+    this.recededTarget = receded;
+  }
+
+  /** Si está replegado del todo (para los tests y la escena). */
+  get isReceded(): boolean {
+    return this.recededProgress >= 0.999;
   }
 
   /**
@@ -643,6 +684,8 @@ export class MarkerPin {
 
     this.smoke.advance(deltaSeconds);
     this.splash?.advance(deltaSeconds);
+    const recede = deltaSeconds / RECEDE_TIME_S;
+    this.recededProgress = clamp01(this.recededProgress + (this.recededTarget ? recede : -recede));
 
     // Vaivén suave: da sensación de que el icono flota sobre el papel.
     this.bob = Math.sin(elapsed * BOB_SPEED + this.phase) * BOB_AMPLITUDE;
@@ -696,9 +739,13 @@ export class MarkerPin {
     // La materializacion se aplica a la escala del icono: sale creciendo
     // desde el papel, con un pelin de rebote al final.
     const materialised = easeOutBack(this.revealProgress);
-    const applied = Math.min(size * ICON_SCALE * materialised, this.maxMapScale);
+    // Replegado (otro animal en primer plano): encoge hacia su sitio. Como
+    // la altura a la que flota sale de su tamaño, a la vez se hunde.
+    const receded = smootherstep(this.recededProgress);
+    const applied = Math.min(size * ICON_SCALE * materialised, this.maxMapScale) * (1 - receded);
+    this.fadeIcon(1 - receded);
 
-    this.lift.visible = this.revealProgress > 0.001 && !this.focused;
+    this.lift.visible = this.revealProgress > 0.001 && !this.focused && receded < 0.999;
     // La zona de toque sigue al tamaño con que se ve el animal; dormido, es
     // su contorno (se descubre tocándolo).
     const tapScale = Math.max(applied, 0.0001) * TAP_FOOTPRINT_MARGIN;
@@ -711,10 +758,10 @@ export class MarkerPin {
     if (!this.focused) this.icon.scale.setScalar(Math.max(applied, 0.0001));
 
     // El contorno se apaga a medida que el animal ocupa su sitio.
-    this.outline.visible = this.revealProgress < 0.999;
+    this.outline.visible = this.revealProgress < 0.999 && receded < 0.999;
     this.outlineMaterial.opacity =
       Math.min(1, OUTLINE_OPACITY + OUTLINE_PULSE_GLOW * this.outlinePulse) *
-      (1 - this.revealProgress);
+      (1 - this.revealProgress) * (1 - receded);
 
     // Los iconos flotan lo justo para quedar delante del papel: un modelo
     // de frente puede extenderse hacia la cámara, y se sube su medio fondo.
@@ -727,6 +774,25 @@ export class MarkerPin {
       this.placeWater(this.lift.position.z);
     }
   }
+
+  /**
+   * La opacidad del animal (1: la suya). Solo es transparente mientras se
+   * desvanece: un material transparente sin necesidad se ordena peor y se
+   * ve a través de sí mismo.
+   */
+  private fadeIcon(visibility: number): void {
+    for (const { material, opacity, transparent } of this.fadeable) {
+      const fading = visibility < 0.999;
+      material.transparent = fading || transparent;
+      material.opacity = opacity * (fading ? visibility : 1);
+    }
+  }
+}
+
+/** Entrada y salida suaves, sin tirón al empezar ni al acabar. */
+function smootherstep(t: number): number {
+  const x = clamp01(t);
+  return x * x * x * (x * (x * 6 - 15) + 10);
 }
 
 /**

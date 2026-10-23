@@ -16,9 +16,17 @@ export interface AudioPort {
   preload(urls: readonly string[]): void;
   /**
    * Una grabación, una vez, a `volume` (0–1, por defecto 1). Si tarda
-   * demasiado en llegar, no suena: tarde confunde.
+   * demasiado en llegar, no suena: tarde confunde. `owner`: de quién es
+   * (el id del animal), para poder apagar luego los de otros
+   * (`fadeOutClips`).
    */
-  playClip(url: string, volume?: number): void;
+  playClip(url: string, volume?: number, owner?: string): void;
+  /**
+   * Apaga con un fundido suave las grabaciones que estén sonando y NO sean
+   * de `keep` (todas, con null). Lo que se apaga no corta en seco: baja en
+   * algo más de un segundo, como cuando un sonido se aleja.
+   */
+  fadeOutClips(keep: string | null): void;
   /**
    * Ambiente en bucle y sin costuras. Sustituye con un fundido al que
    * estuviera sonando; con la misma ruta, no hace nada.
