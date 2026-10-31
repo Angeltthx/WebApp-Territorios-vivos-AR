@@ -304,6 +304,12 @@
         "gain": 0.3,
         "loop": true
       }
-    ]
+    ],
+    "narration": {
+      "file": "audios/RANA.mp3",
+      "cuts": [
+        16.05
+      ]
+    }
   }
 }

@@ -41,4 +41,4 @@ Generado por `npm run build-audio`. No editar a mano.
   - Nota: Hojas removidas: lo que suena cuando la rana cae del salto sobre su hoja.
   - Usado en: frog/tap-1.mp3, frog/tap-2.mp3
 - **Narraciones** (español e inglés) — grabación propia del equipo de Territorios Vivos (`audios/`).
-  - Usado en: whale/narration-1.mp3, whale/narration-2.mp3, whale/narration-en-1.mp3, whale/narration-en-2.mp3, crab/narration-1.mp3, crab/narration-2.mp3, crab/narration-en-1.mp3, crab/narration-en-2.mp3, turtle/narration-1.mp3, turtle/narration-2.mp3, turtle/narration-en-1.mp3, turtle/narration-en-2.mp3, bird/narration-1.mp3, bird/narration-2.mp3, bird/narration-en-1.mp3, bird/narration-en-2.mp3
+  - Usado en: whale/narration-1.mp3, whale/narration-2.mp3, whale/narration-en-1.mp3, whale/narration-en-2.mp3, crab/narration-1.mp3, crab/narration-2.mp3, crab/narration-en-1.mp3, crab/narration-en-2.mp3, turtle/narration-1.mp3, turtle/narration-2.mp3, turtle/narration-en-1.mp3, turtle/narration-en-2.mp3, bird/narration-1.mp3, bird/narration-2.mp3, bird/narration-en-1.mp3, bird/narration-en-2.mp3, frog/narration-1.mp3, frog/narration-2.mp3
