@@ -387,7 +387,8 @@ export class ArView {
     text('#menu-sound-title', t.sound);
     text('#menu-language-title', t.language);
     text('#retry', t.retry);
-    text('[data-action="social"]', t.menuSocial);
+    text('#menu-social-title', t.menuSocial);
+    label('#menu-social', t.menuSocial);
     text('[data-action="soon"]', t.menuSoon);
     text('#menu-credit', t.menuCredit);
     label('#start', t.start);
