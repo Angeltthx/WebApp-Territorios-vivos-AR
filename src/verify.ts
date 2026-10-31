@@ -40,7 +40,7 @@ import { TapHint } from '@infrastructure/rendering/TapHint';
 import { anchorPositionOf } from '@infrastructure/rendering/MarkerPin';
 import { MapText } from '@domain/value-objects/MapText';
 
-const TARGET_ASPECT = 1432 / 1000;
+const TARGET_ASPECT = 1437 / 1000;
 const MAP_URL = '/targets/map.jpg';
 
 /**

@@ -387,9 +387,9 @@ export class ArView {
     text('#menu-sound-title', t.sound);
     text('#menu-language-title', t.language);
     text('#retry', t.retry);
-    text('[data-action="share-story"]', t.menuStory);
     text('[data-action="social"]', t.menuSocial);
     text('[data-action="soon"]', t.menuSoon);
+    text('#menu-credit', t.menuCredit);
     label('#start', t.start);
     label('#focus-close', t.closeCard);
     label('#reading-close', t.closeText);
@@ -790,10 +790,18 @@ export class ArView {
     const list = this.readingCard.querySelector<HTMLElement>('.rt-directory');
     if (list === null) return;
     const fit = (): void => {
-      list.style.fontSize = '';
+      const rows = [...list.children] as HTMLElement[];
+      for (const row of rows) row.classList.remove('rt-wrap');
       const available = list.clientWidth;
       if (available === 0) return;
-      const widest = (): number => Math.max(...[...list.children].map((item) => (item as HTMLElement).scrollWidth));
+      // Una fila que no cabe ni al tamaño mínimo lleva su @ en la línea de
+      // abajo, como en el póster («Grupo de Danza Cultural Serranías del
+      // Porvenir», cuyo @ es larguísimo). Sin esto, esa sola fila encogía
+      // todo el directorio al mínimo y aun así se salía.
+      list.style.fontSize = `${MIN_DIRECTORY_PX}px`;
+      for (const row of rows) if (row.scrollWidth > available) row.classList.add('rt-wrap');
+      list.style.fontSize = '';
+      const widest = (): number => Math.max(...rows.map((row) => row.scrollWidth));
       // Unas pocas vueltas: el tamaño no encoge la línea en proporción
       // exacta (la cápsula y el redondeo de las letras), y una sola pasada
       // la dejaba unos píxeles por fuera.

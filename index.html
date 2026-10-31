@@ -608,7 +608,7 @@
          GUÍA DE ENCUADRE
 
          Lo primero que ve el usuario tras dar permiso de cámara. Un marco
-         con la proporción EXACTA del mapa (1000x1432) y una instrucción:
+         con la proporción EXACTA del mapa (1000x1437) y una instrucción:
          sin esto, la pantalla es la imagen de la cámara y nada indica que
          haya que buscar un mapa impreso.
 
@@ -643,7 +643,7 @@
       #guide-frame {
         flex-shrink: 0;
         position: relative;
-        aspect-ratio: 1000 / 1432;
+        aspect-ratio: 1000 / 1437;
         /* El tercer término deja sitio al texto de debajo (instrucción,
            misión, enlace y la píldora de estado) en pantallas bajas: sin él,
            a 375×560 el enlace se montaba sobre la píldora. En las altas
@@ -1230,6 +1230,28 @@
         background: rgba(255, 255, 255, 0.12);
       }
 
+      /* Los créditos cierran el menú, más pequeños y separados por una
+         línea: se leen, no se eligen. Solo la web es un enlace, en dorado. */
+      #menu-credits {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin-top: 6px;
+        padding: 12px 14px 8px;
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
+        font-family: var(--font-text);
+        font-size: 13px;
+        line-height: 1.4;
+        color: rgba(255, 255, 255, 0.72);
+      }
+      #menu-web {
+        align-self: flex-start;
+        padding: 6px 0;
+        color: #ffc53d;
+        text-decoration: none;
+      }
+      #menu-web:active { opacity: 0.7; }
+
       [hidden] { display: none !important; }
 
 
@@ -1408,6 +1430,14 @@
         white-space: nowrap;
       }
       .rt-directory li + li { margin-top: 0.5em; }
+      /* La fila que no cabe en una línea ni al mínimo: el nombre y, debajo,
+         su @ (ver ArView.fitDirectory), como lo imprime el póster. */
+      .rt-directory li.rt-wrap { white-space: normal; }
+      .rt-directory li.rt-wrap .rt-handle {
+        display: block;
+        width: fit-content;
+        margin: 0.2em 0 0;
+      }
       /* La cápsula del @: el naranja del afiche (#e1633f, medido en
          map.jpg), esquinas apenas redondeadas y letra sans redondeada. */
       .rt-handle {
@@ -1728,9 +1758,15 @@
               <button type="button" data-language="en" aria-pressed="false" lang="en">English</button>
             </div>
           </div>
-          <button type="button" data-action="share-story">Historia</button>
           <button type="button" data-action="social">Redes sociales</button>
           <button type="button" data-action="soon">Próximamente</button>
+          <!-- Créditos, como en el póster: quién lo produce y la web. La web
+               abre SIEMPRE pestaña nueva: navegar en esta dispara `pagehide`
+               y eso para la sesión (ver main.ts). -->
+          <footer id="menu-credits">
+            <span id="menu-credit">Una producción de Doinmedia</span>
+            <a id="menu-web" href="https://www.territoriosvivos.com.co" target="_blank" rel="noopener">www.territoriosvivos.com.co</a>
+          </footer>
         </nav>
 
         <button type="button" id="help" aria-label="Volver a mostrar la guía" hidden>?</button>

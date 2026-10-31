@@ -20,7 +20,7 @@ import { PointerInteractionAdapter } from '@infrastructure/interaction/PointerIn
 import { ThreeSceneAdapter } from '@infrastructure/rendering/ThreeSceneAdapter';
 import { NUQUI_CATALOG } from '@infrastructure/repositories/StaticModelRepository';
 
-const TARGET_ASPECT = 1432 / 1000;
+const TARGET_ASPECT = 1437 / 1000;
 
 const canvas = document.querySelector<HTMLCanvasElement>('#stage');
 const nav = document.querySelector<HTMLElement>('#animals');

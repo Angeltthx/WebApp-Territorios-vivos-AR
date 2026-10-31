@@ -15,7 +15,7 @@ const results = document.querySelector('#results')!;
 const catalog = NUQUI_CATALOG.map(ArModel.fromSnapshot);
 const mapTexts = NUQUI_MAP_TEXTS.map(MapText.of);
 // `?text=directorio` para ver otro texto en grande; por defecto, el párrafo.
-const textId = new URLSearchParams(location.search).get('text') ?? 'turismo';
+const textId = new URLSearchParams(location.search).get('text') ?? 'directorio';
 // `?animal=turtle` para comprobar la ficha de otro: la de la tortuga, con
 // tres párrafos, es la que más ocupa.
 const requested = new URLSearchParams(location.search).get('animal');

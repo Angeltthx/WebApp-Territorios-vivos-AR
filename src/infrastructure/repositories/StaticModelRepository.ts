@@ -98,7 +98,9 @@ export class StaticModelRepository implements ModelRepository {
 export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   {
     id: 'whale',
-    name: 'Ballena jorobada',
+    // «Ballena Yubarta o Jorobada», como la llama Carolina: lo pidió el
+    // cliente (octubre de 2026), aunque el póster diga «BALLENA JOROBADA».
+    name: 'Ballena yubarta o jorobada',
     species: 'Megaptera novaeangliae / Ballena yubarta o jorobada',
     description: [
       'Cada año viaja más de 8.000 kilómetros desde la Antártida hasta estas aguas tibias ' +
@@ -175,7 +177,7 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     },
     // El punto queda dentro del dibujo de la ballena; un poco más abajo que
     // su centro para que la silueta 3D no rebase el borde en perspectiva.
-    spot: { u: 0.304, v: 0.19 },
+    spot: { u: 0.304, v: 0.189 },
     // De frente, como los otros tres: los cuatro miran a quien sostiene el
     // teléfono. Se probó de perfil porque de frente su largo apunta a la
     // cámara, pero lo que se veía "demasiado grande" era el PRIMER PLANO, no
@@ -201,16 +203,16 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     // las mismas coordenadas que `spot` y calzan con el dibujo por
     // construcción.
     outlineShape: [
-      { u: 0.151, v: 0.1585 }, { u: 0.168, v: 0.1376 }, { u: 0.185, v: 0.0391 }, { u: 0.202, v: 0.037 },
-      { u: 0.219, v: 0.0419 }, { u: 0.236, v: 0.0489 }, { u: 0.253, v: 0.0601 }, { u: 0.27, v: 0.0733 },
-      { u: 0.287, v: 0.088 }, { u: 0.304, v: 0.0908 }, { u: 0.321, v: 0.0915 }, { u: 0.338, v: 0.0922 },
-      { u: 0.355, v: 0.0943 }, { u: 0.372, v: 0.0971 }, { u: 0.389, v: 0.0992 }, { u: 0.406, v: 0.1061 },
-      { u: 0.423, v: 0.1103 }, { u: 0.44, v: 0.1173 }, { u: 0.457, v: 0.1229 }, { u: 0.457, v: 0.1439 },
-      { u: 0.44, v: 0.148 }, { u: 0.423, v: 0.1494 }, { u: 0.406, v: 0.1508 }, { u: 0.389, v: 0.1543 },
-      { u: 0.372, v: 0.1571 }, { u: 0.355, v: 0.1599 }, { u: 0.338, v: 0.1613 }, { u: 0.321, v: 0.169 },
-      { u: 0.304, v: 0.1816 }, { u: 0.287, v: 0.1948 }, { u: 0.27, v: 0.2053 }, { u: 0.253, v: 0.2123 },
-      { u: 0.236, v: 0.2165 }, { u: 0.219, v: 0.1704 }, { u: 0.202, v: 0.1753 }, { u: 0.185, v: 0.183 },
-      { u: 0.168, v: 0.1865 }, { u: 0.151, v: 0.1795 },
+      { u: 0.151, v: 0.1559 }, { u: 0.168, v: 0.1357 }, { u: 0.185, v: 0.0383 }, { u: 0.202, v: 0.0362 },
+      { u: 0.219, v: 0.0411 }, { u: 0.236, v: 0.0494 }, { u: 0.253, v: 0.0605 }, { u: 0.27, v: 0.0731 },
+      { u: 0.287, v: 0.0884 }, { u: 0.304, v: 0.0905 }, { u: 0.321, v: 0.0912 }, { u: 0.338, v: 0.0919 },
+      { u: 0.355, v: 0.0939 }, { u: 0.372, v: 0.0967 }, { u: 0.389, v: 0.0988 }, { u: 0.406, v: 0.1051 },
+      { u: 0.423, v: 0.1093 }, { u: 0.44, v: 0.1162 }, { u: 0.457, v: 0.1218 }, { u: 0.457, v: 0.1441 },
+      { u: 0.44, v: 0.1475 }, { u: 0.423, v: 0.1489 }, { u: 0.406, v: 0.1503 }, { u: 0.389, v: 0.1538 },
+      { u: 0.372, v: 0.1566 }, { u: 0.355, v: 0.1594 }, { u: 0.338, v: 0.1608 }, { u: 0.321, v: 0.1684 },
+      { u: 0.304, v: 0.1809 }, { u: 0.287, v: 0.1928 }, { u: 0.27, v: 0.2046 }, { u: 0.253, v: 0.2116 },
+      { u: 0.236, v: 0.2157 }, { u: 0.219, v: 0.1698 }, { u: 0.202, v: 0.1747 }, { u: 0.185, v: 0.1816 },
+      { u: 0.168, v: 0.1907 }, { u: 0.151, v: 0.1802 },
     ],
     outlineView: 'side',
     outlineSpin: 0,
@@ -227,10 +229,10 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   },
   {
     id: 'bird',
-    // Nombre y especie, los del PÓSTER: es la referencia (etiqueta «PAVA DEL
-    // BAUDÓ / Penelope ortoni»).
-    name: 'Pava del Baudó',
-    species: 'Penelope ortoni / Pava del Baudó',
+    // El póster dice «PAVA DEL BAUDÓ / Penelope ortoni»; el cliente pidió
+    // los dos nombres (octubre de 2026), y Carolina la llama «Pava del Chocó».
+    name: 'Pava del Chocó o del Baudó',
+    species: 'Penelope ortoni / Pava del Chocó o del Baudó',
     description: [
       'Endémica del Chocó biogeográfico: no existe en ningún otro planeta. ' +
         'Su canto anuncia que el bosque está sano.',
@@ -238,8 +240,8 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         'Cada vuelo suyo siembra selva.',
     ],
     english: {
-      name: 'Baudó guan',
-      species: 'Penelope ortoni / Baudó guan',
+      name: 'Chocó or Baudó guan',
+      species: 'Penelope ortoni / Chocó or Baudó guan',
       description: [
         'Endemic to the Chocó biogeographic region: it lives nowhere else on the planet. ' +
           'Its call tells us the forest is healthy.',
@@ -310,7 +312,7 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       // clip), no al tocarla: antes de eso solo levanta la cabeza.
       tapSoundAt: 1.3,
     },
-    spot: { u: 0.9075, v: 0.5098 },
+    spot: { u: 0.9105, v: 0.4523 },
     // Dibujo: 0.121 x 0.098. Se mantiene menor que la ballena, pero con
     // presencia suficiente para que la animación Sing se lea en teléfono.
     view: 'front',
@@ -320,16 +322,16 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     // del mapa. Contorno calcado del dibujo: el marrón de la pava contra el
     // verde de la hierba.
     outlineShape: [
-      { u: 0.841, v: 0.4686 }, { u: 0.848, v: 0.4637 }, { u: 0.855, v: 0.4637 }, { u: 0.862, v: 0.4658 },
-      { u: 0.869, v: 0.4881 }, { u: 0.876, v: 0.486 }, { u: 0.883, v: 0.4839 }, { u: 0.89, v: 0.4832 },
-      { u: 0.897, v: 0.4839 }, { u: 0.904, v: 0.4846 }, { u: 0.911, v: 0.486 }, { u: 0.918, v: 0.4874 },
-      { u: 0.925, v: 0.4881 }, { u: 0.932, v: 0.4895 }, { u: 0.939, v: 0.4916 }, { u: 0.946, v: 0.4944 },
-      { u: 0.953, v: 0.4972 }, { u: 0.96, v: 0.5 }, { u: 0.967, v: 0.5035 }, { u: 0.974, v: 0.5126 },
-      { u: 0.974, v: 0.5279 }, { u: 0.967, v: 0.5244 }, { u: 0.96, v: 0.5251 }, { u: 0.953, v: 0.5265 },
-      { u: 0.946, v: 0.5258 }, { u: 0.939, v: 0.5293 }, { u: 0.932, v: 0.5454 }, { u: 0.925, v: 0.5559 },
-      { u: 0.918, v: 0.5391 }, { u: 0.911, v: 0.5335 }, { u: 0.904, v: 0.5321 }, { u: 0.897, v: 0.5419 },
-      { u: 0.89, v: 0.5468 }, { u: 0.883, v: 0.5496 }, { u: 0.876, v: 0.5545 }, { u: 0.869, v: 0.5524 },
-      { u: 0.862, v: 0.5517 }, { u: 0.855, v: 0.5161 }, { u: 0.848, v: 0.5105 }, { u: 0.841, v: 0.4714 },
+      { u: 0.844, v: 0.4078 }, { u: 0.851, v: 0.4015 }, { u: 0.858, v: 0.4001 }, { u: 0.865, v: 0.4015 },
+      { u: 0.872, v: 0.4266 }, { u: 0.879, v: 0.4231 }, { u: 0.886, v: 0.4217 }, { u: 0.893, v: 0.421 },
+      { u: 0.9, v: 0.421 }, { u: 0.907, v: 0.4217 }, { u: 0.914, v: 0.4231 }, { u: 0.921, v: 0.4245 },
+      { u: 0.928, v: 0.4252 }, { u: 0.935, v: 0.4266 }, { u: 0.942, v: 0.4287 }, { u: 0.949, v: 0.4308 },
+      { u: 0.956, v: 0.4335 }, { u: 0.963, v: 0.437 }, { u: 0.97, v: 0.4405 }, { u: 0.977, v: 0.4468 },
+      { u: 0.977, v: 0.4635 }, { u: 0.97, v: 0.4621 }, { u: 0.963, v: 0.4635 }, { u: 0.956, v: 0.4642 },
+      { u: 0.949, v: 0.4635 }, { u: 0.942, v: 0.469 }, { u: 0.935, v: 0.4857 }, { u: 0.928, v: 0.4983 },
+      { u: 0.921, v: 0.5045 }, { u: 0.914, v: 0.501 }, { u: 0.907, v: 0.5045 }, { u: 0.9, v: 0.4802 },
+      { u: 0.893, v: 0.4843 }, { u: 0.886, v: 0.4662 }, { u: 0.879, v: 0.4621 }, { u: 0.872, v: 0.4593 },
+      { u: 0.865, v: 0.4565 }, { u: 0.858, v: 0.453 }, { u: 0.851, v: 0.4468 }, { u: 0.844, v: 0.4106 },
     ],
     outlineView: 'side',
     outlineSpin: 0,
@@ -425,7 +427,7 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       // Las patitas suenan desde el primer paso y duran lo que el correteo.
       tapSoundAt: 0,
     },
-    spot: { u: 0.618, v: 0.4022 },
+    spot: { u: 0.62, v: 0.4053 },
     // Ya se veía de frente; 'front' es exactamente la misma orientación
     // que tenía con 'side' + 90°, escrita de forma directa.
     view: 'front',
@@ -443,13 +445,12 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     // Entran el cuerpo y las patas, no las antenas —demasiado finas para que
     // una columna de píxeles las distinga del fondo.
     outlineShape: [
-      { u: 0.576, v: 0.3918 }, { u: 0.583, v: 0.3897 }, { u: 0.59, v: 0.3918 }, { u: 0.597, v: 0.3925 },
-      { u: 0.604, v: 0.3848 }, { u: 0.611, v: 0.382 }, { u: 0.618, v: 0.3841 }, { u: 0.625, v: 0.3827 },
-      { u: 0.632, v: 0.3855 }, { u: 0.639, v: 0.3939 }, { u: 0.646, v: 0.3932 }, { u: 0.653, v: 0.3911 },
-      { u: 0.66, v: 0.3932 }, { u: 0.66, v: 0.4099 }, { u: 0.653, v: 0.4225 }, { u: 0.646, v: 0.4155 },
-      { u: 0.639, v: 0.4134 }, { u: 0.632, v: 0.412 }, { u: 0.625, v: 0.4043 }, { u: 0.618, v: 0.4043 },
-      { u: 0.611, v: 0.4043 }, { u: 0.604, v: 0.4085 }, { u: 0.597, v: 0.4113 }, { u: 0.59, v: 0.4162 },
-      { u: 0.583, v: 0.4022 }, { u: 0.576, v: 0.4085 },
+      { u: 0.576, v: 0.3939 }, { u: 0.584, v: 0.389 }, { u: 0.592, v: 0.3911 }, { u: 0.6, v: 0.3946 },
+      { u: 0.608, v: 0.3841 }, { u: 0.616, v: 0.3834 }, { u: 0.624, v: 0.3841 }, { u: 0.632, v: 0.3848 },
+      { u: 0.64, v: 0.3946 }, { u: 0.648, v: 0.3932 }, { u: 0.656, v: 0.3911 }, { u: 0.664, v: 0.396 },
+      { u: 0.664, v: 0.4203 }, { u: 0.656, v: 0.421 }, { u: 0.648, v: 0.4273 }, { u: 0.64, v: 0.4134 },
+      { u: 0.632, v: 0.4148 }, { u: 0.624, v: 0.4043 }, { u: 0.616, v: 0.405 }, { u: 0.608, v: 0.412 },
+      { u: 0.6, v: 0.4134 }, { u: 0.592, v: 0.4168 }, { u: 0.584, v: 0.4224 }, { u: 0.576, v: 0.421 },
     ],
     outlineView: 'top',
     outlineSpin: 180,
@@ -471,8 +472,10 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     // hablando de la CAREY (escamas como tejas, pico curvo, come esponjas),
     // nada de eso es de la golfina. Pendiente de que el equipo los
     // reescriba: el texto es suyo.
-    name: 'Tortuga golfina',
-    species: 'Lepidochelys olivacea / Tortuga golfina',
+    // «Tortuga Carey o Golfina», a pedido del cliente (octubre de 2026):
+    // Carolina la llama carey y la ficha habla de la carey.
+    name: 'Tortuga carey o golfina',
+    species: 'Lepidochelys olivacea / Tortuga carey o golfina',
     description: [
       'Navega los océanos por 50 años y siempre recuerda el camino de vuelta. ' +
         'Su caparazón, de escamas que se montan como tejas, es único: no hay dos ' +
@@ -485,8 +488,8 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         'mares, desde mucho antes que nosotros.',
     ],
     english: {
-      name: 'Olive ridley sea turtle',
-      species: 'Lepidochelys olivacea / Olive ridley sea turtle',
+      name: 'Hawksbill or olive ridley sea turtle',
+      species: 'Lepidochelys olivacea / Hawksbill or olive ridley sea turtle',
       description: [
         'It roams the oceans for 50 years and always remembers the way back. ' +
           'Its shell, made of scutes that overlap like roof tiles, is unique: no two ' +
@@ -550,7 +553,7 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       // los 2 s), mientras vuelve a hundirse.
       tapSoundAt: 2.15,
     },
-    spot: { u: 0.3375, v: 0.5335 },
+    spot: { u: 0.3375, v: 0.5334 },
     // De frente es una silueta baja y ancha —una tortuga lo es—, así que
     // se agranda por encima de su dibujo para que no quede como una raya.
     view: 'front',
@@ -566,15 +569,15 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
     // mar crema. Va en diagonal, con las aletas extendidas, que es justo lo
     // que una silueta deducida del modelo no acertaba a dar.
     outlineShape: [
-      { u: 0.244, v: 0.5286 }, { u: 0.255, v: 0.4916 }, { u: 0.266, v: 0.4958 }, { u: 0.277, v: 0.5042 },
-      { u: 0.288, v: 0.5154 }, { u: 0.299, v: 0.523 }, { u: 0.31, v: 0.5203 }, { u: 0.321, v: 0.5161 },
-      { u: 0.332, v: 0.5126 }, { u: 0.343, v: 0.5084 }, { u: 0.354, v: 0.5056 }, { u: 0.365, v: 0.5028 },
-      { u: 0.376, v: 0.5007 }, { u: 0.387, v: 0.53 }, { u: 0.398, v: 0.5349 }, { u: 0.409, v: 0.544 },
-      { u: 0.42, v: 0.5587 }, { u: 0.431, v: 0.5726 }, { u: 0.431, v: 0.5754 }, { u: 0.42, v: 0.5754 },
-      { u: 0.409, v: 0.5726 }, { u: 0.398, v: 0.5677 }, { u: 0.387, v: 0.5615 }, { u: 0.376, v: 0.5622 },
-      { u: 0.365, v: 0.5705 }, { u: 0.354, v: 0.5684 }, { u: 0.343, v: 0.5635 }, { u: 0.332, v: 0.5622 },
-      { u: 0.321, v: 0.5615 }, { u: 0.31, v: 0.5594 }, { u: 0.299, v: 0.5559 }, { u: 0.288, v: 0.5517 },
-      { u: 0.277, v: 0.5461 }, { u: 0.266, v: 0.5433 }, { u: 0.255, v: 0.5419 }, { u: 0.244, v: 0.5363 },
+      { u: 0.244, v: 0.5275 }, { u: 0.255, v: 0.4906 }, { u: 0.266, v: 0.4962 }, { u: 0.277, v: 0.5052 },
+      { u: 0.288, v: 0.515 }, { u: 0.299, v: 0.5226 }, { u: 0.31, v: 0.5198 }, { u: 0.321, v: 0.5164 },
+      { u: 0.332, v: 0.5122 }, { u: 0.343, v: 0.508 }, { u: 0.354, v: 0.5052 }, { u: 0.365, v: 0.5031 },
+      { u: 0.376, v: 0.501 }, { u: 0.387, v: 0.5296 }, { u: 0.398, v: 0.5351 }, { u: 0.409, v: 0.5442 },
+      { u: 0.42, v: 0.5588 }, { u: 0.431, v: 0.5727 }, { u: 0.431, v: 0.5762 }, { u: 0.42, v: 0.5755 },
+      { u: 0.409, v: 0.572 }, { u: 0.398, v: 0.5672 }, { u: 0.387, v: 0.5616 }, { u: 0.376, v: 0.5623 },
+      { u: 0.365, v: 0.5637 }, { u: 0.354, v: 0.5644 }, { u: 0.343, v: 0.5644 }, { u: 0.332, v: 0.563 },
+      { u: 0.321, v: 0.5623 }, { u: 0.31, v: 0.5602 }, { u: 0.299, v: 0.5574 }, { u: 0.288, v: 0.5525 },
+      { u: 0.277, v: 0.547 }, { u: 0.266, v: 0.5435 }, { u: 0.255, v: 0.5428 }, { u: 0.244, v: 0.5379 },
     ],
     outlineView: 'top',
     outlineSpin: -90,
@@ -655,50 +658,30 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
       // recortado.
       tapSoundAt: 1.32,
     },
-    // Las DOS ranas del póster, cada una con su contorno: esta es la
-    // grande, junto a la etiqueta, vista de espaldas sobre una hoja
-    // (dibujo: 0.10 × 0.13 de ancho de mapa); la chica es `companions`.
-    spot: { u: 0.762, v: 0.835 },
+    // El mapa de octubre de 2026 dibuja UNA sola rana (antes eran dos, y la
+    // chica iba en `companions`): de espaldas sobre la hoja grande, encima
+    // de su etiqueta (dibujo: 0.08 × 0.07 de ancho de mapa).
+    spot: { u: 0.8916, v: 0.7754 },
     view: 'front',
     // Medida en /verify.html: a 1 ocupaba 0.073 de ancho, menos que el
-    // cangrejo; a 1.35 queda en ~0.10, como su dibujo. Es negra sobre selva
-    // oscura, y más pequeña se perdía.
+    // cangrejo; a 1.35 queda en ~0.10. Es negra sobre selva oscura, y más
+    // pequeña se perdía.
     iconSize: 1.35,
-    // En primer plano salen LAS DOS en fila: el tamaño lo pone la fila.
     focusSize: 1,
     facing: 0,
     // Calcado del dibujo: el rojo y el negro de la rana contra la selva.
     outlineShape: [
-      { u: 0.715, v: 0.8464 }, { u: 0.72, v: 0.845 }, { u: 0.725, v: 0.8429 }, { u: 0.73, v: 0.8261 },
-      { u: 0.735, v: 0.8226 }, { u: 0.74, v: 0.8198 }, { u: 0.745, v: 0.8142 }, { u: 0.75, v: 0.7926 },
-      { u: 0.755, v: 0.7912 }, { u: 0.76, v: 0.787 }, { u: 0.765, v: 0.7877 }, { u: 0.77, v: 0.7905 },
-      { u: 0.775, v: 0.7933 }, { u: 0.78, v: 0.8128 }, { u: 0.785, v: 0.8184 }, { u: 0.79, v: 0.8261 },
-      { u: 0.795, v: 0.8317 }, { u: 0.8, v: 0.8282 }, { u: 0.805, v: 0.8359 }, { u: 0.81, v: 0.8561 },
-      { u: 0.81, v: 0.8603 }, { u: 0.805, v: 0.8659 }, { u: 0.8, v: 0.8701 }, { u: 0.795, v: 0.8736 },
-      { u: 0.79, v: 0.8764 }, { u: 0.785, v: 0.875 }, { u: 0.78, v: 0.875 }, { u: 0.775, v: 0.861 },
-      { u: 0.77, v: 0.8617 }, { u: 0.765, v: 0.8617 }, { u: 0.76, v: 0.861 }, { u: 0.755, v: 0.8617 },
-      { u: 0.75, v: 0.8617 }, { u: 0.745, v: 0.861 }, { u: 0.74, v: 0.8596 }, { u: 0.735, v: 0.8659 },
-      { u: 0.73, v: 0.8729 }, { u: 0.725, v: 0.8722 }, { u: 0.72, v: 0.8722 }, { u: 0.715, v: 0.8694 },
-    ],
-    // La rana chica, arriba a la derecha sobre la hoja grande. En el póster
-    // las dos miden casi lo mismo (0.09 la chica); aquí se hace claramente
-    // menor —una grande y una chiquita— y en el primer plano salen las dos.
-    companions: [
-      {
-        spot: { u: 0.891, v: 0.775 },
-        iconSize: 0.8,
-        outlineShape: [
-          { u: 0.85, v: 0.7814 }, { u: 0.855, v: 0.7877 }, { u: 0.86, v: 0.7821 }, { u: 0.865, v: 0.7696 },
-          { u: 0.87, v: 0.7654 }, { u: 0.875, v: 0.7619 }, { u: 0.88, v: 0.7416 }, { u: 0.885, v: 0.7388 },
-          { u: 0.89, v: 0.7367 }, { u: 0.895, v: 0.7367 }, { u: 0.9, v: 0.7402 }, { u: 0.905, v: 0.7486 },
-          { u: 0.91, v: 0.7619 }, { u: 0.915, v: 0.7689 }, { u: 0.92, v: 0.773 }, { u: 0.925, v: 0.7772 },
-          { u: 0.93, v: 0.7933 }, { u: 0.93, v: 0.7961 }, { u: 0.925, v: 0.801 }, { u: 0.92, v: 0.8052 },
-          { u: 0.915, v: 0.808 }, { u: 0.91, v: 0.808 }, { u: 0.905, v: 0.8087 }, { u: 0.9, v: 0.7968 },
-          { u: 0.895, v: 0.7975 }, { u: 0.89, v: 0.7989 }, { u: 0.885, v: 0.7982 }, { u: 0.88, v: 0.7961 },
-          { u: 0.875, v: 0.7954 }, { u: 0.87, v: 0.801 }, { u: 0.865, v: 0.8059 }, { u: 0.86, v: 0.8052 },
-          { u: 0.855, v: 0.8052 }, { u: 0.85, v: 0.8017 },
-        ],
-      },
+      { u: 0.852, v: 0.7829 }, { u: 0.856, v: 0.7919 }, { u: 0.86, v: 0.7843 }, { u: 0.864, v: 0.7829 },
+      { u: 0.868, v: 0.769 }, { u: 0.872, v: 0.7662 }, { u: 0.876, v: 0.7634 }, { u: 0.88, v: 0.7606 },
+      { u: 0.884, v: 0.7418 }, { u: 0.888, v: 0.739 }, { u: 0.892, v: 0.7376 }, { u: 0.896, v: 0.737 },
+      { u: 0.9, v: 0.7383 }, { u: 0.904, v: 0.7418 }, { u: 0.908, v: 0.7481 }, { u: 0.912, v: 0.7606 },
+      { u: 0.916, v: 0.7662 }, { u: 0.92, v: 0.7717 }, { u: 0.924, v: 0.7724 }, { u: 0.928, v: 0.7773 },
+      { u: 0.932, v: 0.7843 }, { u: 0.932, v: 0.7982 }, { u: 0.928, v: 0.8017 }, { u: 0.924, v: 0.8051 },
+      { u: 0.92, v: 0.8079 }, { u: 0.916, v: 0.8086 }, { u: 0.912, v: 0.8086 }, { u: 0.908, v: 0.8079 },
+      { u: 0.904, v: 0.7982 }, { u: 0.9, v: 0.7982 }, { u: 0.896, v: 0.7982 }, { u: 0.892, v: 0.7982 },
+      { u: 0.888, v: 0.7975 }, { u: 0.884, v: 0.7968 }, { u: 0.88, v: 0.7968 }, { u: 0.876, v: 0.7961 },
+      { u: 0.872, v: 0.8024 }, { u: 0.868, v: 0.8065 }, { u: 0.864, v: 0.8065 }, { u: 0.86, v: 0.8058 },
+      { u: 0.856, v: 0.8045 }, { u: 0.852, v: 0.8003 },
     ],
     outlineView: 'top',
     outlineSpin: 0,

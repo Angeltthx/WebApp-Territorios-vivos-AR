@@ -86,7 +86,7 @@ El catálogo está en src/infrastructure/repositories/StaticModelRepository.ts.
 Cada animal declara modelo, ficha, sonido, secuencia de clips, coordenadas,
 orientación y contorno.
 
-El ancho del mapa mide una unidad; el alto es 1432/1000. Las coordenadas del catálogo
+El ancho del mapa mide una unidad; el alto es 1437/1000. Las coordenadas del catálogo
 parten de la esquina superior izquierda. MarkerPin realiza la conversión:
 
 ```text
