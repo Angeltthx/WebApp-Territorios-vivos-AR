@@ -53,9 +53,10 @@ export interface Strings {
   readonly unmute: string;
   readonly language: string;
   readonly retry: string;
-  readonly menuStory: string;
   readonly menuSocial: string;
   readonly menuSoon: string;
+  /** Crédito al pie del menú, como en el póster. */
+  readonly menuCredit: string;
 }
 
 export const STRINGS: Readonly<Record<Language, Strings>> = {
@@ -99,9 +100,9 @@ export const STRINGS: Readonly<Record<Language, Strings>> = {
     unmute: 'Activar el sonido',
     language: 'Idioma',
     retry: 'Reintentar',
-    menuStory: 'Historia',
     menuSocial: 'Redes sociales',
     menuSoon: 'Próximamente',
+    menuCredit: 'Una producción de Doinmedia',
   },
   en: {
     hints: {
@@ -147,9 +148,9 @@ export const STRINGS: Readonly<Record<Language, Strings>> = {
     unmute: 'Turn sound on',
     language: 'Language',
     retry: 'Retry',
-    menuStory: 'Story',
     menuSocial: 'Social media',
     menuSoon: 'Coming soon',
+    menuCredit: 'A Doinmedia production',
   },
 };
 

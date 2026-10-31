@@ -931,7 +931,8 @@ test('leer un texto excluye al primer plano, y la X cierra cualquiera de los dos
 test('los textos del mapa son válidos, no se solapan y su sonido existe', async () => {
   const repo = new StaticMapTextRepository(NUQUI_MAP_TEXTS);
   const texts = await repo.findAll();
-  assert.ok(texts.length >= 10);
+  // Solo los cuatro que pidió el cliente (octubre de 2026); el resto perdió su punto.
+  assert.deepEqual(texts.map((text) => text.id).sort(), ['chachita', 'danza', 'directorio', 'kipara']);
   for (const text of texts) {
     if (text.ambience !== null) assert.ok(existsSync(`public${text.ambience}`), `Falta public${text.ambience}`);
   }
@@ -964,14 +965,14 @@ test('un texto solo se abre con todos los animales encontrados y bloquea al rest
   // Falta el cangrejo: todavía no se lee nada.
   discover.execute('whale');
   close.execute();
-  await open.execute('turismo');
+  await open.execute('directorio');
   assert.equal(state.discovery.reading, null);
 
   discover.execute('crab');
   close.execute();
   // Todos encontrados: los textos se abren directamente, sin más pasos.
-  await open.execute('turismo');
-  assert.equal(state.discovery.reading, 'turismo');
+  await open.execute('directorio');
+  assert.equal(state.discovery.reading, 'directorio');
   assert.equal(h.log.at(-1), 'ambience /audio/coast/ambience.mp3');
 
   // Leyendo, tocar un animal no lo abre…
@@ -979,7 +980,7 @@ test('un texto solo se abre con todos los animales encontrados y bloquea al rest
   assert.equal(state.discovery.focused, null);
   // …ni se abre otro texto encima.
   await open.execute('danza');
-  assert.equal(state.discovery.reading, 'turismo');
+  assert.equal(state.discovery.reading, 'directorio');
   // Un id que no existe no hace nada.
   close.execute();
   assert.equal(state.discovery.reading, null);
@@ -1016,9 +1017,9 @@ test('la escena solo hace tocables los puntos con todos los animales encontrados
   const exploring = found.focus(null);
   adapter.applyDiscovery(exploring);
   assert.equal(tappableTexts().length, texts.length);
-  const hotspot = adapter.pickables?.get('text:turismo');
-  assert.equal(hotspot?.userData['textId'], 'turismo');
-  adapter.applyDiscovery(exploring.read('turismo'));
+  const hotspot = adapter.pickables?.get('text:directorio');
+  assert.equal(hotspot?.userData['textId'], 'directorio');
+  adapter.applyDiscovery(exploring.read('directorio'));
   assert.equal(tappableTexts().length, 0);
   adapter.clear();
 });
@@ -1900,7 +1901,7 @@ test('cada animal y cada texto con párrafos tiene su versión en inglés, y su 
     if (translatable) assert.notDeepEqual(text.blocksIn('en'), text.blocks, `${text.id} sin versión inglesa`);
   }
   // Sin traducción, en inglés se enseña el español (mejor eso que nada).
-  const plain = MapText.of(NUQUI_MAP_TEXTS.find((snapshot) => snapshot.id === 'nuqui')!);
+  const plain = MapText.of(NUQUI_MAP_TEXTS.find((snapshot) => snapshot.id === 'kipara')!);
   assert.equal(plain.blocksIn('en'), plain.blocks);
 });
 
@@ -2032,9 +2033,15 @@ test('un animal sin narración enseña la ✕ en cuanto se ve su gesto, y solo e
   assert.equal(tutorial.state.step, 'off');
 });
 
-test('las dos ranas son UN animal: mismo id y ficha, cada una en su sitio, con su contorno y su tamaño', () => {
+test('un compañero es el MISMO animal: mismo id y ficha, en su sitio, con su contorno y su tamaño', () => {
   const snapshot = NUQUI_CATALOG.find((entry) => entry.id === 'frog')!;
-  const frog = ArModel.fromSnapshot(snapshot);
+  // El mapa de octubre de 2026 dibuja una sola rana (antes eran dos).
+  assert.equal(ArModel.fromSnapshot(snapshot).instances.length, 1);
+  // `companions` sigue siendo vocabulario del catálogo: con una rana chica al lado…
+  const frog = ArModel.fromSnapshot({
+    ...snapshot,
+    companions: [{ spot: { u: 0.7, v: 0.8 }, iconSize: 0.8, outlineShape: [{ u: 0.69, v: 0.79 }, { u: 0.71, v: 0.79 }, { u: 0.7, v: 0.81 }] }],
+  });
   const [big, small] = frog.instances;
   assert.equal(frog.instances.length, 2);
   assert.ok(small!.id.equals(big!.id));
@@ -2369,12 +2376,8 @@ test('cada animal del catálogo tiene su efecto y sus huesos existen en el model
 
 test('los puntos del mapa enseñan fotos reales del lugar: como mucho tres, que existen y descritas en los dos idiomas', () => {
   const withPhotos = NUQUI_MAP_TEXTS.map(MapText.of).filter((text) => text.photos.length > 0);
-  // Solo los tres que pidió el cliente: la posada de Chachita, la compañía de danza y Kipará Té.
+  // Solo los tres que pidió el cliente: la posada de Chachita, la fundación de danza y Kipará Té.
   assert.deepEqual(withPhotos.map((text) => text.id).sort(), ['chachita', 'danza', 'kipara']);
-  // La danza va aparte de los cuatro lugares de su lado (que no llevan fotos).
-  const places = NUQUI_MAP_TEXTS.map(MapText.of).find((text) => text.id === 'lugares')!;
-  assert.equal(places.blocks.length, 4);
-  assert.equal(places.photos.length, 0);
   assert.equal(withPhotos.find((text) => text.id === 'danza')!.blocks.length, 1);
   for (const text of withPhotos) {
     assert.ok(text.photos.length <= 3, `${text.id}: más de tres fotos`);
@@ -2397,9 +2400,10 @@ test('cada @ del directorio abre su Instagram, con el enlace limpio', async () =
   assert.equal(instagramUrl('@museo_melele'), 'https://www.instagram.com/museo_melele/');
   assert.equal(instagramUrl('kiparatenuqui'), null);
   assert.equal(instagramUrl('@con espacio'), null);
-  // Las diez cuentas que pasó el cliente, todas en el directorio (en los dos idiomas).
+  // Las diez cuentas del directorio del póster, en los dos idiomas. La de la danza
+  // es la de la fundación desde octubre de 2026 (antes, @orfelinamarmolejo).
   const expected = ['kiparatenuqui', 'lobosdelmanglar', 'vientosdeyubarta', 'carlitours.nuqui', 'museo_melele',
-    'escombrosdelmarhostal', 'posadaecoturisticachachita', 'sononaecolodge', 'posadanativajara.jovi', 'orfelinamarmolejo'];
+    'escombrosdelmarhostal', 'posadaecoturisticachachita', 'sononaecolodge', 'posadanativajara.jovi', 'fundacionserraniasdelporvenir'];
   const directory = MapText.of(NUQUI_MAP_TEXTS.find((text) => text.id === 'directorio')!);
   for (const language of ['es', 'en'] as const) {
     const block = directory.blocksIn(language).find((b) => b.kind === 'directory');

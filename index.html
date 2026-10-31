@@ -608,7 +608,7 @@
          GUÍA DE ENCUADRE
 
          Lo primero que ve el usuario tras dar permiso de cámara. Un marco
-         con la proporción EXACTA del mapa (1000x1432) y una instrucción:
+         con la proporción EXACTA del mapa (1000x1437) y una instrucción:
          sin esto, la pantalla es la imagen de la cámara y nada indica que
          haya que buscar un mapa impreso.
 
@@ -643,7 +643,7 @@
       #guide-frame {
         flex-shrink: 0;
         position: relative;
-        aspect-ratio: 1000 / 1432;
+        aspect-ratio: 1000 / 1437;
         /* El tercer término deja sitio al texto de debajo (instrucción,
            misión, enlace y la píldora de estado) en pantallas bajas: sin él,
            a 375×560 el enlace se montaba sobre la píldora. En las altas
@@ -1215,6 +1215,41 @@
         background: #ffc53d;
         color: #2a2c1c;
       }
+      /* Las redes: el mismo título pequeño que «Idioma» y una píldora por
+         red, con su icono. Son enlaces, no opciones: no cierran nada. */
+      #menu-social {
+        padding: 10px 12px 12px 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      #menu-social-title {
+        display: block;
+        margin-bottom: 8px;
+        font-family: var(--font-label);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.7);
+      }
+      #menu-social-links { display: flex; gap: 6px; }
+      #menu-social-links a {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 40px;
+        padding: 8px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.1);
+        font-family: var(--font-text);
+        font-size: 14px;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.9);
+        text-decoration: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #menu-social-links a:active { background: rgba(255, 255, 255, 0.2); }
+      #menu-social-links svg { width: 18px; height: 18px; fill: #ffc53d; flex: none; }
       #sound-level {
         flex: 1;
         min-width: 0;
@@ -1229,6 +1264,28 @@
         transform: none;
         background: rgba(255, 255, 255, 0.12);
       }
+
+      /* Los créditos cierran el menú, más pequeños y separados por una
+         línea: se leen, no se eligen. Solo la web es un enlace, en dorado. */
+      #menu-credits {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin-top: 6px;
+        padding: 12px 14px 8px;
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
+        font-family: var(--font-text);
+        font-size: 13px;
+        line-height: 1.4;
+        color: rgba(255, 255, 255, 0.72);
+      }
+      #menu-web {
+        align-self: flex-start;
+        padding: 6px 0;
+        color: #ffc53d;
+        text-decoration: none;
+      }
+      #menu-web:active { opacity: 0.7; }
 
       [hidden] { display: none !important; }
 
@@ -1408,6 +1465,14 @@
         white-space: nowrap;
       }
       .rt-directory li + li { margin-top: 0.5em; }
+      /* La fila que no cabe en una línea ni al mínimo: el nombre y, debajo,
+         su @ (ver ArView.fitDirectory), como lo imprime el póster. */
+      .rt-directory li.rt-wrap { white-space: normal; }
+      .rt-directory li.rt-wrap .rt-handle {
+        display: block;
+        width: fit-content;
+        margin: 0.2em 0 0;
+      }
       /* La cápsula del @: el naranja del afiche (#e1633f, medido en
          map.jpg), esquinas apenas redondeadas y letra sans redondeada. */
       .rt-handle {
@@ -1728,9 +1793,32 @@
               <button type="button" data-language="en" aria-pressed="false" lang="en">English</button>
             </div>
           </div>
-          <button type="button" data-action="share-story">Historia</button>
-          <button type="button" data-action="social">Redes sociales</button>
+          <!-- Las redes de Territorios Vivos, las mismas que enlaza el webdoc
+               (../webdoc/web/src/content/site.ts): YouTube, el canal oficial,
+               y TikTok, la cuenta del cliente. Su Instagram falta a propósito:
+               allí sigue marcado como cuenta de prueba. Pestaña nueva, como
+               todo enlace que sale de aquí (ver main.ts, «pagehide»). -->
+          <div id="menu-social" role="group" aria-label="Redes sociales">
+            <span id="menu-social-title">Redes sociales</span>
+            <div id="menu-social-links">
+              <a href="https://www.youtube.com/channel/UCOIVYoUtKmyV9HW7j-QgUfg" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.6 7.2a2.5 2.5 0 0 0-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4a2.5 2.5 0 0 0-1.8 1.8C2 8.8 2 12 2 12s0 3.2.4 4.8a2.5 2.5 0 0 0 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4a2.5 2.5 0 0 0 1.8-1.8c.4-1.6.4-4.8.4-4.8s0-3.2-.4-4.8zM10 15V9l5.2 3L10 15z" /></svg>
+                YouTube
+              </a>
+              <a href="https://www.tiktok.com/@territoriosvivos" target="_blank" rel="noopener">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.6 3h-3.1v12.1a2.6 2.6 0 1 1-2.6-2.6c.3 0 .5 0 .8.1V9.4a5.8 5.8 0 1 0 4.9 5.7V9a7.4 7.4 0 0 0 4.3 1.4V7.3a4.3 4.3 0 0 1-4.3-4.3z" /></svg>
+                TikTok
+              </a>
+            </div>
+          </div>
           <button type="button" data-action="soon">Próximamente</button>
+          <!-- Créditos, como en el póster: quién lo produce y la web. La web
+               abre SIEMPRE pestaña nueva: navegar en esta dispara `pagehide`
+               y eso para la sesión (ver main.ts). -->
+          <footer id="menu-credits">
+            <span id="menu-credit">Una producción de Doinmedia</span>
+            <a id="menu-web" href="https://www.territoriosvivos.com.co" target="_blank" rel="noopener">www.territoriosvivos.com.co</a>
+          </footer>
         </nav>
 
         <button type="button" id="help" aria-label="Volver a mostrar la guía" hidden>?</button>

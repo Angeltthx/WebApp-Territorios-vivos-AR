@@ -39,7 +39,7 @@ const imagePath = resolve(repoRoot, 'public/targets/map.jpg');
  */
 const SUBJECTS = {
   whale: {
-    box: { u0: 0.1, v0: 0.018, u1: 0.48, v1: 0.22 },
+    box: { u0: 0.1, v0: 0.015, u1: 0.5, v1: 0.23 },
     // Sobre el mar la ballena tiene DOS tonos —el lomo azul marino y la
     // panza casi blanca—, y ninguna regla de "es azul" los junta sin
     // tragarse el mar. Lo que sí los junta es la distancia al color del
@@ -51,16 +51,16 @@ const SUBJECTS = {
     hit: (r, g, b) => (r - 4) ** 2 + (g - 124) ** 2 + (b - 141) ** 2 > 3600,
   },
   bird: {
-    box: { u0: 0.82, v0: 0.45, u1: 0.98, v1: 0.558 },
+    box: { u0: 0.83, v0: 0.395, u1: 0.979, v1: 0.505 },
     // Marrón oscuro y negro sobre selva verde. La hierba tiene el verde muy
     // por encima del rojo; la pava no.
     hit: (r, g, b) => (r + g + b) / 3 < 115 && r >= g - 5,
   },
   crab: {
-    box: { u0: 0.555, v0: 0.35, u1: 0.7, v1: 0.432 },
+    box: { u0: 0.56, v0: 0.365, u1: 0.68, v1: 0.428 },
     // Naranja sobre mar turquesa: el caso fácil del mapa. El recorte
-    // empieza en 0.555 para dejar fuera la mariposa, que es igual de
-    // naranja y está a un palmo.
+    // empieza en 0.56 para dejar fuera la mariposa, que es igual de
+    // naranja y está a un palmo, y acaba antes de la etiqueta.
     hit: (r, g, b) => r > b + 30 && r > g + 40,
   },
   turtle: {
@@ -70,21 +70,14 @@ const SUBJECTS = {
     hit: (r, g, b) => g > b + 15 && r > b - 10 && (r + g + b) / 3 < 205,
   },
   frog: {
-    // La rana GRANDE de las dos (la de la izquierda, junto a la etiqueta
-    // «RANA ARLEQUÍN»), vista desde atrás sobre una hoja. El recorte acaba
-    // en 0.82 para dejar fuera la etiqueta azul y la rana pequeña.
-    box: { u0: 0.69, v0: 0.775, u1: 0.82, v1: 0.885 },
+    // Desde el mapa de octubre de 2026 hay UNA sola rana (antes eran dos),
+    // vista desde atrás sobre la hoja grande, encima de su etiqueta azul.
+    // El recorte acaba en 0.812 para dejar fuera la etiqueta.
+    box: { u0: 0.84, v0: 0.73, u1: 0.94, v1: 0.812 },
     // Alrededor hay hojas, flores y la etiqueta azul, así que la regla dice
     // qué es rana: lo ROJO (sin el fucsia de las flores, que tiene mucho
     // azul) o lo NEGRO, cuyo verde va a la par del rojo; la selva oscura
     // tiene el verde muy por encima.
-    hit: (r, g, b) => (r > g + 50 && r > b + 60) || ((0.299 * r + 0.587 * g + 0.114 * b) < 75 && g < r + 12),
-  },
-  frogSmall: {
-    // La otra rana, arriba a la derecha, sobre la hoja grande. El recorte
-    // empieza en 0.835 para dejar fuera la flor fucsia y acaba antes de la
-    // etiqueta. Misma regla de color que la grande.
-    box: { u0: 0.835, v0: 0.72, u1: 0.945, v1: 0.81 },
     hit: (r, g, b) => (r > g + 50 && r > b + 60) || ((0.299 * r + 0.587 * g + 0.114 * b) < 75 && g < r + 12),
   },
 };

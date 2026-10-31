@@ -14,7 +14,7 @@ import { chooseLongSideFov } from '@infrastructure/mindar/CameraModel';
  * cambias el mapa, cambia también este número (y vuelve a medir los spots).
  */
 const TARGET_SRC = '/targets/map.mind';
-const TARGET_ASPECT = 1432 / 1000;
+const TARGET_ASPECT = 1437 / 1000;
 
 /**
  * El campo de visión de la cámara (ver CameraModel). En un teléfono, 66°

@@ -22,14 +22,10 @@ export class StaticMapTextRepository implements MapTextRepository {
   }
 }
 
-/** Mar abierto (olas). */
-const SEA = '/audio/whale/ambience.mp3';
 /** Costa: el mar por delante y la selva del Chocó detrás. Es Nuquí. */
 const COAST = '/audio/coast/ambience.mp3';
 /** Selva del Chocó, grabada allí. */
 const FOREST = '/audio/bird/ambience.mp3';
-/** Playa con manglar. */
-const MANGROVE = '/audio/crab/ambience.mp3';
 
 /**
  * Fotos REALES de los lugares, de la grabación del webdoc (ver
@@ -61,77 +57,35 @@ const PHOTOS: Record<string, readonly MapPhoto[]> = {
 /**
  * Los textos del mapa de Nuquí que se pueden leer en grande.
  *
- * TRANSCRITOS DEL MAPA tal cual, incluidas sus diferencias —la etiqueta
- * rosada dice «Las Serranía» y el directorio «Las Serranías»—: lo que se
- * enseña es el mapa, no una corrección de él. Si el mapa cambia, estos
- * textos y sus zonas cambian con él, igual que los `spot` de los animales.
+ * SOLO CUATRO, a pedido del cliente (octubre de 2026): la Etnoaldea, la
+ * posada de Chachita, la Fundación Serranías del Porvenir y el directorio
+ * turístico (para abrir el Instagram de cada emprendimiento). Los demás
+ * —el párrafo de turismo, la web, Lobos del Manglar, las etiquetas rosadas
+ * de Nuquí, Posada Sonona, el océano y los nombres de los pueblos— tuvieron
+ * su punto amarillo y se quitaron.
  *
- * Las zonas se midieron en píxeles sobre `public/targets/map.jpg`
- * (1000×1432) y se comprobaron dibujándolas encima; aquí van divididas
- * entre 1000 y 1432.
+ * TRANSCRITOS DEL MAPA tal cual (el texto sale del propio PDF de la
+ * diseñadora, `Mapa-de-Nuquí-Final.pdf`): lo que se enseña es el mapa, no
+ * una corrección de él. Si el mapa cambia, estos textos y sus zonas cambian
+ * con él, igual que los `spot` de los animales.
  *
- * EN INGLÉS (`english`), solo lo que se traduce: los párrafos, las
- * descripciones y los nombres comunes. Los nombres propios —lugares,
- * negocios, la web— se quedan como en el mapa; un texto que solo lleva
+ * Las zonas están en coordenadas de `public/targets/map.jpg` (1000×1437):
+ * las cajas del texto del PDF pasadas a la imagen, más el pin o el dibujo
+ * que acompaña a cada etiqueta, y comprobadas dibujándolas encima.
+ *
+ * EN INGLÉS (`english`), solo lo que se traduce. Los nombres propios
+ * —lugares, negocios— se quedan como en el mapa; un texto que solo lleva
  * nombres propios no necesita versión inglesa.
  *
  * El sonido es el del LUGAR del que habla cada texto. No hay grabaciones
- * abiertas de marimba de chonta ni de currulao, así que la danza y el
- * directorio suenan a costa; si se consigue una grabación (Las Serranías
- * está en el propio mapa), es cambiar una línea.
+ * abiertas de marimba de chonta ni de currulao, así que la fundación de
+ * danza y el directorio suenan a costa.
  */
 export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
   {
-    id: 'turismo',
-    label: 'Turismo responsable',
-    area: { u0: 0.092, v0: 0.3631, u1: 0.5, v1: 0.4714 },
-    blocks: [
-      {
-        kind: 'paragraph',
-        text:
-          'Cuando eliges un turismo responsable, el océano sigue siendo refugio de las ' +
-          'ballenas, la selva continúa respirando y las comunidades pueden seguir ' +
-          'contando su propia historia.',
-      },
-      {
-        kind: 'paragraph',
-        text:
-          'El turismo sustentable convierte cada visita en un acto de conservación, cada ' +
-          'experiencia en un aprendizaje y cada encuentro en una oportunidad para ' +
-          'fortalecer a las comunidades locales, sus saberes y su cultura.',
-      },
-    ],
-    english: {
-      label: 'Responsible tourism',
-      blocks: [
-        {
-          kind: 'paragraph',
-          text:
-            'When you choose responsible tourism, the ocean remains a refuge for whales, ' +
-            'the forest keeps breathing and communities can go on telling their own story.',
-        },
-        {
-          kind: 'paragraph',
-          text:
-            'Sustainable tourism turns every visit into an act of conservation, every ' +
-            'experience into learning and every encounter into a chance to strengthen ' +
-            'local communities, their knowledge and their culture.',
-        },
-      ],
-    },
-    ambience: COAST,
-  },
-  {
-    id: 'web',
-    label: 'Territorios Vivos',
-    area: { u0: 0.152, v0: 0.3394, u1: 0.336, v1: 0.3513 },
-    blocks: [{ kind: 'link', text: 'www.territoriosvivos.com.co' }],
-    ambience: COAST,
-  },
-  {
     id: 'directorio',
     label: 'Directorio de turismo local',
-    area: { u0: 0.092, v0: 0.6145, u1: 0.368, v1: 0.7193 },
+    area: { u0: 0.092, v0: 0.6145, u1: 0.364, v1: 0.7285 },
     blocks: [
       {
         kind: 'directory',
@@ -142,14 +96,14 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
           { name: 'Carlitours Nuquí', handle: '@carlitours.nuqui' },
           { name: 'Museo Melelé', handle: '@museo_melele' },
           { name: 'Escombros del Mar', handle: '@escombrosdelmarhostal' },
-          { name: 'Posada ecoturistica Chachita', handle: '@posadaecoturisticachachita' },
+          { name: 'Posada ecoturística Chachita', handle: '@posadaecoturisticachachita' },
           { name: 'Posada Sonona', handle: '@sononaecolodge' },
           { name: 'Posada Nativa Jara', handle: '@posadanativajara.jovi' },
-          { name: 'Danza tradicional Las Serranías', handle: '@orfelinamarmolejo' },
+          { name: 'Grupo de Danza Cultural Serranías del Porvenir', handle: '@fundacionserraniasdelporvenir' },
         ],
       },
     ],
-    // Los negocios conservan su nombre; solo la danza se describe.
+    // Los negocios conservan su nombre; solo el grupo de danza se describe.
     english: {
       label: 'Local tourism directory',
       blocks: [
@@ -162,47 +116,28 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
             { name: 'Carlitours Nuquí', handle: '@carlitours.nuqui' },
             { name: 'Museo Melelé', handle: '@museo_melele' },
             { name: 'Escombros del Mar', handle: '@escombrosdelmarhostal' },
-            { name: 'Posada ecoturistica Chachita', handle: '@posadaecoturisticachachita' },
+            { name: 'Posada ecoturística Chachita', handle: '@posadaecoturisticachachita' },
             { name: 'Posada Sonona', handle: '@sononaecolodge' },
             { name: 'Posada Nativa Jara', handle: '@posadanativajara.jovi' },
-            { name: 'Las Serranías traditional dance', handle: '@orfelinamarmolejo' },
+            { name: 'Serranías del Porvenir cultural dance group', handle: '@fundacionserraniasdelporvenir' },
           ],
         },
       ],
     },
     ambience: COAST,
   },
-  // Las cuatro etiquetas rosadas de arriba y la de la compañía de danza
-  // fueron UN texto; el cliente pidió separarlas: estas cuatro solas, y la
-  // danza aparte con las fotos del grupo de Orfelina. Zonas medidas sobre
-  // map.jpg: los cuatro lugares de y=752 a 840, la danza de 843 a 868.
-  {
-    id: 'lugares',
-    label: 'Lugares de Nuquí',
-    area: { u0: 0.605, v0: 0.5251, u1: 0.742, v1: 0.5866 },
-    blocks: [
-      { kind: 'pin', text: 'Vientos de Yubarta' },
-      { kind: 'pin', text: 'Carlitours Nuquí' },
-      { kind: 'pin', text: 'Museo Melelé' },
-      { kind: 'pin', text: 'Escombros del Mar' },
-    ],
-    english: { label: 'Places in Nuquí', blocks: [
-      { kind: 'pin', text: 'Vientos de Yubarta' },
-      { kind: 'pin', text: 'Carlitours Nuquí' },
-      { kind: 'pin', text: 'Museo Melelé' },
-      { kind: 'pin', text: 'Escombros del Mar' },
-    ] },
-    ambience: COAST,
-  },
+  // La compañía de danza de Orfelina Marmolejo: en el mapa nuevo su etiqueta
+  // rosada es la de la fundación, y su Instagram el de la fundación (antes
+  // @orfelinamarmolejo). El id sigue siendo 'danza' por sus fotos.
   {
     id: 'danza',
-    label: 'Compañía de danza tradicional Las Serranía',
-    // La etiqueta y, a su derecha, los pies de los bailarines.
-    area: { u0: 0.583, v0: 0.5887, u1: 0.77, v1: 0.6061 },
-    blocks: [{ kind: 'pin', text: 'Compañía de danza tradicional Las Serranía' }],
+    label: 'Fundación Cultural y Ambiental Serranías del Porvenir',
+    // La etiqueta, de tres líneas, y su pin a la izquierda.
+    area: { u0: 0.672, v0: 0.505, u1: 0.81, v1: 0.536 },
+    blocks: [{ kind: 'pin', text: 'Fundación Cultural y Ambiental Serranías del Porvenir' }],
     english: {
-      label: 'Las Serranía traditional dance company',
-      blocks: [{ kind: 'pin', text: 'Las Serranía traditional dance company' }],
+      label: 'Serranías del Porvenir Cultural and Environmental Foundation',
+      blocks: [{ kind: 'pin', text: 'Serranías del Porvenir Cultural and Environmental Foundation' }],
     },
     photos: PHOTOS['danza']!,
     ambience: COAST,
@@ -210,49 +145,19 @@ export const NUQUI_MAP_TEXTS: readonly MapTextSnapshot[] = [
   {
     id: 'kipara',
     label: 'Etnoaldea Kipara Té',
-    area: { u0: 0.735, v0: 0.0594, u1: 0.935, v1: 0.1362 },
+    // Los tambos dibujados y su etiqueta.
+    area: { u0: 0.735, v0: 0.055, u1: 0.935, v1: 0.152 },
     blocks: [{ kind: 'pin', text: 'Etnoaldea Kipara Té' }],
     photos: PHOTOS['kipara']!,
     ambience: FOREST,
   },
   {
-    id: 'lobos',
-    label: 'Lobos del Manglar',
-    area: { u0: 0.688, v0: 0.3031, u1: 0.757, v1: 0.3282 },
-    blocks: [{ kind: 'pin', text: 'Lobos del Manglar' }],
-    ambience: MANGROVE,
-  },
-  {
     id: 'chachita',
-    label: 'Posada ecoturistica Chachita',
-    area: { u0: 0.388, v0: 0.6879, u1: 0.468, v1: 0.7214 },
-    blocks: [{ kind: 'pin', text: 'Posada ecoturistica Chachita' }],
+    label: 'Posada Ecoturística Chachita',
+    // La etiqueta y su pin, encima. Empieza justo donde acaba el directorio.
+    area: { u0: 0.365, v0: 0.693, u1: 0.478, v1: 0.737 },
+    blocks: [{ kind: 'pin', text: 'Posada Ecoturística Chachita' }],
     photos: PHOTOS['chachita']!,
     ambience: FOREST,
   },
-  {
-    id: 'sur',
-    label: 'Escombros del Mar y Posada Sonona',
-    area: { u0: 0.058, v0: 0.8296, u1: 0.15, v1: 0.8603 },
-    blocks: [
-      { kind: 'pin', text: 'Escombros del Mar' },
-      { kind: 'pin', text: 'Posada Sonona' },
-    ],
-    ambience: SEA,
-  },
-  // La etiqueta «RANA ARLEQUÍN / Oophaga solanensis» fue un texto de aquí
-  // hasta que la rana pasó a ser el quinto animal: ahora es su ficha.
-  {
-    id: 'oceano',
-    label: 'Océano Pacífico',
-    area: { u0: 0.072, v0: 0.5272, u1: 0.192, v1: 0.567 },
-    blocks: [{ kind: 'sea', text: 'Océano Pacífico' }],
-    english: { label: 'Pacific Ocean', blocks: [{ kind: 'sea', text: 'Pacific Ocean' }] },
-    ambience: SEA,
-  },
-  { id: 'jurubida', label: 'Jurubidá', area: { u0: 0.48, v0: 0.0433, u1: 0.605, v1: 0.0615 }, blocks: [{ kind: 'place', text: 'Jurubidá' }], ambience: COAST },
-  { id: 'tribuga', label: 'Tribugá', area: { u0: 0.672, v0: 0.3527, u1: 0.8, v1: 0.3701 }, blocks: [{ kind: 'place', text: 'Tribugá' }], ambience: COAST },
-  { id: 'nuqui', label: 'Nuquí', area: { u0: 0.51, v0: 0.618, u1: 0.605, v1: 0.6362 }, blocks: [{ kind: 'place', text: 'Nuquí' }], ambience: COAST },
-  { id: 'pangui', label: 'Pangui', area: { u0: 0.378, v0: 0.7367, u1: 0.477, v1: 0.7556 }, blocks: [{ kind: 'place', text: 'Pangui' }], ambience: COAST },
-  { id: 'coqui', label: 'Coqui', area: { u0: 0.118, v0: 0.8834, u1: 0.215, v1: 0.9015 }, blocks: [{ kind: 'place', text: 'Coqui' }], ambience: COAST },
 ];
