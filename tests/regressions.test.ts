@@ -1295,11 +1295,16 @@ test('cerrar la ficha a mitad de la narración la corta y no la deja seguir', as
 });
 
 /** Animales que el equipo todavía no ha narrado: su ficha se abre sin voz. */
-const WITHOUT_NARRATION = new Set(['frog']);
+const WITHOUT_NARRATION = new Set<string>();
+/**
+ * Narrados solo en español (la rana, octubre de 2026): en inglés suena la voz
+ * española, que es lo que hace `narrationIn` sin grabación inglesa.
+ */
+const WITHOUT_ENGLISH_NARRATION = new Set(['frog']);
 const NARRATED = NUQUI_CATALOG.filter((entry) => !WITHOUT_NARRATION.has(entry.id));
 
 test('las narraciones del catálogo existen, van en trozos y cada pausa deja actuar al animal', () => {
-  assert.equal(NARRATED.length, 4);
+  assert.equal(NARRATED.length, 5);
   for (const entry of NUQUI_CATALOG.filter((e) => WITHOUT_NARRATION.has(e.id))) {
     // Sin narración de verdad, no a medias: ni voz española ni inglesa.
     const soundscape = ArModel.fromSnapshot(entry).soundscape!;
@@ -1889,6 +1894,11 @@ test('cada animal y cada texto con párrafos tiene su versión en inglés, y su 
     assert.notEqual(en.name, es.name, `${entry.id} sin nombre en inglés`);
     assert.equal(en.paragraphs.length, es.paragraphs.length, `${entry.id}: distinto número de párrafos`);
     if (WITHOUT_NARRATION.has(entry.id)) continue;
+    if (WITHOUT_ENGLISH_NARRATION.has(entry.id)) {
+      // Sin voz inglesa, la española (mejor eso que nada); el día que llegue, fuera de la lista.
+      assert.equal(animal.soundscape?.narrationIn('en'), animal.soundscape?.narrationIn('es'), `${entry.id} ya tiene narración inglesa: quítalo de WITHOUT_ENGLISH_NARRATION`);
+      continue;
+    }
     const narration = animal.soundscape?.narrationIn('en');
     assert.ok(narration && narration !== animal.soundscape?.narrationIn('es'), `${entry.id} sin narración inglesa`);
     for (const part of narration.parts) assert.ok(existsSync(`public${part}`), `falta ${part}`);
@@ -1970,7 +1980,7 @@ test('en inglés narra la voz inglesa; cambiar de idioma a media narración sigu
 const ENGLISH_NOT_YET_MATCHING = new Set<string>();
 
 test('las frases de cada narración española e inglesa van a la par', () => {
-  for (const entry of NARRATED) {
+  for (const entry of NARRATED.filter((e) => !WITHOUT_ENGLISH_NARRATION.has(e.id))) {
     const soundscape = ArModel.fromSnapshot(entry).soundscape!;
     const es = soundscape.narrationIn('es')!;
     const en = soundscape.narrationIn('en')!;
@@ -2213,7 +2223,7 @@ test('en primer plano salen las dos ranas en fila, la chica más chica, y salta 
 
 test('cambiar de idioma a media narración sigue en la MISMA frase, en los dos sentidos', () => {
   for (const entry of NARRATED) {
-    if (ENGLISH_NOT_YET_MATCHING.has(entry.id)) continue;
+    if (ENGLISH_NOT_YET_MATCHING.has(entry.id) || WITHOUT_ENGLISH_NARRATION.has(entry.id)) continue;
     const soundscape = ArModel.fromSnapshot(entry).soundscape!;
     const es = soundscape.narrationIn('es')!;
     const en = soundscape.narrationIn('en')!;

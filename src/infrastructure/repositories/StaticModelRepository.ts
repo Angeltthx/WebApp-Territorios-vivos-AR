@@ -592,37 +592,38 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
   },
   {
     id: 'frog',
-    // Nombre y especie, los del PÓSTER («RANA ARLEQUÍN / Oophaga
-    // solanensis»). Antes era uno de los textos del mapa; ahora es el quinto
-    // animal y esa etiqueta pasa a ser su ficha.
-    name: 'Rana arlequín',
-    species: 'Oophaga solanensis / Rana arlequín',
-    // PROVISIONAL: el equipo todavía no ha entregado texto ni narración de
-    // la rana. Son datos del género Oophaga y de la especie (descrita en
-    // 2018 cerca de Bahía Solano), escritos aquí para que la ficha no salga
-    // vacía; se sustituyen tal cual cuando llegue el texto del equipo.
+    // Especie, la del PÓSTER («RANA ARLEQUÍN / Oophaga solanensis»); el
+    // nombre, como lo dice la narración: «Rana arlequín o kokoi» (whisper oye
+    // «Cocoy»; kokoi es como se escribe la palabra emberá).
+    name: 'Rana arlequín o kokoi',
+    species: 'Oophaga solanensis / Rana arlequín o kokoi',
+    // La ficha es lo que dice la narración (octubre de 2026), transcrita con
+    // faster-whisper, como las de los otros cuatro. Sustituye al texto
+    // provisional con datos del género que había mientras no llegaba.
     description: [
-      'Cabe en la yema de un dedo y no se esconde: su rojo y negro es un aviso. ' +
-        'Su piel guarda venenos que saca de las hormigas y los ácaros que come.',
-      'Oophaga quiere decir «come huevos»: la madre lleva cada renacuajo a cuestas ' +
-        'hasta el agua que se junta en las bromelias, y allí lo alimenta con huevos. ' +
-        'Solo vive en las selvas del Chocó.',
+      'Su nombre, kokoi, es un eco de las voces indígenas del Chocó, quienes conocen ' +
+        'sus secretos desde tiempos inmemoriales. Su traje rojo y negro brilla sobre ' +
+        'la hojarasca como una advertencia milenaria.',
+      'Es una intocable del bosque porque lleva en su piel las toxinas de la selva. ' +
+        'Escala los troncos hasta lo alto para criar a sus renacuajos en pequeñas ' +
+        'piscinas dentro de las bromelias, y les lleva alimento todos los días.',
     ],
     english: {
-      name: 'Harlequin poison frog',
-      species: 'Oophaga solanensis / Harlequin poison frog',
+      name: 'Harlequin frog or kokoi',
+      species: 'Oophaga solanensis / Harlequin frog or kokoi',
       description: [
-        'It fits on a fingertip and does not hide: its red and black are a warning. ' +
-          'Its skin stores poisons it takes from the ants and mites it eats.',
-        'Oophaga means "egg-eater": the mother carries each tadpole on her back to ' +
-          'the water pooled in bromeliads, and feeds it there with eggs. ' +
-          'It lives only in the forests of the Chocó.',
+        'Its name, kokoi, is an echo of the Indigenous voices of the Chocó, who have ' +
+          'known its secrets since time immemorial. Its red and black coat shines on ' +
+          'the leaf litter like an age-old warning.',
+        'It is one of the forest\'s untouchables, because it carries the toxins of the ' +
+          'jungle in its skin. It climbs tree trunks all the way up to raise its tadpoles ' +
+          'in tiny pools inside bromeliads, and brings them food every day.',
       ],
     },
     // No hay grabaciones abiertas de Oophaga solanensis: su llamada es la de
     // Oophaga pumilio, del MISMO GÉNERO (un trino parecido). Al tocarla, el
     // crujido de las hojas donde cae del salto; de fondo, la selva del Chocó
-    // con ranas. Sin narración: el equipo no la ha grabado todavía.
+    // con ranas.
     soundscape: {
       calls: [
         '/audio/frog/call-1.mp3',
@@ -634,6 +635,18 @@ export const NUQUI_CATALOG: readonly ArModelSnapshot[] = [
         '/audio/frog/tap-2.mp3',
       ],
       ambience: '/audio/frog/ambience.mp3',
+      // La narración del equipo (`audios/RANA.mp3`, octubre de 2026): «…Su
+      // traje rojo y negro brilla sobre la hojarasca como una advertencia
+      // milenaria.» → la rana SALTA (su gesto 'hop', 3.3 s) → «Es una
+      // intocable del bosque…». Corte a los 16.05 s, en mitad del silencio
+      // medido (15.75–16.36 s); re-transcritos, los dos trozos empiezan y
+      // acaban en frase. Solo en español: en inglés suena esta misma.
+      narration: {
+        parts: ['/audio/frog/narration-1.mp3', '/audio/frog/narration-2.mp3'],
+        cues: [{ action: 'gesture', holdSeconds: 3.5 }],
+        // Inicio de cada frase de cada trozo (s), medido con faster-whisper.
+        sentences: [[0, 3.38, 11.28], [0, 5.08]],
+      },
     },
     source: ModelSource.gltf('/models/Rana_Ani.glb'),
     animation: {
