@@ -814,8 +814,8 @@ export class ArView {
       }
     };
     requestAnimationFrame(fit);
-    // Y otra vez cuando llega la tipografía del afiche (Merriweather, más
-    // ancha que la de reserva): medida con la otra, la línea se salía.
+    // Y otra vez cuando llega la tipografía (IBM Plex Sans, de ancho
+    // distinto al de la de reserva): medida con la otra, la línea se salía.
     void list.ownerDocument.fonts?.ready.then(() => requestAnimationFrame(fit));
     if (!this.directoryResizeWatched) {
       this.directoryResizeWatched = true;

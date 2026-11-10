@@ -64,29 +64,29 @@
     <!-- El icono de la experiencia (LOGO.png → `npm run make-icons`). Sin
          estas líneas se veía el de Netlify: en la pestaña, en Google y en el
          «Reproduciendo ahora» del iPhone con la página en segundo plano. -->
-    <!-- `?v=2`: los navegadores guardan los iconos aparte y NO los
+    <!-- `?v=3`: los navegadores guardan los iconos aparte y NO los
          refrescan al recargar; quien visitó la página cuando salía el de
          Netlify lo seguía viendo aunque ya se sirviera el bueno. Una URL
          nueva les obliga a pedirlo otra vez. Si cambia el logo, subir el
          número (aquí, en el manifiesto y en WebAudioAdapter). -->
-    <link rel="icon" href="/favicon.ico?v=2" sizes="48x48" />
-    <link rel="icon" href="/icons/favicon-96.png?v=2" type="image/png" sizes="96x96" />
-    <link rel="icon" href="/icons/favicon-192.png?v=2" type="image/png" sizes="192x192" />
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=2" />
-    <link rel="manifest" href="/manifest.webmanifest?v=2" />
+    <link rel="icon" href="/favicon.ico?v=3" sizes="48x48" />
+    <link rel="icon" href="/icons/favicon-96.png?v=3" type="image/png" sizes="96x96" />
+    <link rel="icon" href="/icons/favicon-192.png?v=3" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=3" />
+    <link rel="manifest" href="/manifest.webmanifest?v=3" />
 
-    <!-- Las tipografías DEL PÓSTER: Arvo (los nombres de lugar, JURUBIDÁ,
-         TRIBUGÁ…), Oswald (las etiquetas de especie, BALLENA JOROBADA) y
-         Merriweather (los párrafos, y su cursiva para los nombres
-         científicos). La interfaz usa las mismas para que se lea como parte
-         del mapa. `media="print"` + onload: la hoja no bloquea el primer
-         dibujo —la portada es una imagen y no las necesita—, y `swap` pinta
-         con Georgia hasta que llegan. -->
+    <!-- Las tipografías DEL WEBDOC (territoriosvivos.com.co): Fraunces para
+         los títulos e IBM Plex Sans para el texto, las etiquetas y los
+         botones, para que el AR se lea como parte del mismo sitio (noviembre
+         de 2026; antes usaba las del póster: Arvo, Oswald y Merriweather).
+         `media="print"` + onload: la hoja no bloquea el primer dibujo —la
+         portada es una imagen y no las necesita—, y `swap` pinta con la
+         letra del sistema hasta que llegan. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Arvo:wght@700&family=Merriweather:ital,wght@0,400;0,700;1,400&family=Oswald:wght@500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..600,100;1,9..144,300..500,100&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap"
       media="print"
       onload="this.media='all'"
     />
@@ -96,10 +96,15 @@
         --surface: rgba(18, 18, 20, 0.72);
         --border: rgba(255, 255, 255, 0.14);
         --accent: #e8442f;
-        /* Las tres familias del póster (ver el <link> de arriba). */
-        --font-title: "Arvo", Rockwell, Georgia, serif;
-        --font-label: "Oswald", "Arial Narrow", sans-serif;
-        --font-text: "Merriweather", Georgia, serif;
+        /* Las letras del webdoc (noviembre de 2026; antes, las del póster:
+           Arvo, Oswald y Merriweather): Fraunces para los títulos e IBM Plex
+           Sans para todo lo demás. Ver el <link> de arriba. */
+        --font-title: "Fraunces", Georgia, serif;
+        --font-label: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+        --font-text: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+        /* Los colores del webdoc: su dorado y el verde oscuro de su menú. */
+        --gold: #e8bb52;
+        --forest: #0c1d17;
 
         /* Proporcion EXACTA de public/splash/inicio.webp (720x1600). Es lo
            que permite colocar el boton sobre el que viene dibujado en la
@@ -122,6 +127,9 @@
       body {
         /* Texto corrido como los párrafos del póster. */
         font: 400 15px/1.45 var(--font-text);
+        /* Fraunces como en el webdoc: suave y con el tamaño óptico de los
+           títulos (las demás letras no tienen estos ejes y lo ignoran). */
+        font-variation-settings: "SOFT" 100, "opsz" 72;
         color: #fff;
         overscroll-behavior: none;
       }
@@ -226,13 +234,16 @@
         border-color: rgba(255, 120, 120, 0.4);
       }
 
+      /* Los botones del webdoc: píldoras (y círculos, los de un solo ícono)
+         translúcidas, con un borde blanco fino. */
       button {
         font: inherit;
         color: #fff;
-        background: var(--surface);
-        backdrop-filter: blur(12px);
-        border: 1px solid var(--border);
-        border-radius: 14px;
+        background: rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        border-radius: 999px;
         padding: 13px 18px;
         min-width: 52px;
         min-height: 48px;
@@ -246,12 +257,13 @@
          reintentar sin recargar la pagina. */
       #retry {
         font-family: var(--font-label);
-        font-size: 17px;
-        font-weight: 500;
-        letter-spacing: 0.04em;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
         text-transform: uppercase;
-        padding: 17px 44px;
-        background: var(--accent);
+        padding: 17px 40px;
+        color: var(--forest);
+        background: var(--gold);
         border-color: transparent;
       }
 
@@ -435,7 +447,7 @@
         height: 1em;
         flex: none;
         border: 2px solid rgba(255, 255, 255, 0.35);
-        border-top-color: #ffc53d;
+        border-top-color: var(--gold);
         border-radius: 50%;
         animation: boot-spin 0.9s linear infinite;
       }
@@ -557,7 +569,7 @@
       }
       #approach-sub strong {
         font-weight: 700;
-        color: #ffc53d;
+        color: var(--gold);
       }
       @media (prefers-reduced-motion: reduce) {
         #approach[data-urgent="true"] #approach-title,
@@ -593,7 +605,7 @@
         letter-spacing: 0.04em;
         text-transform: uppercase;
         /* El dorado de los contornos que marcan dónde hay un animal. */
-        color: #ffc53d;
+        color: var(--gold);
       }
 
       #approach-sub {
@@ -771,12 +783,12 @@
 
       #focus-name {
         margin: 0;
-        /* Como las etiquetas de especie del póster: BALLENA JOROBADA. */
-        font-family: var(--font-label);
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        font-size: clamp(26px, 7.4vw, 38px);
+        /* Como los títulos del webdoc (antes, las etiquetas de especie del
+           póster, en mayúsculas). */
+        font-family: var(--font-title);
+        font-weight: 400;
+        letter-spacing: -0.01em;
+        font-size: clamp(28px, 7.8vw, 40px);
         line-height: 1.1;
         text-shadow: 0 2px 20px rgba(0, 0, 0, 0.9);
       }
@@ -852,7 +864,7 @@
         width: 34px;
         height: 34px;
         border-radius: 50%;
-        background: #ffc53d;
+        background: var(--gold);
         box-shadow: 0 2px 10px rgba(255, 197, 61, 0.35);
       }
       .narration-badge svg {
@@ -1079,90 +1091,120 @@
         transform: translateY(-7px) rotate(-45deg);
       }
 
+      /* EL MENÚ, COMO EL DEL WEBDOC (noviembre de 2026): un panel a toda la
+         altura con el verde oscuro del webdoc, la orilla ondulada del lado
+         de la cámara, la marca «Territorios Vivos» arriba y cada grupo con
+         su título pequeño. Sale desde la izquierda porque el ☰ está ahí: a
+         la derecha chocaría con la ✕ de la ficha, que se queda a la vista.
+         Sigue por encima de todo (su contenedor #ui, a 6; él, a 30 dentro)
+         y oscurece lo demás con una sombra que no es un elemento (tocar
+         fuera sigue cerrándolo, ver ArView). */
       #menu {
+        --orilla: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 140' preserveAspectRatio='none'%3E%3Cpath d='M0 0H9C16 18 16 52 9 70C2 88 2 122 9 140H0Z'/%3E%3C/svg%3E");
         position: absolute;
         z-index: 30;
-        top: calc(68px + env(safe-area-inset-top));
-        left: calc(14px + env(safe-area-inset-left));
+        top: 0;
+        bottom: 0;
+        left: 0;
         display: flex;
         flex-direction: column;
-        min-width: 216px;
-        max-width: calc(100vw - 28px);
-        padding: 6px;
-        border-radius: 16px;
-        background: rgba(18, 18, 20, 0.9);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
-        border: 1px solid var(--border);
-        /* Se despliega desde el botón, no desde su propio centro. */
-        transform-origin: top left;
-        transform: translateY(-6px) scale(0.97);
-        /* Con opacidad y no con [hidden], por lo mismo que la guía:
-           `display:none` corta la transición y el menú daría un salto. */
+        gap: 6px;
+        width: min(380px, calc(100vw - 40px));
+        padding: calc(14px + env(safe-area-inset-top)) 34px calc(20px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        background:
+          radial-gradient(120% 50% at 100% 0%, rgba(159, 227, 242, 0.08), transparent 60%),
+          radial-gradient(90% 45% at 100% 100%, rgba(232, 187, 82, 0.07), transparent 60%),
+          var(--forest);
+        -webkit-mask: linear-gradient(#000, #000) 0 0 / calc(100% - 17px) 100% no-repeat, var(--orilla) 100% 0 / 18px 140px repeat-y;
+        mask: linear-gradient(#000, #000) 0 0 / calc(100% - 17px) 100% no-repeat, var(--orilla) 100% 0 / 18px 140px repeat-y;
+        transform: translateX(-104%);
+        visibility: hidden;
+        transition: transform 0.42s cubic-bezier(0.22, 0.61, 0.36, 1), visibility 0.42s;
+      }
+      #menu[data-visible="true"] {
+        transform: none;
+        visibility: visible;
+        animation: menu-orilla 6s linear infinite;
+      }
+      /* La orilla corre hacia abajo, como el agua del borde del webdoc. */
+      @keyframes menu-orilla {
+        to {
+          -webkit-mask-position: 0 0, 100% 140px;
+          mask-position: 0 0, 100% 140px;
+        }
+      }
+      /* Lo de detrás, teñido del mismo verde (antes, negro neutro). Es un
+         pseudo-elemento de #ui y no del menú: la máscara de la orilla lo
+         recortaría. */
+      #ui::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 29;
+        background: linear-gradient(90deg, rgba(8, 24, 19, 0.78), rgba(8, 24, 19, 0.4));
         opacity: 0;
         visibility: hidden;
-        transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+        pointer-events: none;
+        transition: opacity 0.35s ease, visibility 0.35s;
       }
-      /* Todo lo demás se oscurece un poco: una sombra que cubre la pantalla
-         entera sin ser un elemento más (tocar fuera sigue cerrando el menú,
-         ver ArView). */
-      #menu[data-visible="true"] {
-        box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45);
-        opacity: 1;
-        visibility: visible;
-        transform: none;
+      #ui:has(#menu[data-visible="true"])::before { opacity: 1; visibility: visible; }
+
+      /* La marca, a la altura del ☰ (que queda encima, convertido en ✕). */
+      #menu-brand {
+        display: flex;
+        align-items: center;
+        min-height: 46px;
+        margin: 0 0 14px 60px;
+        font: 400 22px/1 var(--font-title);
+        letter-spacing: -0.01em;
+        color: #fff;
+      }
+      #menu-brand em { font-style: italic; }
+
+      /* Cada grupo: su título pequeño en mayúsculas, como «Más del
+         documental» en el webdoc, y una línea fina que lo separa del
+         siguiente. */
+      #menu-sound, #menu-language, #menu-social {
+        padding: 12px 0 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      #menu-sound-title, #menu-language-title, #menu-social-title {
+        display: block;
+        margin-bottom: 10px;
+        font: 600 12px/1.2 var(--font-label);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.55);
       }
 
       #menu button {
-        width: 100%;
-        text-align: left;
-        font-family: var(--font-label);
-        font-size: 16px;
-        font-weight: 500;
-        letter-spacing: 0.03em;
-        text-transform: uppercase;
         min-width: 0;
-        min-height: 44px;
-        padding: 12px 14px;
-        border: 0;
-        border-radius: 11px;
-        background: transparent;
         backdrop-filter: none;
+        -webkit-backdrop-filter: none;
       }
-      #menu button + button { margin-top: 2px; }
+      #menu button:active { transform: none; }
 
-      /* EL VOLUMEN, primero en el menú. Un altavoz redondo que silencia y
-         una barra dorada; sin mayúsculas gritonas ni recuadros. */
-      #menu-sound {
-        padding: 10px 12px 12px 14px;
-        margin-bottom: 4px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-      }
-      #menu-sound-title {
-        display: block;
-        margin-bottom: 6px;
-        font-family: var(--font-label);
-        font-size: 12px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.7);
-      }
-      #menu-sound-row { display: flex; align-items: center; gap: 12px; }
+      /* El volumen: el altavoz como los botones redondos del webdoc y una
+         barra dorada. */
+      #menu-sound-row { display: flex; align-items: center; gap: 14px; }
       #menu #sound-toggle {
         display: grid;
         place-items: center;
         flex: none;
-        width: 40px;
-        min-width: 40px;
-        height: 40px;
-        min-height: 40px;
+        width: 42px;
+        min-width: 42px;
+        height: 42px;
+        min-height: 42px;
         padding: 0;
         border-radius: 50%;
-        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        background: rgba(0, 0, 0, 0.3);
       }
       #sound-toggle svg {
-        width: 22px;
-        height: 22px;
+        width: 20px;
+        height: 20px;
         fill: none;
         stroke: #fff;
         stroke-width: 1.8;
@@ -1172,122 +1214,92 @@
       #sound-toggle .speaker { fill: #fff; stroke: none; }
       #sound-toggle .cross { display: none; }
       #sound-toggle[aria-pressed="true"] .waves { display: none; }
-      #sound-toggle[aria-pressed="true"] .cross { display: inline; stroke: #ffc53d; }
-      /* EL IDIOMA, bajo el volumen: dos opciones como un interruptor, la
-         elegida en dorado. Cada una se escribe en su propio idioma
-         («English», no «Inglés»): así la encuentra quien no lee el otro. */
-      #menu-language {
-        padding: 10px 12px 12px 14px;
-        margin-bottom: 4px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-      }
-      #menu-language-title {
-        display: block;
-        margin-bottom: 8px;
-        font-family: var(--font-label);
-        font-size: 12px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.7);
-      }
-      #menu-language-options {
-        display: flex;
-        gap: 4px;
-        padding: 3px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.1);
-      }
-      #menu #menu-language-options button {
-        flex: 1;
-        min-height: 36px;
-        padding: 8px 10px;
-        border-radius: 999px;
-        text-align: center;
-        font-family: var(--font-text);
-        font-size: 14px;
-        font-weight: 700;
-        letter-spacing: 0;
-        text-transform: none;
-        color: rgba(255, 255, 255, 0.85);
-        transition: background 0.2s ease, color 0.2s ease;
-      }
-      #menu #menu-language-options button[aria-pressed="true"] {
-        background: #ffc53d;
-        color: #2a2c1c;
-      }
-      /* Las redes: el mismo título pequeño que «Idioma» y una píldora por
-         red, con su icono. Son enlaces, no opciones: no cierran nada. */
-      #menu-social {
-        padding: 10px 12px 12px 14px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-      }
-      #menu-social-title {
-        display: block;
-        margin-bottom: 8px;
-        font-family: var(--font-label);
-        font-size: 12px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: rgba(255, 255, 255, 0.7);
-      }
-      /* Tres en fila, icono ARRIBA y nombre debajo: en píldoras con el
-         icono al lado, «Instagram» no dejaba sitio y TikTok quedaba cortado
-         en el menú de un teléfono de 320–375 px. */
-      #menu-social-links { display: flex; gap: 6px; }
-      #menu-social-links a {
-        flex: 1 1 0;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 5px;
-        min-height: 56px;
-        padding: 8px 4px;
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.1);
-        font-family: var(--font-text);
-        font-size: 12px;
-        font-weight: 700;
-        color: rgba(255, 255, 255, 0.9);
-        text-decoration: none;
-        -webkit-tap-highlight-color: transparent;
-      }
-      #menu-social-links a:active { background: rgba(255, 255, 255, 0.2); }
-      #menu-social-links svg { width: 20px; height: 20px; fill: #ffc53d; flex: none; }
+      #sound-toggle[aria-pressed="true"] .cross { display: inline; stroke: var(--gold); }
       #sound-level {
         flex: 1;
         min-width: 0;
         height: 28px;
         margin: 0;
-        accent-color: #ffc53d;
+        accent-color: var(--gold);
         cursor: pointer;
       }
-      /* Una opción ancha encogiéndose entera queda raro; se marca con un
-         fondo, que es como se marca una lista. */
-      #menu button:active {
-        transform: none;
-        background: rgba(255, 255, 255, 0.12);
+
+      /* El idioma: dos opciones como un interruptor, la elegida en dorado.
+         Cada una en su propio idioma («English», no «Inglés»). */
+      #menu-language-options {
+        display: flex;
+        gap: 4px;
+        padding: 3px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+      }
+      #menu #menu-language-options button {
+        flex: 1;
+        min-height: 38px;
+        padding: 8px 10px;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        text-align: center;
+        font: 500 14px/1 var(--font-text);
+        color: rgba(255, 255, 255, 0.85);
+        transition: background 0.2s ease, color 0.2s ease;
+      }
+      #menu #menu-language-options button[aria-pressed="true"] {
+        background: var(--gold);
+        color: var(--forest);
+        font-weight: 600;
       }
 
-      /* Los créditos cierran el menú, más pequeños y separados por una
-         línea: se leen, no se eligen. Solo la web es un enlace, en dorado. */
+      /* Las redes: los botones redondos del webdoc, solo con su ícono (el
+         nombre queda para quien usa lector de pantalla). */
+      #menu-social-links { display: flex; gap: 10px; }
+      #menu-social-links a {
+        display: grid;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        font-size: 0;
+        color: #fff;
+        text-decoration: none;
+        transition: border-color 0.2s ease, background 0.2s ease;
+      }
+      #menu-social-links a:active { background: rgba(255, 255, 255, 0.12); }
+      #menu-social-links svg { width: 19px; height: 19px; fill: #fff; flex: none; }
+
+      /* Lo que aún no tiene destino: con la letra de los títulos del webdoc,
+         apagado hasta que lo tenga. */
+      #menu button[data-action] {
+        width: 100%;
+        min-height: 48px;
+        margin-top: 4px;
+        padding: 10px 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        text-align: left;
+        font: 400 21px/1.15 var(--font-title);
+        letter-spacing: -0.01em;
+        color: rgba(255, 255, 255, 0.7);
+      }
+      #menu button[data-action]:active { color: var(--gold); }
+
+      /* Los créditos cierran el menú, abajo del todo, como en el webdoc. */
       #menu-credits {
         display: flex;
         flex-direction: column;
         gap: 2px;
-        margin-top: 6px;
-        padding: 12px 14px 8px;
-        border-top: 1px solid rgba(255, 255, 255, 0.14);
-        font-family: var(--font-text);
-        font-size: 13px;
-        line-height: 1.4;
-        color: rgba(255, 255, 255, 0.72);
+        margin-top: auto;
+        padding-top: 18px;
+        font: 400 13px/1.4 var(--font-text);
+        color: rgba(255, 255, 255, 0.6);
       }
       #menu-web {
         align-self: flex-start;
         padding: 6px 0;
-        color: #ffc53d;
+        color: var(--gold);
         text-decoration: none;
       }
       #menu-web:active { opacity: 0.7; }
@@ -1305,9 +1317,8 @@
          zona del mapa donde está impreso. Entra como un recorte que se
          amplía desde el centro. Se cierra con la X o tocando fuera.
 
-         Las tipografías (Merriweather, Arvo, Oswald) NO se piden al abrir
-         la página: la portada se pinta sin fuentes externas. ArView las
-         pide al desbloquearse los textos, mucho después.
+         Las tipografías son las del webdoc, como el resto (ver el <link>
+         del <head>).
          ------------------------------------------------------------------ */
       #reading {
         position: fixed;
@@ -1333,7 +1344,9 @@
         height: 46px;
         border-radius: 50%;
         border: 1px solid rgba(255, 255, 255, 0.35);
-        background: rgba(0, 0, 0, 0.45);
+        background: rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
         color: #fff;
         font-size: 20px;
         cursor: pointer;
@@ -1397,7 +1410,7 @@
         background: rgba(255, 255, 255, 0.4);
         transition: background 0.25s ease, transform 0.25s ease;
       }
-      .rt-photos-dot[data-active="true"] { background: #ffc53d; transform: scale(1.25); }
+      .rt-photos-dot[data-active="true"] { background: var(--gold); transform: scale(1.25); }
       #reading[data-visible="true"] .rt-photos {
         animation: dibujo 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.2) 0.1s both;
       }
@@ -1454,7 +1467,7 @@
       .rt-hint strong {
         font-style: normal;
         font-weight: 700;
-        color: #ffc53d;
+        color: var(--gold);
       }
       .rt-directory {
         list-style: none;
@@ -1684,8 +1697,8 @@
           </filter>
           <radialGradient id="focus-tap-hand-glow">
           <stop offset="0" stop-color="#ffe7a3" stop-opacity="0.95"/>
-          <stop offset="0.45" stop-color="#ffc53d" stop-opacity="0.55"/>
-          <stop offset="1" stop-color="#ffc53d" stop-opacity="0"/>
+          <stop offset="0.45" stop-color="#e8bb52" stop-opacity="0.55"/>
+          <stop offset="1" stop-color="#e8bb52" stop-opacity="0"/>
           </radialGradient>
           </defs>
           <circle cx="45" cy="13" r="12" fill="url(#focus-tap-hand-glow)"/>
@@ -1719,8 +1732,8 @@
           </filter>
           <radialGradient id="close-hand-glow">
           <stop offset="0" stop-color="#ffe7a3" stop-opacity="0.95"/>
-          <stop offset="0.45" stop-color="#ffc53d" stop-opacity="0.55"/>
-          <stop offset="1" stop-color="#ffc53d" stop-opacity="0"/>
+          <stop offset="0.45" stop-color="#e8bb52" stop-opacity="0.55"/>
+          <stop offset="1" stop-color="#e8bb52" stop-opacity="0"/>
           </radialGradient>
           </defs>
           <circle cx="45" cy="13" r="12" fill="url(#close-hand-glow)"/>
@@ -1774,6 +1787,7 @@
         <!-- Opciones provisionales: los nombres están puestos para ver la
              idea, no para quedarse. -->
         <nav id="menu" data-visible="false" aria-hidden="true">
+          <p id="menu-brand">Territorios&nbsp;<em>Vivos</em></p>
           <!-- El volumen: silenciar con el altavoz, y el nivel con la barra.
                No cierra el menú al tocarlo: se ajusta oyendo. -->
           <div id="menu-sound" role="group" aria-label="Volumen">
